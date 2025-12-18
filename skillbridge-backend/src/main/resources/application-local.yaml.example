@@ -1,0 +1,15 @@
+# Example Local Configuration File
+# 
+# INSTRUCTIONS:
+# 1. Copy this file to: application-local.yaml
+# 2. Replace YOUR_SUPABASE_HOST and YOUR_SUPABASE_PASSWORD with your actual values
+# 3. application-local.yaml is in .gitignore (won't be committed to Git)
+#
+# This file overrides application-dev.yaml for local development
+
+spring:
+  datasource:
+    url: jdbc:postgresql://YOUR_SUPABASE_HOST:5432/postgres
+    username: postgres
+    password: YOUR_SUPABASE_PASSWORD
+
