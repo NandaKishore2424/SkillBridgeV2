@@ -1,0 +1,15 @@
+# Main Application Configuration
+# This is the default configuration file
+# Environment-specific configs (application-dev.yaml, application-prod.yaml) override this
+
+spring:
+  application:
+    name: skillbridge-backend
+  
+  # Active profile - change this to switch environments
+  # Options: dev, prod
+  profiles:
+    active: dev
+
+# When 'dev' profile is active, Spring Boot will also load application-dev.yaml
+# This allows us to have environment-specific settings
