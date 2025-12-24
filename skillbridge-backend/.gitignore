@@ -29,6 +29,7 @@ logs/
 .env
 .env.local
 application-local.yaml
+application-dev.yaml
 application-secrets.yaml
 
 # Spring Boot
