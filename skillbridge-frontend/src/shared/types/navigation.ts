@@ -2,7 +2,7 @@
  * Navigation-related types for layout components
  */
 
-import { UserRole } from './index'
+import type { UserRole } from '@/shared/types'
 
 export interface NavItem {
   title: string

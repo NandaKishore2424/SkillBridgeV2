@@ -7,16 +7,28 @@
  * - Call-to-action buttons (Login/Register)
  */
 
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/shared/components/ui'
 import { Header } from '@/shared/components/layout'
+import { useAuth } from '@/shared/hooks/useAuth'
 import { GraduationCap, Users, BookOpen, Briefcase, ArrowRight } from 'lucide-react'
 
 export function Landing() {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  
+  const handleLogout = async () => {
+    await logout()
+    navigate('/')
+  }
+  
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
-      <Header />
+      <Header 
+        user={user ? { email: user.email, role: user.role } : undefined}
+        onLogout={handleLogout}
+      />
 
       {/* Main Content */}
       <main className="flex-1">

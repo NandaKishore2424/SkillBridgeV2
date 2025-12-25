@@ -9,12 +9,13 @@
  * - Create college button
  */
 
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AuthenticatedLayout } from '@/shared/components/layout'
 import { PageWrapper } from '@/shared/components/layout'
 import { RoleGuard } from '@/shared/components/auth'
+import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import {
   Button,
   Card,
@@ -32,6 +33,7 @@ import {
   Badge,
   Alert,
   AlertDescription,
+  TableSkeleton,
 } from '@/shared/components/ui'
 import {
   getAllColleges,
@@ -48,7 +50,18 @@ import {
 
 export function CollegesList() {
   const queryClient = useQueryClient()
+  const location = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
+  const { showSuccess, showError } = useToastNotifications()
+
+  // Show success message from navigation state
+  useEffect(() => {
+    if (location.state?.message) {
+      showSuccess(location.state.message)
+      // Clear the state
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state, showSuccess])
 
   // Fetch colleges
   const {
@@ -64,8 +77,14 @@ export function CollegesList() {
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: 'ACTIVE' | 'INACTIVE' }) =>
       updateCollegeStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'colleges'] })
+      showSuccess(
+        `College ${variables.status === 'ACTIVE' ? 'activated' : 'deactivated'} successfully`
+      )
+    },
+    onError: (error: any) => {
+      showError(error?.response?.data?.message || 'Failed to update college status')
     },
   })
 
@@ -147,9 +166,7 @@ export function CollegesList() {
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
+                  <TableSkeleton rows={5} columns={6} />
                 ) : filteredColleges && filteredColleges.length > 0 ? (
                   <div className="rounded-md border">
                     <Table>

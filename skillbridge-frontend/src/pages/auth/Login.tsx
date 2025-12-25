@@ -36,21 +36,14 @@ export function Login() {
   const { login, isLoading, error, isAuthenticated, clearError } = useAuth()
   const [localError, setLocalError] = useState<string | null>(null)
 
-  // Get redirect path from location state (if redirected from protected route)
-  const from = (location.state as any)?.from?.pathname || '/dashboard'
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate(from, { replace: true })
-    }
-  }, [isAuthenticated, navigate, from])
-
   // Clear errors when component mounts
   useEffect(() => {
     clearError()
     setLocalError(null)
   }, [clearError])
+  
+  // Note: Removed redirect on isAuthenticated to avoid conflicts
+  // AuthContext handles all navigation after login based on user role
 
   const {
     register,

@@ -2,7 +2,7 @@
  * Authentication-related TypeScript types
  */
 
-import { User, UserRole } from './index'
+import type { User, UserRole } from './index'
 
 /**
  * Authentication state

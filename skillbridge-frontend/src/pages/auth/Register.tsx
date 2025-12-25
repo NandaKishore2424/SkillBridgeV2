@@ -39,7 +39,7 @@ import { Header } from '@/shared/components/layout'
 import { PageWrapper } from '@/shared/components/layout'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { getColleges } from '@/api/college'
-import { RegisterData } from '@/shared/types/auth'
+import type { RegisterData } from '@/shared/types/auth'
 
 // Base registration schema (common fields)
 const baseRegisterSchema = z.object({

@@ -11,8 +11,8 @@
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/shared/components/ui'
-import { UserRole } from '@/shared/types'
-import { NavItem, SidebarConfig } from '@/shared/types/navigation'
+import type { UserRole } from '@/shared/types'
+import type { NavItem, SidebarConfig } from '@/shared/types/navigation'
 import {
   LayoutDashboard,
   Building2,

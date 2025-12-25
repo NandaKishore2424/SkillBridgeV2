@@ -26,11 +26,10 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Alert,
-  AlertDescription,
 } from '@/shared/components/ui'
 import { createCollege, type CreateCollegeRequest } from '@/api/admin'
-import { AlertCircle, Loader2, ArrowLeft } from 'lucide-react'
+import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
+import { Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 // Form schema
@@ -50,6 +49,7 @@ type CreateCollegeFormData = z.infer<typeof createCollegeSchema>
 
 export function CreateCollege() {
   const navigate = useNavigate()
+  const { showSuccess, showError } = useToastNotifications()
 
   const {
     register,
@@ -69,9 +69,13 @@ export function CreateCollege() {
   const mutation = useMutation({
     mutationFn: (data: CreateCollegeRequest) => createCollege(data),
     onSuccess: () => {
-      navigate('/admin/colleges', {
-        state: { message: 'College created successfully!' },
-      })
+      showSuccess('College created successfully!')
+      navigate('/admin/colleges')
+    },
+    onError: (error: any) => {
+      showError(
+        error?.response?.data?.message || 'Failed to create college. Please try again.'
+      )
     },
   })
 
@@ -116,17 +120,6 @@ export function CreateCollege() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                  {/* Error Alert */}
-                  {mutation.error && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        {(mutation.error as any)?.response?.data?.message ||
-                          'Failed to create college. Please try again.'}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
                   {/* Name */}
                   <div className="space-y-2">
                     <Label htmlFor="name">
