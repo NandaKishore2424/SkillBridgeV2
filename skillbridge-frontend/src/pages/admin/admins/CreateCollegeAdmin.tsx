@@ -33,15 +33,14 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Alert,
-  AlertDescription,
 } from '@/shared/components/ui'
 import {
   createCollegeAdmin,
   type CreateCollegeAdminRequest,
 } from '@/api/admin'
 import { getAllColleges } from '@/api/admin'
-import { AlertCircle, Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
+import { Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 // Form schema
@@ -67,7 +66,7 @@ type CreateAdminFormData = z.infer<typeof createAdminSchema>
 
 export function CreateCollegeAdmin() {
   const navigate = useNavigate()
-  const [success, setSuccess] = useState(false)
+  const { showSuccess, showError } = useToastNotifications()
 
   // Fetch active colleges
   const {
@@ -102,10 +101,11 @@ export function CreateCollegeAdmin() {
     mutationFn: ({ collegeId, data }: { collegeId: number; data: CreateCollegeAdminRequest }) =>
       createCollegeAdmin(collegeId, data),
     onSuccess: () => {
-      setSuccess(true)
-      setTimeout(() => {
-        navigate('/admin/colleges')
-      }, 2000)
+      showSuccess('College admin created successfully!')
+      navigate('/admin/colleges')
+    },
+    onError: (error: any) => {
+      showError(error?.response?.data?.message || 'Failed to create college admin. Please try again.')
     },
   })
 
@@ -141,16 +141,6 @@ export function CreateCollegeAdmin() {
               </div>
             </div>
 
-            {/* Success Alert */}
-            {success && (
-              <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800 dark:text-green-200">
-                  College admin created successfully! Redirecting...
-                </AlertDescription>
-              </Alert>
-            )}
-
             {/* Form Card */}
             <Card>
               <CardHeader>
@@ -161,17 +151,6 @@ export function CreateCollegeAdmin() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                  {/* Error Alert */}
-                  {mutation.error && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        {(mutation.error as any)?.response?.data?.message ||
-                          'Failed to create college admin. Please try again.'}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
                   {/* College Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="collegeId">
@@ -317,7 +296,7 @@ export function CreateCollegeAdmin() {
                     >
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={mutation.isPending || success}>
+                    <Button type="submit" disabled={mutation.isPending}>
                       {mutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />

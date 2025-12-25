@@ -3,7 +3,7 @@
  */
 
 import apiClient from './client'
-import { College } from '@/shared/types'
+import type { College } from '@/shared/types'
 
 /**
  * Get all active colleges (for registration form)

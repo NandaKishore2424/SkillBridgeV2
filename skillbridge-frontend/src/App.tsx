@@ -9,36 +9,28 @@ import { Landing } from './pages/Landing'
 import { Login } from './pages/auth/Login'
 import { Register } from './pages/auth/Register'
 import { ProtectedRoute } from './shared/components/auth'
+
+// System Admin pages
 import { CollegesList } from './pages/admin/colleges/CollegesList'
 import { CreateCollege } from './pages/admin/colleges/CreateCollege'
 import { CreateCollegeAdmin } from './pages/admin/admins/CreateCollegeAdmin'
 
-function CollegeAdminDashboard() {
-  return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold">College Admin Dashboard</h1>
-      <p className="mt-4 text-muted-foreground">Coming soon...</p>
-    </div>
-  )
-}
+// College Admin pages
+import { Dashboard } from './pages/admin/dashboard/Dashboard'
+import { BatchesList } from './pages/admin/batches/BatchesList'
+import { CreateBatch } from './pages/admin/batches/CreateBatch'
+import { BatchDetails } from './pages/admin/batches/BatchDetails'
+import { CompaniesList } from './pages/admin/companies/CompaniesList'
+import { CreateCompany } from './pages/admin/companies/CreateCompany'
+import { TrainersList } from './pages/admin/trainers/TrainersList'
+import { CreateTrainer } from './pages/admin/trainers/CreateTrainer'
+import { StudentsList } from './pages/admin/students/StudentsList'
 
-function TrainerDashboard() {
-  return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold">Trainer Dashboard</h1>
-      <p className="mt-4 text-muted-foreground">Coming soon...</p>
-    </div>
-  )
-}
+// Trainer pages
+import { TrainerDashboard } from './pages/trainer/dashboard/TrainerDashboard'
 
-function StudentDashboard() {
-  return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold">Student Dashboard</h1>
-      <p className="mt-4 text-muted-foreground">Coming soon...</p>
-    </div>
-  )
-}
+// Student pages
+import { StudentDashboard } from './pages/student/dashboard/StudentDashboard'
 
 function App() {
   return (
@@ -79,7 +71,71 @@ function App() {
         path="/admin/dashboard"
         element={
           <ProtectedRoute>
-            <CollegeAdminDashboard />
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/batches"
+        element={
+          <ProtectedRoute>
+            <BatchesList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/batches/create"
+        element={
+          <ProtectedRoute>
+            <CreateBatch />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/batches/:id"
+        element={
+          <ProtectedRoute>
+            <BatchDetails />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/companies"
+        element={
+          <ProtectedRoute>
+            <CompaniesList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/companies/create"
+        element={
+          <ProtectedRoute>
+            <CreateCompany />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/trainers"
+        element={
+          <ProtectedRoute>
+            <TrainersList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/trainers/create"
+        element={
+          <ProtectedRoute>
+            <CreateTrainer />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/students"
+        element={
+          <ProtectedRoute>
+            <StudentsList />
           </ProtectedRoute>
         }
       />

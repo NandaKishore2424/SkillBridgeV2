@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { Footer } from './Footer'
-import { UserRole } from '@/shared/types'
+import type { UserRole } from '@/shared/types'
 
 interface LayoutProps {
   /** Page content */

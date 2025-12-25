@@ -6,6 +6,7 @@ import { queryClient } from './lib/react-query'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './shared/contexts/AuthContext.tsx'
+import { Toaster } from './shared/components/ui/toaster'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -13,6 +14,7 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <AuthProvider>
           <App />
+          <Toaster />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

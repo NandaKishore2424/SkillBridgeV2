@@ -9,7 +9,7 @@
 
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/shared/hooks/useAuth'
-import { UserRole } from '@/shared/types'
+import type { UserRole } from '@/shared/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui'
 
 interface RoleGuardProps {

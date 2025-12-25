@@ -5,7 +5,7 @@
  */
 
 import apiClient from './client'
-import { College } from '@/shared/types'
+import type { College } from '@/shared/types'
 
 export interface CreateCollegeRequest {
   name: string

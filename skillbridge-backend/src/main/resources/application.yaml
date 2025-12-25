@@ -7,9 +7,9 @@ spring:
     name: skillbridge-backend
   
   # Active profile - change this to switch environments
-  # Options: dev, prod
+  # Options: dev, local, prod
   profiles:
-    active: dev
+    active: local
 
 # When 'dev' profile is active, Spring Boot will also load application-dev.yaml
 # This allows us to have environment-specific settings
