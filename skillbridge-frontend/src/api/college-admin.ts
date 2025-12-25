@@ -92,6 +92,7 @@ export interface CreateCompanyRequest {
   name: string
   domain?: string
   hiringType: 'FULL_TIME' | 'INTERNSHIP' | 'BOTH'
+  collegeId?: number  // Optional: for SYSTEM_ADMIN to specify which college
   hiringProcess?: string
   notes?: string
 }

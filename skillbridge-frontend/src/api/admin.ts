@@ -89,3 +89,35 @@ export const createCollegeAdmin = async (
   return response.data
 }
 
+/**
+ * Get students for a specific college
+ */
+export const getCollegeStudents = async (collegeId: number): Promise<any[]> => {
+  const response = await apiClient.get<any[]>(`/admin/colleges/${collegeId}/students`)
+  return response.data
+}
+
+/**
+ * Get batches for a specific college
+ */
+export const getCollegeBatches = async (collegeId: number): Promise<any[]> => {
+  const response = await apiClient.get<any[]>(`/admin/colleges/${collegeId}/batches`)
+  return response.data
+}
+
+/**
+ * Get trainers for a specific college
+ */
+export const getCollegeTrainers = async (collegeId: number): Promise<any[]> => {
+  const response = await apiClient.get<any[]>(`/admin/colleges/${collegeId}/trainers`)
+  return response.data
+}
+
+/**
+ * Get admins for a specific college
+ */
+export const getCollegeAdmins = async (collegeId: number): Promise<any[]> => {
+  const response = await apiClient.get<any[]>(`/admin/colleges/${collegeId}/admins`)
+  return response.data
+}
+

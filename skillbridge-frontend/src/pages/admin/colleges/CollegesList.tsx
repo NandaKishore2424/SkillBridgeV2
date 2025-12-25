@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AuthenticatedLayout } from '@/shared/components/layout'
 import { PageWrapper } from '@/shared/components/layout'
@@ -51,6 +51,7 @@ import {
 export function CollegesList() {
   const queryClient = useQueryClient()
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const { showSuccess, showError } = useToastNotifications()
 
@@ -118,12 +119,14 @@ export function CollegesList() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h1 className="text-3xl font-bold tracking-tight">Colleges</h1>
-                <p className="text-muted-foreground">
+                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                  Colleges
+                </h1>
+                <p className="text-muted-foreground mt-2">
                   Manage all colleges and institutions on the platform
                 </p>
               </div>
-              <Button asChild>
+              <Button asChild size="lg" className="shadow-md hover:shadow-lg transition-shadow">
                 <Link to="/admin/colleges/create">
                   <Plus className="mr-2 h-4 w-4" />
                   Create College
@@ -157,36 +160,40 @@ export function CollegesList() {
             )}
 
             {/* Colleges Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>All Colleges</CardTitle>
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="border-b">
+                <CardTitle className="text-xl">All Colleges</CardTitle>
                 <CardDescription>
                   {filteredColleges?.length || 0} college(s) found
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 {isLoading ? (
                   <TableSkeleton rows={5} columns={6} />
                 ) : filteredColleges && filteredColleges.length > 0 ? (
-                  <div className="rounded-md border">
+                  <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Code</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Phone</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="font-semibold">Name</TableHead>
+                          <TableHead className="font-semibold">Code</TableHead>
+                          <TableHead className="font-semibold">Email</TableHead>
+                          <TableHead className="font-semibold">Phone</TableHead>
+                          <TableHead className="font-semibold">Status</TableHead>
+                          <TableHead className="text-right font-semibold">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredColleges.map((college) => (
-                          <TableRow key={college.id}>
+                          <TableRow 
+                            key={college.id}
+                            className="cursor-pointer hover:bg-muted/50 transition-colors"
+                            onClick={() => navigate(`/admin/colleges/${college.id}`)}
+                          >
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
-                                <Building2 className="h-4 w-4 text-muted-foreground" />
-                                {college.name}
+                                <Building2 className="h-4 w-4 text-primary" />
+                                <span className="hover:text-primary transition-colors">{college.name}</span>
                               </div>
                             </TableCell>
                             <TableCell>
@@ -203,22 +210,19 @@ export function CollegesList() {
                                 {college.status}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
+                                  <Button variant="ghost" size="icon" className="hover:bg-muted">
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuItem asChild>
-                                    <Link
-                                      to={`/admin/colleges/${college.id}`}
-                                      className="flex items-center"
-                                    >
-                                      <Edit className="mr-2 h-4 w-4" />
-                                      View Details
-                                    </Link>
+                                  <DropdownMenuItem 
+                                    onClick={() => navigate(`/admin/colleges/${college.id}`)}
+                                  >
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    View Details
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handleStatusToggle(college)}
