@@ -254,10 +254,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         let redirectPath = '/'
         switch (user.role) {
           case 'SYSTEM_ADMIN':
-            redirectPath = '/admin/colleges'
+            redirectPath = '/admin/dashboard'
             break
           case 'COLLEGE_ADMIN':
-            redirectPath = '/admin/dashboard'
+            redirectPath = '/admin/college-admin/dashboard'
             break
           case 'TRAINER':
             redirectPath = '/trainer/dashboard'

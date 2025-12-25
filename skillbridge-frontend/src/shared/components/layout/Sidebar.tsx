@@ -23,6 +23,7 @@ import {
   UserCog,
   PlusCircle,
   Menu,
+  Settings,
 } from 'lucide-react'
 
 // Icon mapping for navigation items
@@ -45,7 +46,7 @@ const sidebarConfig: SidebarConfig = {
   SYSTEM_ADMIN: [
     {
       title: 'Dashboard',
-      href: '/admin/colleges',
+      href: '/admin/dashboard',
       icon: LayoutDashboard,
     },
     {
@@ -54,20 +55,20 @@ const sidebarConfig: SidebarConfig = {
       icon: Building2,
     },
     {
-      title: 'Create College',
-      href: '/admin/colleges/create',
-      icon: PlusCircle,
+      title: 'Companies',
+      href: '/admin/companies',
+      icon: Briefcase,
     },
     {
-      title: 'Create Admin',
-      href: '/admin/admins/create',
-      icon: UserCog,
+      title: 'Settings',
+      href: '/admin/settings',
+      icon: Settings,
     },
   ],
   COLLEGE_ADMIN: [
     {
       title: 'Dashboard',
-      href: '/admin/dashboard',
+      href: '/admin/college-admin/dashboard',
       icon: LayoutDashboard,
     },
     {
@@ -199,10 +200,10 @@ export function Sidebar({ role, open = true, onClose, mobile = false }: SidebarP
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-16 z-40 h-[calc(100vh-4rem)] w-64 border-r bg-background transition-transform duration-300 lg:translate-x-0',
-          mobile && !open && '-translate-x-full',
-          mobile && open && 'translate-x-0',
-          !mobile && 'sticky'
+          'fixed left-0 top-16 z-40 h-[calc(100vh-4rem)] w-64 border-r bg-background transition-transform duration-300',
+          mobile
+            ? (open ? 'translate-x-0' : '-translate-x-full')
+            : 'translate-x-0 lg:sticky lg:top-16'
         )}
       >
         <ScrollArea className="h-full">

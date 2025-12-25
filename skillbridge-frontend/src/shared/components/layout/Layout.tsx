@@ -79,19 +79,14 @@ export function Layout({
 
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
+        {/* Sidebar - Single responsive sidebar */}
         {showSidebar && user?.role && (
-          <>
-            {/* Desktop Sidebar */}
-            <Sidebar role={user.role} mobile={false} />
-            {/* Mobile Sidebar */}
-            <Sidebar
-              role={user.role}
-              open={sidebarOpen}
-              onClose={closeSidebar}
-              mobile={isMobile}
-            />
-          </>
+          <Sidebar
+            role={user.role}
+            open={sidebarOpen}
+            onClose={closeSidebar}
+            mobile={isMobile}
+          />
         )}
 
         {/* Main Content */}

@@ -20,7 +20,8 @@ public class GlobalExceptionHandler {
         log.error("Runtime exception: {}", ex.getMessage(), ex);
         Map<String, String> error = new HashMap<>();
         error.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        // Return 500 for most runtime exceptions (like "College not found")
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
     
     @ExceptionHandler(MethodArgumentNotValidException.class)

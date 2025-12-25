@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { AuthenticatedLayout } from '@/shared/components/layout'
 import { PageWrapper } from '@/shared/components/layout'
 import { RoleGuard } from '@/shared/components/auth'
@@ -34,6 +34,8 @@ import {
   SelectValue,
 } from '@/shared/components/ui'
 import { createCompany, type CreateCompanyRequest } from '@/api/college-admin'
+import { getAllColleges } from '@/api/admin'
+import { useAuth } from '@/shared/hooks/useAuth'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import { Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -41,18 +43,11 @@ import { Link } from 'react-router-dom'
 // Form schema
 const createCompanySchema = z.object({
   name: z.string().min(1, 'Company name is required').max(255, 'Name is too long'),
-  domain: z
-    .string()
-    .max(255, 'Domain is too long')
-    .optional()
-    .refine(
-      (val) => !val || /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*\.[a-zA-Z]{2,}$/.test(val),
-      'Invalid domain format (e.g., example.com)'
-    )
-    .or(z.literal('')),
+  domain: z.string().max(255, 'Domain is too long').optional().or(z.literal('')),
   hiringType: z.enum(['FULL_TIME', 'INTERNSHIP', 'BOTH'], {
     required_error: 'Please select a hiring type',
   }),
+  collegeId: z.number().optional(),
   hiringProcess: z.string().max(1000, 'Hiring process description is too long').optional().or(z.literal('')),
   notes: z.string().max(1000, 'Notes are too long').optional().or(z.literal('')),
 })
@@ -62,6 +57,16 @@ type CreateCompanyFormData = z.infer<typeof createCompanySchema>
 export function CreateCompany() {
   const navigate = useNavigate()
   const { showSuccess, showError } = useToastNotifications()
+  const { user } = useAuth()
+  
+  const isSystemAdmin = user?.role === 'SYSTEM_ADMIN'
+
+  // Fetch colleges for system admin
+  const { data: colleges, isLoading: isLoadingColleges } = useQuery({
+    queryKey: ['colleges'],
+    queryFn: getAllColleges,
+    enabled: isSystemAdmin,
+  })
 
   const {
     register,
@@ -75,6 +80,7 @@ export function CreateCompany() {
       name: '',
       domain: '',
       hiringType: undefined,
+      collegeId: undefined,
       hiringProcess: '',
       notes: '',
     },
@@ -96,6 +102,7 @@ export function CreateCompany() {
       name: data.name,
       domain: data.domain || undefined,
       hiringType: data.hiringType,
+      collegeId: data.collegeId || undefined,
       hiringProcess: data.hiringProcess || undefined,
       notes: data.notes || undefined,
     }
@@ -103,9 +110,10 @@ export function CreateCompany() {
   }
 
   const hiringType = watch('hiringType')
+  const selectedCollegeId = watch('collegeId')
 
   return (
-    <RoleGuard allowedRoles={['COLLEGE_ADMIN']}>
+    <RoleGuard allowedRoles={['COLLEGE_ADMIN', 'SYSTEM_ADMIN']}>
       <AuthenticatedLayout>
         <PageWrapper maxWidth="lg">
           <div className="space-y-6">
@@ -134,6 +142,36 @@ export function CreateCompany() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                  {/* College Selection (System Admin only) */}
+                  {isSystemAdmin && (
+                    <div className="space-y-2">
+                      <Label htmlFor="collegeId">
+                        College <span className="text-destructive">*</span>
+                      </Label>
+                      <Select
+                        onValueChange={(value) => setValue('collegeId', parseInt(value))}
+                        disabled={mutation.isPending || isLoadingColleges}
+                      >
+                        <SelectTrigger id="collegeId">
+                          <SelectValue placeholder="Select a college" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {colleges?.map((college) => (
+                            <SelectItem key={college.id} value={college.id.toString()}>
+                              {college.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {errors.collegeId && (
+                        <p className="text-sm text-destructive">{errors.collegeId.message}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Select which college this company belongs to
+                      </p>
+                    </div>
+                  )}
+
                   {/* Name */}
                   <div className="space-y-2">
                     <Label htmlFor="name">
@@ -233,7 +271,14 @@ export function CreateCompany() {
                     >
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={mutation.isPending || !hiringType}>
+                    <Button 
+                      type="submit" 
+                      disabled={
+                        mutation.isPending || 
+                        !hiringType || 
+                        (isSystemAdmin && !selectedCollegeId)
+                      }
+                    >
                       {mutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -13,7 +13,9 @@ import { ProtectedRoute } from './shared/components/auth'
 // System Admin pages
 import { CollegesList } from './pages/admin/colleges/CollegesList'
 import { CreateCollege } from './pages/admin/colleges/CreateCollege'
+import { CollegeDetail } from './pages/admin/colleges/CollegeDetail'
 import { CreateCollegeAdmin } from './pages/admin/admins/CreateCollegeAdmin'
+import { SystemAdminDashboard } from './pages/admin/dashboard/SystemAdminDashboard'
 
 // College Admin pages
 import { Dashboard } from './pages/admin/dashboard/Dashboard'
@@ -42,6 +44,14 @@ function App() {
 
       {/* Protected Routes - System Admin */}
       <Route
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute>
+            <SystemAdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/colleges"
         element={
           <ProtectedRoute>
@@ -58,6 +68,14 @@ function App() {
         }
       />
       <Route
+        path="/admin/colleges/:id"
+        element={
+          <ProtectedRoute>
+            <CollegeDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/admins/create"
         element={
           <ProtectedRoute>
@@ -68,7 +86,7 @@ function App() {
 
       {/* Protected Routes - College Admin */}
       <Route
-        path="/admin/dashboard"
+        path="/admin/college-admin/dashboard"
         element={
           <ProtectedRoute>
             <Dashboard />
