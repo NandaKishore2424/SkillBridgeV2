@@ -48,6 +48,7 @@ import {
   Power,
   Loader2,
   AlertCircle,
+  Upload,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -124,20 +125,28 @@ export function StudentsList() {
               </div>
             </div>
 
-            {/* Search */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search students by roll number, email, degree, or branch..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            {/* Search and Action */}
+            <div className="flex gap-4 items-center">
+              <Card className="flex-1">
+                <CardContent className="pt-6">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search students by roll number, email, degree, or branch..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+              <Button asChild>
+                <Link to="/admin/students/upload">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Bulk Upload
+                </Link>
+              </Button>
+            </div>
 
             {/* Error Alert */}
             {error && (

@@ -12,53 +12,67 @@ import java.util.Set;
 
 @Entity
 @Table(name = "users", indexes = {
-    @Index(name = "idx_users_email", columnList = "email"),
-    @Index(name = "idx_users_college_id", columnList = "college_id"),
-    @Index(name = "idx_users_is_active", columnList = "is_active")
+        @Index(name = "idx_users_email", columnList = "email"),
+        @Index(name = "idx_users_college_id", columnList = "college_id"),
+        @Index(name = "idx_users_is_active", columnList = "is_active")
 })
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class User {
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     @Column(name = "college_id")
     private Long collegeId; // NULL for SYSTEM_ADMIN
-    
+
     @Column(name = "email", unique = true, nullable = false, length = 255)
     private String email;
-    
+
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
-    
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;
-    
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
-    
+
     @Column(name = "updated_at", nullable = false)
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
-    
+
+    // Account management fields for bulk upload feature
+    @Column(name = "must_change_password")
+    @Builder.Default
+    private Boolean mustChangePassword = false;
+
+    @Column(name = "account_status", length = 20)
+    @Builder.Default
+    private String accountStatus = "ACTIVE"; // PENDING_SETUP, ACTIVE, INCOMPLETE, SUSPENDED
+
+    @Column(name = "invitation_sent_at")
+    private LocalDateTime invitationSentAt;
+
+    @Column(name = "first_login_at")
+    private LocalDateTime firstLoginAt;
+
+    @Column(name = "profile_completed")
+    @Builder.Default
+    private Boolean profileCompleted = false;
+
     @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-        name = "user_roles",
-        joinColumns = @JoinColumn(name = "user_id"),
-        inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
+    @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
     @Builder.Default
     private Set<Role> roles = new HashSet<>();
-    
+
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
 }
-
