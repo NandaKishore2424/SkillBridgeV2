@@ -27,6 +27,8 @@ import { CreateCompany } from './pages/admin/companies/CreateCompany'
 import { TrainersList } from './pages/admin/trainers/TrainersList'
 import { CreateTrainer } from './pages/admin/trainers/CreateTrainer'
 import { StudentsList } from './pages/admin/students/StudentsList'
+import { StudentBulkUploadPage } from './pages/admin/students/StudentBulkUploadPage'
+import { TrainerBulkUploadPage } from './pages/admin/trainers/TrainerBulkUploadPage'
 
 // Trainer pages
 import { TrainerDashboard } from './pages/trainer/dashboard/TrainerDashboard'
@@ -154,6 +156,22 @@ function App() {
         element={
           <ProtectedRoute>
             <StudentsList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/students/upload"
+        element={
+          <ProtectedRoute>
+            <StudentBulkUploadPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/trainers/upload"
+        element={
+          <ProtectedRoute>
+            <TrainerBulkUploadPage />
           </ProtectedRoute>
         }
       />

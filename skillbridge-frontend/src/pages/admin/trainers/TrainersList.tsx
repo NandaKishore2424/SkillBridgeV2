@@ -50,6 +50,7 @@ import {
   Power,
   Loader2,
   AlertCircle,
+  Upload,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -133,12 +134,20 @@ export function TrainersList() {
                   Manage trainers in your college
                 </p>
               </div>
-              <Button asChild>
-                <Link to="/admin/trainers/create">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Trainer
-                </Link>
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" asChild>
+                  <Link to="/admin/trainers/upload">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Bulk Upload
+                  </Link>
+                </Button>
+                <Button asChild>
+                  <Link to="/admin/trainers/create">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Trainer
+                  </Link>
+                </Button>
+              </div>
             </div>
 
             {/* Search */}
