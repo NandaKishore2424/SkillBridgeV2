@@ -5,6 +5,7 @@ import com.skillbridge.college.entity.College;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
 import com.skillbridge.company.repository.CompanyRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +23,7 @@ import java.util.Optional;
 @RequestMapping("/api/v1/admin/companies")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
+@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class CompanyController {
 
     private final CompanyRepository companyRepository;
@@ -35,10 +36,10 @@ public class CompanyController {
         log.info("Fetching all companies");
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User user = (User) auth.getPrincipal();
-        
+
         // SYSTEM_ADMIN can see all, COLLEGE_ADMIN only sees their college's companies
         Long userCollegeId = user.getCollegeId();
-        
+
         // If collegeId is null, try to get it from CollegeAdmin entity
         if (userCollegeId == null) {
             Optional<CollegeAdmin> collegeAdminOpt = collegeAdminRepository.findByUserId(user.getId());
@@ -46,7 +47,7 @@ public class CompanyController {
                 userCollegeId = collegeAdminOpt.get().getCollege().getId();
             }
         }
-        
+
         List<Company> companies;
         if (userCollegeId == null) {
             // SYSTEM_ADMIN
@@ -55,8 +56,8 @@ public class CompanyController {
             // COLLEGE_ADMIN - filter by college
             final Long finalCollegeId = userCollegeId; // Make final for lambda
             companies = companyRepository.findAll().stream()
-                .filter(company -> company.getCollege().getId().equals(finalCollegeId))
-                .toList();
+                    .filter(company -> company.getCollege().getId().equals(finalCollegeId))
+                    .toList();
         }
         return ResponseEntity.ok(companies);
     }
@@ -66,24 +67,24 @@ public class CompanyController {
     public ResponseEntity<Company> getCompanyById(@PathVariable Long id) {
         log.info("Fetching company with id: {}", id);
         return companyRepository.findById(id)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
     @PreAuthorize("hasRole('SYSTEM_ADMIN') or hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<?> createCompany(@RequestBody CreateCompanyRequest request) {
         log.info("Creating company: {}", request.name);
-        
+
         // Get college ID from authenticated user
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User user = (User) auth.getPrincipal();
         Long collegeId = null;
-        
+
         // Check if user is SYSTEM_ADMIN
         boolean isSystemAdmin = user.getRoles().stream()
-            .anyMatch(role -> role.getName().equals("ROLE_SYSTEM_ADMIN"));
-        
+                .anyMatch(role -> role.getName().equals("ROLE_SYSTEM_ADMIN"));
+
         // For SYSTEM_ADMIN: use collegeId from request if provided
         // For COLLEGE_ADMIN: use their college ID
         if (isSystemAdmin) {
@@ -96,7 +97,7 @@ public class CompanyController {
         } else {
             // COLLEGE_ADMIN: use their college ID
             collegeId = user.getCollegeId();
-            
+
             // If collegeId is null, try to get it from CollegeAdmin entity
             if (collegeId == null) {
                 Optional<CollegeAdmin> collegeAdminOpt = collegeAdminRepository.findByUserId(user.getId());
@@ -105,31 +106,45 @@ public class CompanyController {
                 }
             }
         }
-        
+
         if (collegeId == null) {
             log.error("College ID is null for user: {}", user.getEmail());
             return ResponseEntity.badRequest().body("College ID is required. Please provide a valid college ID.");
         }
-        
+
         // Verify college exists
         Optional<College> collegeOpt = collegeRepository.findById(collegeId);
         if (collegeOpt.isEmpty()) {
             log.error("College not found with ID: {}", collegeId);
             return ResponseEntity.badRequest().body("College not found with ID: " + collegeId);
         }
-        
+
         College college = collegeOpt.get();
-        
+
         Company company = Company.builder()
-            .college(college)
-            .name(request.name)
-            .domain(request.domain)
-            .hiringType(request.hiringType)
-            .build();
-        
+                .college(college)
+                .name(request.name)
+                .domain(request.domain)
+                .hiringType(request.hiringType)
+                .build();
+
         Company savedCompany = companyRepository.save(company);
         log.info("Company created successfully with ID: {}", savedCompany.getId());
         return ResponseEntity.ok(savedCompany);
+    }
+
+    // Helper method to convert Company entity to DTO
+    private CompanyDTO convertToDTO(Company company) {
+        return CompanyDTO.builder()
+                .id(company.getId())
+                .collegeId(company.getCollege().getId())
+                .collegeName(company.getCollege().getName())
+                .name(company.getName())
+                .domain(company.getDomain())
+                .hiringType(company.getHiringType())
+                .createdAt(company.getCreatedAt())
+                .updatedAt(company.getUpdatedAt())
+                .build();
     }
 
     // DTO for creating company
@@ -142,4 +157,3 @@ public class CompanyController {
         public String notes; // Not in DB schema yet, ignore for now
     }
 }
-

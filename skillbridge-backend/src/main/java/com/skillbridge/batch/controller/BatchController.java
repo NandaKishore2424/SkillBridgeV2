@@ -1,6 +1,7 @@
 package com.skillbridge.batch.controller;
 
 import com.skillbridge.auth.entity.User;
+import com.skillbridge.batch.dto.BatchDTO;
 import com.skillbridge.batch.entity.Batch;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.college.entity.CollegeAdmin;
@@ -23,7 +24,7 @@ import java.util.Optional;
 @RequestMapping("/api/v1/admin/batches")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
+@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class BatchController {
 
     private final BatchRepository batchRepository;
@@ -32,13 +33,13 @@ public class BatchController {
 
     @GetMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<Batch>> getAllBatches() {
+    public ResponseEntity<List<BatchDTO>> getAllBatches() {
         log.info("Fetching all batches for college admin");
         // Get college ID from authenticated user
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User user = (User) auth.getPrincipal();
         Long collegeId = user.getCollegeId();
-        
+
         // If collegeId is null, try to get it from CollegeAdmin entity
         if (collegeId == null) {
             Optional<CollegeAdmin> collegeAdminOpt = collegeAdminRepository.findByUserId(user.getId());
@@ -46,42 +47,45 @@ public class BatchController {
                 collegeId = collegeAdminOpt.get().getCollege().getId();
             }
         }
-        
+
         if (collegeId == null) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         List<Batch> batches = batchRepository.findByCollegeId(collegeId);
-        return ResponseEntity.ok(batches);
+        List<BatchDTO> batchDTOs = batches.stream()
+                .map(this::convertToDTO)
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(batchDTOs);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<Batch> getBatchById(@PathVariable Long id) {
+    public ResponseEntity<BatchDTO> getBatchById(@PathVariable Long id) {
         log.info("Fetching batch with id: {}", id);
         Optional<Batch> batch = batchRepository.findById(id);
-        return batch.map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+        return batch.map(b -> ResponseEntity.ok(convertToDTO(b)))
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<Batch> createBatch(@RequestBody CreateBatchRequest request) {
         log.info("Creating batch: {}", request.name);
-        
+
         try {
             // Get college ID from authenticated user
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             log.debug("Authentication principal type: {}", auth.getPrincipal().getClass().getName());
-            
+
             if (!(auth.getPrincipal() instanceof User)) {
                 log.error("Principal is not a User instance: {}", auth.getPrincipal());
                 throw new RuntimeException("Authentication error: Invalid user principal");
             }
-            
+
             User user = (User) auth.getPrincipal();
             Long collegeId = user.getCollegeId();
-            
+
             // If collegeId is null, try to get it from CollegeAdmin entity
             if (collegeId == null) {
                 log.warn("User {} does not have collegeId in User entity, checking CollegeAdmin", user.getEmail());
@@ -91,25 +95,25 @@ public class BatchController {
                     log.info("Found collegeId from CollegeAdmin: {}", collegeId);
                 }
             }
-            
+
             log.info("User: {}, College ID: {}", user.getEmail(), collegeId);
-            
+
             if (collegeId == null) {
                 log.error("User {} does not have a collegeId", user.getEmail());
                 throw new RuntimeException("User does not have a college assigned");
             }
-            
+
             // Make final for lambda expression
             final Long finalCollegeId = collegeId;
-            
+
             // Verify college exists
             var college = collegeRepository.findById(finalCollegeId)
-                .orElseThrow(() -> new RuntimeException("College not found with id: " + finalCollegeId));
-            
+                    .orElseThrow(() -> new RuntimeException("College not found with id: " + finalCollegeId));
+
             // Parse dates from strings if provided
             LocalDate startDate = null;
             LocalDate endDate = null;
-            
+
             if (request.startDate != null && !request.startDate.isEmpty()) {
                 try {
                     // Try ISO format first (YYYY-MM-DD)
@@ -125,7 +129,7 @@ public class BatchController {
                     }
                 }
             }
-            
+
             if (request.endDate != null && !request.endDate.isEmpty()) {
                 try {
                     endDate = LocalDate.parse(request.endDate);
@@ -139,16 +143,16 @@ public class BatchController {
                     }
                 }
             }
-            
+
             Batch batch = Batch.builder()
-                .college(college)
-                .name(request.name)
-                .description(request.description)
-                .status(request.status != null ? request.status : "UPCOMING")
-                .startDate(startDate)
-                .endDate(endDate)
-                .build();
-            
+                    .college(college)
+                    .name(request.name)
+                    .description(request.description)
+                    .status(request.status != null ? request.status : "UPCOMING")
+                    .startDate(startDate)
+                    .endDate(endDate)
+                    .build();
+
             Batch savedBatch = batchRepository.save(batch);
             log.info("Successfully created batch with id: {}", savedBatch.getId());
             return ResponseEntity.ok(savedBatch);
@@ -169,14 +173,14 @@ public class BatchController {
         if (batchOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        
+
         Batch batch = batchOpt.get();
         batch.setName(request.name);
         batch.setDescription(request.description);
         if (request.status != null) {
             batch.setStatus(request.status);
         }
-        
+
         // Parse dates
         if (request.startDate != null && !request.startDate.isEmpty()) {
             try {
@@ -189,7 +193,7 @@ public class BatchController {
                 }
             }
         }
-        
+
         if (request.endDate != null && !request.endDate.isEmpty()) {
             try {
                 batch.setEndDate(LocalDate.parse(request.endDate));
@@ -201,7 +205,7 @@ public class BatchController {
                 }
             }
         }
-        
+
         Batch updatedBatch = batchRepository.save(batch);
         return ResponseEntity.ok(updatedBatch);
     }
@@ -210,8 +214,7 @@ public class BatchController {
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<Batch> updateBatchStatus(
             @PathVariable Long id,
-            @RequestBody StatusUpdateRequest request
-    ) {
+            @RequestBody StatusUpdateRequest request) {
         log.info("Updating batch status for id: {} to {}", id, request.status);
         Optional<Batch> batchOpt = batchRepository.findById(id);
         if (batchOpt.isEmpty()) {
@@ -223,13 +226,29 @@ public class BatchController {
         return ResponseEntity.ok(updatedBatch);
     }
 
+    // Helper method to convert Batch entity to DTO
+    private BatchDTO convertToDTO(Batch batch) {
+        return BatchDTO.builder()
+                .id(batch.getId())
+                .collegeId(batch.getCollege().getId())
+                .collegeName(batch.getCollege().getName())
+                .name(batch.getName())
+                .description(batch.getDescription())
+                .status(batch.getStatus())
+                .startDate(batch.getStartDate())
+                .endDate(batch.getEndDate())
+                .createdAt(batch.getCreatedAt())
+                .updatedAt(batch.getUpdatedAt())
+                .build();
+    }
+
     // DTOs
     public static class CreateBatchRequest {
         public String name;
         public String description;
         public String status;
         public String startDate; // Accept as string, parse in controller
-        public String endDate;   // Accept as string, parse in controller
+        public String endDate; // Accept as string, parse in controller
         public Integer maxEnrollments; // Ignored for now (not in DB schema)
     }
 
