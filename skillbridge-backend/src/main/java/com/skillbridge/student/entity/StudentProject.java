@@ -1,7 +1,5 @@
-package com.skillbridge.batch.entity;
+package com.skillbridge.student.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.skillbridge.college.entity.College;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,31 +10,34 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "batches")
+@Table(name = "student_projects")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Batch {
-
+public class StudentProject {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "college_id", nullable = false)
-    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
-    private College college;
+    @JoinColumn(name = "student_id", nullable = false)
+    private Student student;
 
-    @Column(name = "name", nullable = false, length = 255)
-    private String name;
+    @Column(name = "title", nullable = false, length = 255)
+    private String title;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "status", nullable = false, length = 20)
-    @Builder.Default
-    private String status = "UPCOMING"; // UPCOMING, OPEN, ACTIVE, COMPLETED, CANCELLED
+    @Column(name = "technologies", columnDefinition = "TEXT")
+    private String technologies;
+
+    @Column(name = "project_url", length = 255)
+    private String projectUrl;
+
+    @Column(name = "github_url", length = 255)
+    private String githubUrl;
 
     @Column(name = "start_date")
     private LocalDate startDate;
@@ -51,9 +52,4 @@ public class Batch {
     @Column(name = "updated_at", nullable = false)
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
-
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
 }
