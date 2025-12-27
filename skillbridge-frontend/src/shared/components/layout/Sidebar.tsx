@@ -24,6 +24,7 @@ import {
   PlusCircle,
   Menu,
   Settings,
+  MessageSquare,
 } from 'lucide-react'
 
 // Icon mapping for navigation items
@@ -108,6 +109,11 @@ const sidebarConfig: SidebarConfig = {
       href: '/trainer/students',
       icon: GraduationCap,
     },
+    {
+      title: 'Feedback',
+      href: '/trainer/feedback',
+      icon: MessageSquare,
+    },
   ],
   STUDENT: [
     {
@@ -124,6 +130,11 @@ const sidebarConfig: SidebarConfig = {
       title: 'My Progress',
       href: '/student/progress',
       icon: LayoutDashboard,
+    },
+    {
+      title: 'Feedback',
+      href: '/student/feedback',
+      icon: MessageSquare,
     },
     {
       title: 'Placements',

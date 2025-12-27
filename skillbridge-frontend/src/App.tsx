@@ -32,9 +32,11 @@ import { TrainerBulkUploadPage } from './pages/admin/trainers/TrainerBulkUploadP
 
 // Trainer pages
 import { TrainerDashboard } from './pages/trainer/dashboard/TrainerDashboard'
+import FeedbackManagement from './pages/trainer/FeedbackManagement'
 
 // Student pages
 import { StudentDashboard } from './pages/student/dashboard/StudentDashboard'
+import StudentFeedback from './pages/student/StudentFeedback'
 
 function App() {
   return (
@@ -185,6 +187,14 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/trainer/feedback"
+        element={
+          <ProtectedRoute>
+            <FeedbackManagement />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Protected Routes - Student */}
       <Route
@@ -192,6 +202,14 @@ function App() {
         element={
           <ProtectedRoute>
             <StudentDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/feedback"
+        element={
+          <ProtectedRoute>
+            <StudentFeedback />
           </ProtectedRoute>
         }
       />

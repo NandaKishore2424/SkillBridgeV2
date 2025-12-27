@@ -36,6 +36,7 @@ import {
   AlertCircle,
   BookOpen,
   TrendingUp,
+  Upload,
 } from 'lucide-react'
 
 interface StatCardProps {
@@ -154,7 +155,7 @@ export function Dashboard() {
             )}
 
             {/* Quick Actions */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader>
                   <CardTitle>Quick Actions</CardTitle>
@@ -177,6 +178,27 @@ export function Dashboard() {
                     <Link to="/admin/companies/create">
                       <Plus className="mr-2 h-4 w-4" />
                       Add Company
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Bulk Operations</CardTitle>
+                  <CardDescription>Import multiple users at once</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Button asChild variant="outline" className="w-full justify-start">
+                    <Link to="/admin/students/upload">
+                      <Upload className="mr-2 h-4 w-4" />
+                      Bulk Upload Students
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full justify-start">
+                    <Link to="/admin/trainers/upload">
+                      <Upload className="mr-2 h-4 w-4" />
+                      Bulk Upload Trainers
                     </Link>
                   </Button>
                 </CardContent>

@@ -49,6 +49,40 @@ Always use idempotent SQL statements in migrations.
 
 ---
 
+## Backend Compilation Errors
+
+### Error 1: Cannot find symbol - getFirstName()/getLastName() methods
+
+**Error Message:**
+```
+cannot find symbol
+symbol:   method getFirstName()
+location: class com.skillbridge.auth.entity.User
+```
+
+**Root Cause:**
+The `User` entity doesn't have `firstName` and `lastName` fields. Names are stored in the profile entities (`Student`, `Trainer`) as `fullName`.
+
+**Solution:**
+Use the `fullName` field from the profile entities instead of concatenating `firstName + lastName` from User:
+
+```java
+// Wrong:
+.studentName(feedback.getStudent().getUser().getFirstName() + " " + feedback.getStudent().getUser().getLastName())
+
+// Correct:
+.studentName(feedback.getStudent().getFullName())
+.trainerName(feedback.getTrainer().getFullName())
+```
+
+**Files Affected:**
+- `FeedbackServiceImpl.java` - mapToDTO method
+
+**Prevention:**
+Always check entity structure before accessing properties. Use profile entities for name/contact information.
+
+---
+
 ## Hibernate/JPA Errors
 
 ### Error 2: Hibernate Proxy Serialization Error
@@ -264,6 +298,44 @@ Remove one of the Link components:
 
 ---
 
+### Error 7: Module not found - 'sonner'
+
+**Error Message:**
+```
+Module not found: Can't resolve 'sonner'
+```
+
+**Root Cause:**
+Importing `toast` from 'sonner' library which is not installed. The project uses a custom toast system based on `@radix-ui/react-toast`.
+
+**Solution:**
+Use the existing `useToastNotifications` hook:
+
+```tsx
+// Wrong:
+import { toast } from 'sonner';
+
+// Correct:
+import { useToastNotifications } from '@/shared/hooks/useToastNotifications';
+
+// In component:
+const { showSuccess, showError } = useToastNotifications();
+
+// Usage:
+showSuccess('Operation successful');
+showError('Operation failed');
+```
+
+**Prevention:**
+- Check existing UI library setup before adding new dependencies
+- Use consistent toast system across the application
+
+**Files Affected:**
+- `FeedbackManagement.tsx`
+- `StudentFeedback.tsx`
+
+---
+
 ## Quick Reference
 
 ### When You See...
@@ -276,6 +348,8 @@ Remove one of the Link components:
 | `cannot find symbol: method` | Missing repository method | Add method to repository interface |
 | `404` or `500` on API call | Missing endpoint | Create controller method |
 | Nested `<a>` warning | Duplicate Link components | Remove one Link or `asChild` |
+| `cannot find symbol: getFirstName()` | Wrong entity field access | Use `fullName` from profile entities |
+| `Module not found: sonner` | Wrong toast library import | Use `useToastNotifications` hook |
 
 ---
 
