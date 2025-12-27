@@ -45,7 +45,7 @@ public class TrainerService {
         }
 
         // Get TRAINER role
-        Role trainerRole = roleRepository.findByName(Role.RoleName.TRAINER)
+        Role trainerRole = roleRepository.findByName("TRAINER")
                 .orElseThrow(() -> new RuntimeException("Required role not found"));
 
         Set<Role> roles = new HashSet<>();

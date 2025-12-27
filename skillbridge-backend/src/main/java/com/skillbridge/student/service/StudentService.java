@@ -52,7 +52,7 @@ public class StudentService {
         }
 
         // Get STUDENT role
-        Role studentRole = roleRepository.findByName(Role.RoleName.STUDENT)
+        Role studentRole = roleRepository.findByName("STUDENT")
                 .orElseThrow(() -> new RuntimeException("Required role not found"));
 
         Set<Role> roles = new HashSet<>();
