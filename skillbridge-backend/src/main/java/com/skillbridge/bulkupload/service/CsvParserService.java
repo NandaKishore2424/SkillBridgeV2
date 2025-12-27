@@ -30,6 +30,18 @@ public class CsvParserService {
 
     private <T> List<T> parseCsv(MultipartFile file, Class<T> clazz) {
         try (Reader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            // First, read and log the header line
+            BufferedReader headerReader = new BufferedReader(
+                    new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+            String headerLine = headerReader.readLine();
+            log.info("CSV Headers found: {}", headerLine);
+            log.info("Parsing CSV for class: {}", clazz.getSimpleName());
+            headerReader.close();
+
+            // Now parse with a fresh reader
+            Reader actualReader = new BufferedReader(
+                    new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+
             HeaderColumnNameMappingStrategy<T> strategy = new HeaderColumnNameMappingStrategy<>();
             strategy.setType(clazz);
 
@@ -37,15 +49,21 @@ public class CsvParserService {
                     .withMappingStrategy(strategy)
                     .withIgnoreLeadingWhiteSpace(true)
                     .withType(clazz)
+                    .withThrowExceptions(true)
                     .build();
 
-            return csvToBean.parse();
+            List<T> results = csvToBean.parse();
+            log.info("Successfully parsed {} rows from CSV", results.size());
+            return results;
         } catch (IOException e) {
             log.error("Error parsing CSV file", e);
             throw new RuntimeException("Failed to parse CSV file: " + e.getMessage());
         } catch (Exception e) {
-            log.error("Error processing CSV data", e);
-            throw new RuntimeException("Error processing CSV data: " + e.getMessage());
+            log.error(
+                    "Error processing CSV data. Expected headers for {}: Full Name, Email, Roll Number, Degree, Branch, Year",
+                    clazz.getSimpleName(), e);
+            throw new RuntimeException("Error processing CSV data: " + e.getMessage() +
+                    ". Please ensure CSV has correct headers: Full Name, Email, Roll Number, Degree, Branch, Year");
         }
     }
 

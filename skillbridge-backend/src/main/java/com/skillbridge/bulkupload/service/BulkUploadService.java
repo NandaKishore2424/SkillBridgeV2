@@ -80,7 +80,7 @@ public class BulkUploadService {
             bulkUpload.setTotalRows(students.size());
 
             // Get student role
-            Role studentRole = roleRepository.findByName(RoleName.STUDENT)
+            Role studentRole = roleRepository.findByName("STUDENT")
                     .orElseThrow(() -> new RuntimeException("Role STUDENT not found"));
             Set<Role> roles = new HashSet<>();
             roles.add(studentRole);
@@ -258,7 +258,7 @@ public class BulkUploadService {
             List<TrainerUploadDTO> trainers = csvParserService.parseTrainerCsv(file);
             bulkUpload.setTotalRows(trainers.size());
 
-            Role trainerRole = roleRepository.findByName(RoleName.TRAINER)
+            Role trainerRole = roleRepository.findByName("TRAINER")
                     .orElseThrow(() -> new RuntimeException("Role TRAINER not found"));
             Set<Role> roles = new HashSet<>();
             roles.add(trainerRole);
