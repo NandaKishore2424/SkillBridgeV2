@@ -15,6 +15,7 @@ public class TrainerDTO {
     private Long id;
     private Long userId;
     private String email;
+    private Boolean isActive; // Added: from user.isActive
     private String fullName;
     private String phone;
     private String department;
