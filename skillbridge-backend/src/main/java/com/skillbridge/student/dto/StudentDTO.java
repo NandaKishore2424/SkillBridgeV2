@@ -16,6 +16,7 @@ public class StudentDTO {
     private Long id;
     private Long userId;
     private String email;
+    private Boolean isActive; // Added: from user.isActive
     private String fullName;
     private String rollNumber;
     private String degree;

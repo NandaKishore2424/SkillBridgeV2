@@ -93,14 +93,14 @@ export function StudentsList() {
     const query = searchQuery.toLowerCase()
     return (
       student.rollNumber.toLowerCase().includes(query) ||
-      student.user.email.toLowerCase().includes(query) ||
+      student.email.toLowerCase().includes(query) ||  // Fixed: email is on student directly
       student.degree?.toLowerCase().includes(query) ||
       student.branch?.toLowerCase().includes(query)
     )
   })
 
   const handleStatusToggle = (student: StudentWithDetails) => {
-    const newStatus = !student.user.isActive
+    const newStatus = !student.isActive
     if (
       confirm(
         `Are you sure you want to ${newStatus ? 'activate' : 'deactivate'} student ${student.rollNumber}?`
@@ -193,7 +193,7 @@ export function StudentsList() {
                                 {student.rollNumber}
                               </div>
                             </TableCell>
-                            <TableCell>{student.user.email}</TableCell>
+                            <TableCell>{student.email}</TableCell>
                             <TableCell>{student.degree || '-'}</TableCell>
                             <TableCell>{student.branch || '-'}</TableCell>
                             <TableCell>{student.year || '-'}</TableCell>
@@ -207,8 +207,8 @@ export function StudentsList() {
                               )}
                             </TableCell>
                             <TableCell>
-                              <Badge variant={student.user.isActive ? 'default' : 'secondary'}>
-                                {student.user.isActive ? 'Active' : 'Inactive'}
+                              <Badge variant={student.isActive ? 'default' : 'secondary'}>
+                                {student.isActive ? 'Active' : 'Inactive'}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
@@ -230,7 +230,7 @@ export function StudentsList() {
                                     disabled={statusMutation.isPending}
                                   >
                                     <Power className="mr-2 h-4 w-4" />
-                                    {student.user.isActive ? 'Deactivate' : 'Activate'}
+                                    {student.isActive ? 'Deactivate' : 'Activate'}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>

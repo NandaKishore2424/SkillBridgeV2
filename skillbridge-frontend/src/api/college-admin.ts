@@ -208,11 +208,10 @@ export const unassignTrainerFromBatch = async (
 // ==================== Students ====================
 
 export interface StudentWithDetails extends Student {
-  user: {
-    id: number
-    email: string
-    isActive: boolean
-  }
+  userId: number
+  email: string
+  fullName: string
+  isActive?: boolean  // From user entity via DTO mapping
   enrolledBatchIds?: number[]
 }
 
