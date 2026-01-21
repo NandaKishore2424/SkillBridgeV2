@@ -138,6 +138,7 @@ public class TrainerService {
                 .id(trainer.getId())
                 .userId(trainer.getUser().getId())
                 .email(trainer.getUser().getEmail())
+                .isActive(trainer.getUser().getIsActive()) // Added: frontend needs this
                 .fullName(trainer.getFullName())
                 .phone(trainer.getPhone())
                 .department(trainer.getDepartment())
