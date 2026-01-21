@@ -1,5 +1,6 @@
 package com.skillbridge.bulkupload.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.college.entity.College;
 import jakarta.persistence.*;
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 public class BulkUpload {
 
     @Id

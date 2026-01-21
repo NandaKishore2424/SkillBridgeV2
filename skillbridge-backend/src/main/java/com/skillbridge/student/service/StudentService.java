@@ -246,6 +246,7 @@ public class StudentService {
                 .id(student.getId())
                 .userId(student.getUser().getId())
                 .email(student.getUser().getEmail())
+                .isActive(student.getUser().getIsActive()) // Added: frontend needs this
                 .fullName(student.getFullName())
                 .rollNumber(student.getRollNumber())
                 .degree(student.getDegree())

@@ -34,6 +34,6 @@ public class BulkUploadResult {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
-    @Column(name = "data", columnDefinition = "jsonb")
+    @Column(name = "data", columnDefinition = "TEXT")
     private String data; // JSON string of row data for audit
 }

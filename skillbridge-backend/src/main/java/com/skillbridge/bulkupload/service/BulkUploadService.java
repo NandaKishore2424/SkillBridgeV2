@@ -20,7 +20,7 @@ import com.skillbridge.student.entity.Student;
 import com.skillbridge.student.repository.StudentRepository;
 import com.skillbridge.trainer.entity.Trainer;
 import com.skillbridge.trainer.repository.TrainerRepository;
-import jakarta.transaction.Transactional;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -47,7 +47,6 @@ public class BulkUploadService {
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
 
-    @Transactional
     public BulkUploadResponse uploadStudents(MultipartFile file, Long collegeId, Long uploadedByUserId) {
         log.info("Starting bulk upload for students. CollegeID: {}, UserID: {}", collegeId, uploadedByUserId);
 
@@ -200,6 +199,7 @@ public class BulkUploadService {
         Student student = Student.builder()
                 .user(user)
                 .college(college)
+                .fullName(dto.getFullName()) // Added: was missing, causing NULL constraint violation
                 .rollNumber(dto.getRollNumber())
                 .degree(dto.getDegree())
                 .branch(dto.getBranch())
@@ -230,7 +230,6 @@ public class BulkUploadService {
         bulkUploadResultRepository.save(result);
     }
 
-    @Transactional
     public BulkUploadResponse uploadTrainers(MultipartFile file, Long collegeId, Long uploadedByUserId) {
         log.info("Starting bulk upload for trainers");
         csvParserService.validateCsvFormat(file, "TRAINER");
@@ -342,6 +341,7 @@ public class BulkUploadService {
         Trainer trainer = Trainer.builder()
                 .user(user)
                 .college(college)
+                .fullName(dto.getFullName()) // Added: should have full name like Student
                 .department(dto.getDepartment())
                 .specialization(dto.getSpecialization())
                 .build();
