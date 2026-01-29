@@ -2,6 +2,8 @@ package com.skillbridge.batch.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.skillbridge.college.entity.College;
+import com.skillbridge.company.entity.Company;
+import com.skillbridge.trainer.entity.Trainer;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,6 +12,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "batches")
@@ -43,6 +47,20 @@ public class Batch {
 
     @Column(name = "end_date")
     private LocalDate endDate;
+
+    // Many-to-Many relationship with Trainers
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "batch_trainers", joinColumns = @JoinColumn(name = "batch_id"), inverseJoinColumns = @JoinColumn(name = "trainer_id"))
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "batches" })
+    @Builder.Default
+    private Set<Trainer> trainers = new HashSet<>();
+
+    // Many-to-Many relationship with Companies
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "batch_companies", joinColumns = @JoinColumn(name = "batch_id"), inverseJoinColumns = @JoinColumn(name = "company_id"))
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "batches" })
+    @Builder.Default
+    private Set<Company> companies = new HashSet<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default

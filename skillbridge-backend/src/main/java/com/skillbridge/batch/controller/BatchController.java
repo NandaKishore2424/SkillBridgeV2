@@ -7,6 +7,12 @@ import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.company.dto.CompanyDTO;
+import com.skillbridge.company.entity.Company;
+import com.skillbridge.company.repository.CompanyRepository;
+import com.skillbridge.trainer.dto.TrainerDTO;
+import com.skillbridge.trainer.entity.Trainer;
+import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -30,6 +37,8 @@ public class BatchController {
     private final BatchRepository batchRepository;
     private final CollegeRepository collegeRepository;
     private final CollegeAdminRepository collegeAdminRepository;
+    private final TrainerRepository trainerRepository;
+    private final CompanyRepository companyRepository;
 
     @GetMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
@@ -66,6 +75,36 @@ public class BatchController {
         Optional<Batch> batch = batchRepository.findById(id);
         return batch.map(b -> ResponseEntity.ok(convertToDTO(b)))
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/trainers")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<List<TrainerDTO>> getBatchTrainers(@PathVariable Long id) {
+        log.info("Fetching trainers for batch: {}", id);
+        Optional<Batch> batchOpt = batchRepository.findById(id);
+        if (batchOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        List<TrainerDTO> trainers = batchOpt.get().getTrainers().stream()
+                .map(this::convertTrainerToDTO)
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(trainers);
+    }
+
+    @GetMapping("/{id}/companies")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<List<CompanyDTO>> getBatchCompanies(@PathVariable Long id) {
+        log.info("Fetching companies for batch: {}", id);
+        Optional<Batch> batchOpt = batchRepository.findById(id);
+        if (batchOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        List<CompanyDTO> companies = batchOpt.get().getCompanies().stream()
+                .map(this::convertCompanyToDTO)
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(companies);
     }
 
     @PostMapping
@@ -226,6 +265,82 @@ public class BatchController {
         return ResponseEntity.ok(updatedBatch);
     }
 
+    @PostMapping("/{id}/trainers")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<?> assignTrainers(
+            @PathVariable Long id,
+            @RequestBody AssignTrainersRequest request) {
+        log.info("Assigning trainers to batch {}: {}", id, request.trainerIds);
+
+        try {
+            Optional<Batch> batchOpt = batchRepository.findById(id);
+            if (batchOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Batch batch = batchOpt.get();
+            batch.getTrainers().clear(); // Clear existing trainers
+
+            // Add new trainers
+            for (Long trainerId : request.trainerIds) {
+                trainerRepository.findById(trainerId).ifPresent(trainer -> {
+                    batch.getTrainers().add(trainer);
+                });
+            }
+
+            Batch updatedBatch = batchRepository.save(batch);
+            log.info("Successfully assigned {} trainers to batch {}", updatedBatch.getTrainers().size(), id);
+            // Return simple Map to avoid Jackson serialization errors with lazy-loaded
+            // entities
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Trainers assigned successfully",
+                    "batchId", id,
+                    "trainerCount", updatedBatch.getTrainers().size()));
+        } catch (Exception e) {
+            log.error("Error assigning trainers to batch {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("error", "An unexpected error occurred"));
+        }
+    }
+
+    @PostMapping("/{id}/companies")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<?> assignCompanies(
+            @PathVariable Long id,
+            @RequestBody AssignCompaniesRequest request) {
+        log.info("Assigning companies to batch {}: {}", id, request.companyIds);
+
+        try {
+            Optional<Batch> batchOpt = batchRepository.findById(id);
+            if (batchOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Batch batch = batchOpt.get();
+            batch.getCompanies().clear(); // Clear existing companies
+
+            // Add new companies
+            for (Long companyId : request.companyIds) {
+                companyRepository.findById(companyId).ifPresent(company -> {
+                    batch.getCompanies().add(company);
+                });
+            }
+
+            Batch updatedBatch = batchRepository.save(batch);
+            log.info("Successfully assigned {} companies to batch {}", updatedBatch.getCompanies().size(), id);
+
+            // Return simple Map to avoid Jackson serialization errors
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Companies assigned successfully",
+                    "batchId", id,
+                    "companyCount", updatedBatch.getCompanies().size()));
+        } catch (Exception e) {
+            log.error("Error assigning companies to batch {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("error", "An unexpected error occurred"));
+        }
+    }
+
     // Helper method to convert Batch entity to DTO
     private BatchDTO convertToDTO(Batch batch) {
         return BatchDTO.builder()
@@ -239,6 +354,42 @@ public class BatchController {
                 .endDate(batch.getEndDate())
                 .createdAt(batch.getCreatedAt())
                 .updatedAt(batch.getUpdatedAt())
+                .trainerCount(batch.getTrainers() != null ? batch.getTrainers().size() : 0)
+                .companyCount(batch.getCompanies() != null ? batch.getCompanies().size() : 0)
+                .studentCount(0) // TODO: Add enrollments relationship
+                .build();
+    }
+
+    // Helper method to convert Trainer entity to DTO
+    private TrainerDTO convertTrainerToDTO(Trainer trainer) {
+        return TrainerDTO.builder()
+                .id(trainer.getId())
+                .userId(trainer.getUser() != null ? trainer.getUser().getId() : null)
+                .email(trainer.getUser() != null ? trainer.getUser().getEmail() : null)
+                .isActive(trainer.getUser() != null ? trainer.getUser().getIsActive() : null)
+                .fullName(trainer.getFullName())
+                .phone(trainer.getPhone())
+                .department(trainer.getDepartment())
+                .specialization(trainer.getSpecialization())
+                .bio(trainer.getBio())
+                .linkedinUrl(trainer.getLinkedinUrl())
+                .yearsOfExperience(trainer.getYearsOfExperience())
+                .createdAt(trainer.getCreatedAt())
+                .updatedAt(trainer.getUpdatedAt())
+                .build();
+    }
+
+    // Helper method to convert Company entity to DTO
+    private CompanyDTO convertCompanyToDTO(Company company) {
+        return CompanyDTO.builder()
+                .id(company.getId())
+                .collegeId(company.getCollege() != null ? company.getCollege().getId() : null)
+                .collegeName(company.getCollege() != null ? company.getCollege().getName() : null)
+                .name(company.getName())
+                .domain(company.getDomain())
+                .hiringType(company.getHiringType())
+                .createdAt(company.getCreatedAt())
+                .updatedAt(company.getUpdatedAt())
                 .build();
     }
 
@@ -254,5 +405,13 @@ public class BatchController {
 
     public static class StatusUpdateRequest {
         public String status;
+    }
+
+    public static class AssignTrainersRequest {
+        public List<Long> trainerIds;
+    }
+
+    public static class AssignCompaniesRequest {
+        public List<Long> companyIds;
     }
 }
