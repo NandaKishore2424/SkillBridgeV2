@@ -59,8 +59,8 @@ import {
   updateSyllabusTopic,
   deleteSyllabusTopic,
 } from '@/api/batch-details'
-import { getTrainers } from '@/api/college-admin'
-import { getCompanies } from '@/api/college-admin'
+import { getAssignedTrainers as getBatchTrainers, getAssignedCompanies as getBatchCompanies } from '@/api/batch-details'
+import { getTrainers, getCompanies } from '@/api/college-admin'
 import {
   ArrowLeft,
   Loader2,
@@ -77,7 +77,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -146,18 +146,32 @@ function OverviewTab({ batch }: { batch: any }) {
 function TrainersTab({ batchId, trainers, assignedTrainerIds }: any) {
   const queryClient = useQueryClient()
   const { showSuccess, showError } = useToastNotifications()
-  const [selectedTrainers, setSelectedTrainers] = useState<number[]>(assignedTrainerIds || [])
+  const [selectedTrainers, setSelectedTrainers] = useState<number[]>([])
 
   const { data: allTrainers, isLoading } = useQuery({
     queryKey: ['admin', 'trainers'],
     queryFn: getTrainers,
   })
 
+  // Fetch assigned trainers
+  const { data: assignedTrainers } = useQuery({
+    queryKey: ['admin', 'batches', batchId, 'trainers'],
+    queryFn: () => getBatchTrainers(batchId),
+  })
+
+  // Update selectedTrainers when assignedTrainers data arrives
+  useEffect(() => {
+    if (assignedTrainers) {
+      setSelectedTrainers(assignedTrainers.map(t => t.id))
+    }
+  }, [assignedTrainers])
+
   const assignMutation = useMutation({
     mutationFn: (trainerIds: number[]) => assignTrainersToBatch(batchId, trainerIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId, 'trainers'] })
       showSuccess('Trainers assigned successfully!')
     },
     onError: (error: any) => {
@@ -202,6 +216,20 @@ function TrainersTab({ batchId, trainers, assignedTrainerIds }: any) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            {/* Show assigned trainers at top */}
+            {assignedTrainers && assignedTrainers.length > 0 && (
+              <div className="mb-4 p-3 bg-muted/50 rounded-md">
+                <p className="text-sm font-medium mb-2">Currently Assigned ({assignedTrainers.length}):</p>
+                <div className="flex flex-wrap gap-2">
+                  {assignedTrainers.map(trainer => (
+                    <Badge key={trainer.id} variant="default">
+                      {trainer.fullName}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               {allTrainers?.map((trainer) => (
                 <div
@@ -262,18 +290,32 @@ function TrainersTab({ batchId, trainers, assignedTrainerIds }: any) {
 function CompaniesTab({ batchId, companies, linkedCompanyIds }: any) {
   const queryClient = useQueryClient()
   const { showSuccess, showError } = useToastNotifications()
-  const [selectedCompanies, setSelectedCompanies] = useState<number[]>(linkedCompanyIds || [])
+  const [selectedCompanies, setSelectedCompanies] = useState<number[]>([])
 
   const { data: allCompanies, isLoading } = useQuery({
     queryKey: ['admin', 'companies'],
     queryFn: getCompanies,
   })
 
+  // Fetch assigned companies
+  const { data: assignedCompanies } = useQuery({
+    queryKey: ['admin', 'batches', batchId, 'companies'],
+    queryFn: () => getBatchCompanies(batchId),
+  })
+
+  // Update selectedCompanies when assignedCompanies data arrives
+  useEffect(() => {
+    if (assignedCompanies) {
+      setSelectedCompanies(assignedCompanies.map(c => c.id))
+    }
+  }, [assignedCompanies])
+
   const mapMutation = useMutation({
     mutationFn: (companyIds: number[]) => mapCompaniesToBatch(batchId, companyIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId, 'companies'] })
       showSuccess('Companies mapped successfully!')
     },
     onError: (error: any) => {
@@ -311,6 +353,20 @@ function CompaniesTab({ batchId, companies, linkedCompanyIds }: any) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            {/* Show assigned companies at top */}
+            {assignedCompanies && assignedCompanies.length > 0 && (
+              <div className="mb-4 p-3 bg-muted/50 rounded-md">
+                <p className="text-sm font-medium mb-2">Currently Assigned ({assignedCompanies.length}):</p>
+                <div className="flex flex-wrap gap-2">
+                  {assignedCompanies.map(company => (
+                    <Badge key={company.id} variant="default">
+                      {company.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               {allCompanies?.map((company) => (
                 <div
@@ -599,6 +655,7 @@ const topicSchema = z.object({
 
 function SyllabusTab({ batchId, syllabus }: any) {
   const queryClient = useQueryClient()
+  const { showSuccess, showError } = useToastNotifications()
   const [isAddingTopic, setIsAddingTopic] = useState(false)
   const [editingTopicId, setEditingTopicId] = useState<number | null>(null)
 

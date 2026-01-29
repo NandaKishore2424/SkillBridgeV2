@@ -60,6 +60,16 @@ export const getBatchDetails = async (id: number): Promise<BatchDetails> => {
   return response.data
 }
 
+export const getAssignedTrainers = async (batchId: number): Promise<Trainer[]> => {
+  const response = await apiClient.get<Trainer[]>(`/admin/batches/${batchId}/trainers`)
+  return response.data
+}
+
+export const getAssignedCompanies = async (batchId: number): Promise<Company[]> => {
+  const response = await apiClient.get<Company[]>(`/admin/batches/${batchId}/companies`)
+  return response.data
+}
+
 // ==================== Trainer Assignment ====================
 
 export interface AssignTrainersRequest {

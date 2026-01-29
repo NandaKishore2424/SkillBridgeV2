@@ -32,7 +32,10 @@ import { TrainerBulkUploadPage } from './pages/admin/trainers/TrainerBulkUploadP
 
 // Trainer pages
 import { TrainerDashboard } from './pages/trainer/dashboard/TrainerDashboard'
+import { TrainerBatchesPage } from './pages/trainer/batches/TrainerBatchesPage'
+import { TrainerStudentsPage } from './pages/trainer/students/TrainerStudentsPage'
 import FeedbackManagement from './pages/trainer/FeedbackManagement'
+import BatchDetailsPage from './pages/trainer/BatchDetailsPage'
 
 // Student pages
 import { StudentDashboard } from './pages/student/dashboard/StudentDashboard'
@@ -184,6 +187,30 @@ function App() {
         element={
           <ProtectedRoute>
             <TrainerDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trainer/batches"
+        element={
+          <ProtectedRoute>
+            <TrainerBatchesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trainer/batches/:id"
+        element={
+          <ProtectedRoute>
+            <BatchDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trainer/students"
+        element={
+          <ProtectedRoute>
+            <TrainerStudentsPage />
           </ProtectedRoute>
         }
       />
