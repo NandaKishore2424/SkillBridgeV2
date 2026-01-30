@@ -8,13 +8,14 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Entity representing a topic within a syllabus module
+ * Entity representing a topic within a syllabus sub-module
+ * Topics are the smallest unit of curriculum content
  */
 @Entity
 @Table(name = "syllabus_topics", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_module_display_order", columnNames = { "module_id", "display_order" })
+        @UniqueConstraint(name = "uk_submodule_display_order", columnNames = { "submodule_id", "display_order" })
 }, indexes = {
-        @Index(name = "idx_topics_module", columnList = "module_id"),
+        @Index(name = "idx_topics_submodule", columnList = "submodule_id"),
         @Index(name = "idx_topics_completed", columnList = "is_completed")
 })
 @Getter
@@ -29,8 +30,8 @@ public class SyllabusTopic {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "module_id", nullable = false)
-    private SyllabusModule module;
+    @JoinColumn(name = "submodule_id", nullable = false)
+    private SyllabusSubmodule submodule;
 
     @Column(nullable = false)
     private String name;

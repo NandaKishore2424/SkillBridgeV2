@@ -6,14 +6,14 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * DTO for a curriculum module with its sub-modules
+ * DTO for a syllabus sub-module with its topics
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class SyllabusModuleDTO {
+public class SyllabusSubmoduleDTO {
     private Long id;
     private String name;
     private String description;
@@ -22,10 +22,10 @@ public class SyllabusModuleDTO {
     // Scheduling
     private LocalDate startDate;
     private LocalDate endDate;
+    private Integer weekNumber;
 
-    // Sub-modules (which contain topics)
-    private List<SyllabusSubmoduleDTO> submodules;
-    private Integer submodulesCount;
-    private Integer totalTopicsCount;
+    // Topics
+    private List<SyllabusTopicDTO> topics;
+    private Integer topicsCount;
     private Integer completedTopicsCount;
 }

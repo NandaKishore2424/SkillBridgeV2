@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
+import { Accordion } from '@/shared/components/ui/accordion';
 import { Plus, Copy, Loader2, BookOpen } from 'lucide-react';
 import { syllabusApi, type SyllabusModule } from '@/api/batchManagement';
 import { useToast } from '@/shared/hooks/use-toast';
@@ -45,9 +46,10 @@ export default function SyllabusTab({ batchId }: SyllabusTabProps) {
         },
     });
 
-    const totalTopics = modules.reduce((sum, module) => sum + module.topicsCount, 0);
+    const totalTopics = modules.reduce((sum, module) => sum + module.totalTopicsCount, 0);
     const completedTopics = modules.reduce((sum, module) => sum + module.completedTopicsCount, 0);
     const progressPercentage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
+
 
     if (isLoading) {
         return (
@@ -129,7 +131,7 @@ export default function SyllabusTab({ batchId }: SyllabusTabProps) {
                     </CardContent>
                 </Card>
             ) : (
-                <div className="space-y-4">
+                <Accordion type="multiple" className="space-y-4">
                     {modules.map((module) => (
                         <ModuleAccordion
                             key={module.id}
@@ -138,12 +140,13 @@ export default function SyllabusTab({ batchId }: SyllabusTabProps) {
                             onDelete={() => deleteMutation.mutate(module.id)}
                         />
                     ))}
-                </div>
+                </Accordion>
             )}
 
             {/* Dialogs */}
             <CreateModuleDialog
                 batchId={batchId}
+                modules={modules}
                 open={isCreateOpen}
                 onOpenChange={setIsCreateOpen}
             />

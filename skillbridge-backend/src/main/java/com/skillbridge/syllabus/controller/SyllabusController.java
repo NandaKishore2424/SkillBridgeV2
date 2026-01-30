@@ -13,8 +13,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * REST Controller for Syllabus Management
- * Allows trainers to create and manage syllabuses for their batches
+ * REST Controller for Curriculum Management
+ * Allows trainers to create and manage curriculum (modules, sub-modules,
+ * topics) for their batches
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -25,17 +26,25 @@ public class SyllabusController {
 
     private final SyllabusService syllabusService;
 
+    // ===================================================================
+    // CURRICULUM - Full Structure
+    // ===================================================================
+
     /**
-     * Get complete syllabus for a batch
+     * Get complete curriculum for a batch
      * GET /api/v1/batches/{batchId}/syllabus
      */
     @GetMapping("/batches/{batchId}/syllabus")
     @PreAuthorize("hasAnyRole('TRAINER', 'ADMIN')")
     public ResponseEntity<List<SyllabusModuleDTO>> getSyllabus(@PathVariable Long batchId) {
         log.info("API: Get syllabus for batch {}", batchId);
-        List<SyllabusModuleDTO> syllabus = syllabusService.getSyllabusByBatchId(batchId);
+        List<SyllabusModuleDTO> syllabus = syllabusService.getCurriculumByBatchId(batchId);
         return ResponseEntity.ok(syllabus);
     }
+
+    // ===================================================================
+    // MODULE Endpoints
+    // ===================================================================
 
     /**
      * Create a new module for a batch
@@ -77,17 +86,65 @@ public class SyllabusController {
         return ResponseEntity.noContent().build();
     }
 
+    // ===================================================================
+    // SUB-MODULE Endpoints
+    // ===================================================================
+
     /**
-     * Add a topic to a module
-     * POST /api/v1/syllabus/modules/{moduleId}/topics
+     * Create a sub-module under a module
+     * POST /api/v1/syllabus/modules/{moduleId}/submodules
      */
-    @PostMapping("/syllabus/modules/{moduleId}/topics")
+    @PostMapping("/syllabus/modules/{moduleId}/submodules")
+    @PreAuthorize("hasRole('TRAINER')")
+    public ResponseEntity<SyllabusSubmoduleDTO> createSubmodule(
+            @PathVariable Long moduleId,
+            @Valid @RequestBody CreateSubmoduleRequest request) {
+        log.info("API: Create sub-module for module {}", moduleId);
+        SyllabusSubmoduleDTO submodule = syllabusService.createSubmodule(moduleId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(submodule);
+    }
+
+    /**
+     * Update a sub-module
+     * PUT /api/v1/syllabus/submodules/{submoduleId}
+     */
+    @PutMapping("/syllabus/submodules/{submoduleId}")
+    @PreAuthorize("hasRole('TRAINER')")
+    public ResponseEntity<SyllabusSubmoduleDTO> updateSubmodule(
+            @PathVariable Long submoduleId,
+            @Valid @RequestBody UpdateSubmoduleRequest request) {
+        log.info("API: Update sub-module {}", submoduleId);
+        SyllabusSubmoduleDTO submodule = syllabusService.updateSubmodule(submoduleId, request);
+        return ResponseEntity.ok(submodule);
+    }
+
+    /**
+     * Delete a sub-module
+     * DELETE /api/v1/syllabus/submodules/{submoduleId}
+     */
+    @DeleteMapping("/syllabus/submodules/{submoduleId}")
+    @PreAuthorize("hasRole('TRAINER')")
+    public ResponseEntity<Void> deleteSubmodule(@PathVariable Long submoduleId) {
+        log.info("API: Delete sub-module {}", submoduleId);
+        syllabusService.deleteSubmodule(submoduleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ===================================================================
+    // TOPIC Endpoints
+    // ===================================================================
+
+    /**
+     * Add a topic to a sub-module
+     * POST /api/v1/syllabus/submodules/{submoduleId}/topics
+     */
+    @PostMapping("/syllabus/submodules/{submoduleId}/topics")
     @PreAuthorize("hasRole('TRAINER')")
     public ResponseEntity<SyllabusTopicDTO> addTopic(
-            @PathVariable Long moduleId,
+            @PathVariable Long submoduleId,
             @Valid @RequestBody CreateTopicRequest request) {
-        log.info("API: Add topic to module {}", moduleId);
-        SyllabusTopicDTO topic = syllabusService.addTopicToModule(moduleId, request);
+        log.info("API: Add topic to sub-module {}", submoduleId);
+        SyllabusTopicDTO topic = syllabusService.addTopicToSubmodule(submoduleId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(topic);
     }
 
@@ -127,19 +184,5 @@ public class SyllabusController {
         log.info("API: Toggle completion for topic {}", topicId);
         SyllabusTopicDTO topic = syllabusService.toggleTopicCompletion(topicId);
         return ResponseEntity.ok(topic);
-    }
-
-    /**
-     * Copy syllabus from another batch
-     * POST /api/v1/batches/{targetBatchId}/syllabus/copy-from/{sourceBatchId}
-     */
-    @PostMapping("/batches/{targetBatchId}/syllabus/copy-from/{sourceBatchId}")
-    @PreAuthorize("hasRole('TRAINER')")
-    public ResponseEntity<List<SyllabusModuleDTO>> copySyllabus(
-            @PathVariable Long targetBatchId,
-            @PathVariable Long sourceBatchId) {
-        log.info("API: Copy syllabus from batch {} to batch {}", sourceBatchId, targetBatchId);
-        List<SyllabusModuleDTO> syllabus = syllabusService.copySyllabusFromBatch(sourceBatchId, targetBatchId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(syllabus);
     }
 }

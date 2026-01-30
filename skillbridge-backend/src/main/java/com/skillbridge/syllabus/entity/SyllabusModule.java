@@ -6,12 +6,14 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Entity representing a module in a batch syllabus
+ * Entity representing a module in a batch curriculum
+ * Modules are high-level course sections (e.g., "Core Java", "React")
  */
 @Entity
 @Table(name = "syllabus_modules", uniqueConstraints = {
@@ -43,10 +45,17 @@ public class SyllabusModule {
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder;
 
+    // Scheduling fields
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(name = "end_date")
+    private LocalDate endDate;
+
     @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC")
     @Builder.Default
-    private List<SyllabusTopic> topics = new ArrayList<>();
+    private List<SyllabusSubmodule> submodules = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -57,13 +66,13 @@ public class SyllabusModule {
     private LocalDateTime updatedAt;
 
     // Helper methods for bidirectional relationship
-    public void addTopic(SyllabusTopic topic) {
-        topics.add(topic);
-        topic.setModule(this);
+    public void addSubmodule(SyllabusSubmodule submodule) {
+        submodules.add(submodule);
+        submodule.setModule(this);
     }
 
-    public void removeTopic(SyllabusTopic topic) {
-        topics.remove(topic);
-        topic.setModule(null);
+    public void removeSubmodule(SyllabusSubmodule submodule) {
+        submodules.remove(submodule);
+        submodule.setModule(null);
     }
 }

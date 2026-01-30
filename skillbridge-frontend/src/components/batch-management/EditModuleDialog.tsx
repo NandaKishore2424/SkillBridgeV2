@@ -5,60 +5,58 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Textarea } from '@/shared/components/ui/textarea';
-import { Plus, Loader2 } from 'lucide-react';
+import { Pencil, Loader2 } from 'lucide-react';
 import { syllabusApi, type SyllabusModule } from '@/api/batchManagement';
 import { useToast } from '@/shared/hooks/use-toast';
 
-interface CreateModuleDialogProps {
+interface EditModuleDialogProps {
+    module: SyllabusModule | null;
     batchId: number;
-    modules: SyllabusModule[];
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
+    isOpen: boolean;
+    onClose: () => void;
 }
 
-export default function CreateModuleDialog({ batchId, modules, open, onOpenChange }: CreateModuleDialogProps) {
+export default function EditModuleDialog({ module, batchId, isOpen, onClose }: EditModuleDialogProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [displayOrder, setDisplayOrder] = useState('1');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
-    // Auto-calculate next display order when dialog opens
+    // Populate form when module changes
     useEffect(() => {
-        if (open) {
-            const maxOrder = modules.length > 0
-                ? Math.max(...modules.map(m => m.displayOrder))
-                : 0;
-            setDisplayOrder((maxOrder + 1).toString());
+        if (module) {
+            setName(module.name);
+            setDescription(module.description || '');
+            setDisplayOrder(module.displayOrder.toString());
+            setStartDate(module.startDate || '');
+            setEndDate(module.endDate || '');
         }
-    }, [open, modules]);
+    }, [module]);
 
-    const createMutation = useMutation({
-        mutationFn: (data: { name: string; description?: string; displayOrder: number }) =>
-            syllabusApi.createModule(batchId, data),
+    const updateMutation = useMutation({
+        mutationFn: (data: { name: string; description?: string; displayOrder: number; startDate?: string; endDate?: string }) =>
+            syllabusApi.updateModule(module!.id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['syllabus', batchId] });
             toast({
-                title: 'Module created',
-                description: 'The module has been successfully created.',
+                title: 'Module updated',
+                description: 'The module has been successfully updated.',
             });
-            handleClose();
+            onClose();
         },
         onError: (error: any) => {
             toast({
                 title: 'Error',
-                description: error.response?.data?.message || 'Failed to create module. Please try again.',
+                description: error.response?.data?.message || 'Failed to update module. Please try again.',
                 variant: 'destructive',
             });
         },
     });
 
-    const handleClose = () => {
-        setName('');
-        setDescription('');
-        // Display order will be recalculated on next open
-        onOpenChange(false);
-    };
+
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -72,21 +70,25 @@ export default function CreateModuleDialog({ batchId, modules, open, onOpenChang
             return;
         }
 
-        createMutation.mutate({
+        updateMutation.mutate({
             name: name.trim(),
             description: description.trim() || undefined,
             displayOrder: parseInt(displayOrder) || 1,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
         });
     };
 
+    if (!module) return null;
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <form onSubmit={handleSubmit}>
                     <DialogHeader>
-                        <DialogTitle>Create New Module</DialogTitle>
+                        <DialogTitle>Edit Module</DialogTitle>
                         <DialogDescription>
-                            Add a new module to the batch syllabus. You can add topics later.
+                            Update the module details. Changes will be reflected in the syllabus.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -98,7 +100,7 @@ export default function CreateModuleDialog({ batchId, modules, open, onOpenChang
                                 placeholder="e.g., Introduction to React"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                disabled={createMutation.isPending}
+                                disabled={updateMutation.isPending}
                             />
                         </div>
 
@@ -109,7 +111,7 @@ export default function CreateModuleDialog({ batchId, modules, open, onOpenChang
                                 placeholder="Brief description of the module"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
-                                disabled={createMutation.isPending}
+                                disabled={updateMutation.isPending}
                                 rows={3}
                             />
                         </div>
@@ -122,8 +124,32 @@ export default function CreateModuleDialog({ batchId, modules, open, onOpenChang
                                 min="1"
                                 value={displayOrder}
                                 onChange={(e) => setDisplayOrder(e.target.value)}
-                                disabled={createMutation.isPending}
+                                disabled={updateMutation.isPending}
                             />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="startDate">Start Date</Label>
+                                <Input
+                                    id="startDate"
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    disabled={updateMutation.isPending}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="endDate">End Date</Label>
+                                <Input
+                                    id="endDate"
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    disabled={updateMutation.isPending}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -131,15 +157,15 @@ export default function CreateModuleDialog({ batchId, modules, open, onOpenChang
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={handleClose}
-                            disabled={createMutation.isPending}
+                            onClick={onClose}
+                            disabled={updateMutation.isPending}
                         >
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={createMutation.isPending}>
-                            {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create Module
+                        <Button type="submit" disabled={updateMutation.isPending}>
+                            {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Update Module
                         </Button>
                     </DialogFooter>
                 </form>

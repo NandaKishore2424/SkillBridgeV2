@@ -9,15 +9,15 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Request DTO for creating a module with sub-modules
+ * Request DTO for creating a sub-module with topics
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateModuleRequest {
-    @NotBlank(message = "Module name is required")
+public class CreateSubmoduleRequest {
+    @NotBlank(message = "Sub-module name is required")
     private String name;
 
     private String description;
@@ -28,7 +28,8 @@ public class CreateModuleRequest {
     // Scheduling fields
     private LocalDate startDate;
     private LocalDate endDate;
+    private Integer weekNumber;
 
     @Valid
-    private List<CreateSubmoduleRequest> submodules;
+    private List<CreateTopicRequest> topics;
 }

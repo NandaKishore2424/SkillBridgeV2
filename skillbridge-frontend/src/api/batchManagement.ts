@@ -8,8 +8,8 @@ export const batchApi = {
     // Get all batches
     getAllBatches: () => apiClient.get('/trainer/batches'),
 
-    // Get batch by ID
-    getBatchById: (batchId: number) => apiClient.get(`/batches/${batchId}`),
+    // Get batch by ID (use admin endpoint for now, TODO: create trainer-specific endpoint)
+    getBatchById: (batchId: number) => apiClient.get(`/admin/batches/${batchId}`),
 };
 
 // ============================================================================
@@ -26,10 +26,20 @@ export const syllabusApi = {
         name: string;
         description?: string;
         displayOrder: number;
-        topics?: Array<{
+        startDate?: string;
+        endDate?: string;
+        submodules?: Array<{
             name: string;
             description?: string;
             displayOrder: number;
+            startDate?: string;
+            endDate?: string;
+            weekNumber?: number;
+            topics?: Array<{
+                name: string;
+                description?: string;
+                displayOrder: number;
+            }>;
         }>;
     }) =>
         apiClient.post(`/batches/${batchId}/syllabus/modules`, data),
@@ -39,6 +49,8 @@ export const syllabusApi = {
         name?: string;
         description?: string;
         displayOrder?: number;
+        startDate?: string;
+        endDate?: string;
     }) =>
         apiClient.put(`/syllabus/modules/${moduleId}`, data),
 
@@ -46,13 +58,44 @@ export const syllabusApi = {
     deleteModule: (moduleId: number) =>
         apiClient.delete(`/syllabus/modules/${moduleId}`),
 
-    // Add topic to module
-    addTopic: (moduleId: number, data: {
+    // Create a submodule
+    createSubmodule: (moduleId: number, data: {
+        name: string;
+        description?: string;
+        displayOrder: number;
+        startDate?: string;
+        endDate?: string;
+        weekNumber?: number;
+        topics?: Array<{
+            name: string;
+            description?: string;
+            displayOrder: number;
+        }>;
+    }) =>
+        apiClient.post(`/syllabus/modules/${moduleId}/submodules`, data),
+
+    // Update a submodule
+    updateSubmodule: (submoduleId: number, data: {
+        name?: string;
+        description?: string;
+        displayOrder?: number;
+        startDate?: string;
+        endDate?: string;
+        weekNumber?: number;
+    }) =>
+        apiClient.put(`/syllabus/submodules/${submoduleId}`, data),
+
+    // Delete a submodule
+    deleteSubmodule: (submoduleId: number) =>
+        apiClient.delete(`/syllabus/submodules/${submoduleId}`),
+
+    // Add topic to submodule
+    addTopic: (submoduleId: number, data: {
         name: string;
         description?: string;
         displayOrder: number;
     }) =>
-        apiClient.post(`/syllabus/modules/${moduleId}/topics`, data),
+        apiClient.post(`/syllabus/submodules/${submoduleId}/topics`, data),
 
     // Update a topic
     updateTopic: (topicId: number, data: {
@@ -74,6 +117,7 @@ export const syllabusApi = {
     copySyllabus: (targetBatchId: number, sourceBatchId: number) =>
         apiClient.post(`/batches/${targetBatchId}/syllabus/copy-from/${sourceBatchId}`),
 };
+
 
 // ============================================================================
 // Timeline API
@@ -162,16 +206,6 @@ export const trainerEnrollmentApi = {
 // Types
 // ============================================================================
 
-export interface SyllabusModule {
-    id: number;
-    name: string;
-    description?: string;
-    displayOrder: number;
-    topics: SyllabusTopic[];
-    topicsCount: number;
-    completedTopicsCount: number;
-}
-
 export interface SyllabusTopic {
     id: number;
     name: string;
@@ -180,6 +214,33 @@ export interface SyllabusTopic {
     isCompleted: boolean;
     completedAt?: string;
 }
+
+export interface SyllabusSubmodule {
+    id: number;
+    name: string;
+    description?: string;
+    displayOrder: number;
+    startDate?: string;
+    endDate?: string;
+    weekNumber?: number;
+    topics: SyllabusTopic[];
+    topicsCount: number;
+    completedTopicsCount: number;
+}
+
+export interface SyllabusModule {
+    id: number;
+    name: string;
+    description?: string;
+    displayOrder: number;
+    startDate?: string;
+    endDate?: string;
+    submodules: SyllabusSubmodule[];
+    submodulesCount: number;
+    totalTopicsCount: number;
+    completedTopicsCount: number;
+}
+
 
 export interface TimelineSession {
     id: number;

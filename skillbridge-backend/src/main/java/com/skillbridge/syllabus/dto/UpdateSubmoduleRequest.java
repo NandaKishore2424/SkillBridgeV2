@@ -5,14 +5,14 @@ import lombok.*;
 import java.time.LocalDate;
 
 /**
- * Request DTO for updating a module
+ * Request DTO for updating a sub-module
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UpdateModuleRequest {
+public class UpdateSubmoduleRequest {
     private String name;
     private String description;
     private Integer displayOrder;
@@ -20,4 +20,5 @@ public class UpdateModuleRequest {
     // Scheduling fields
     private LocalDate startDate;
     private LocalDate endDate;
+    private Integer weekNumber;
 }
