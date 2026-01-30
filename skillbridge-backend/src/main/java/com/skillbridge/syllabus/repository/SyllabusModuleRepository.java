@@ -36,13 +36,14 @@ public interface SyllabusModuleRepository extends JpaRepository<SyllabusModule, 
     long countByBatchId(Long batchId);
 
     /**
-     * Find all modules for a batch with their topics fetched
+     * Find all modules for a batch with their submodules fetched
+     * Topics will be loaded lazily when accessed
      */
     @Query("SELECT DISTINCT m FROM SyllabusModule m " +
-            "LEFT JOIN FETCH m.topics " +
+            "LEFT JOIN FETCH m.submodules " +
             "WHERE m.batch.id = :batchId " +
             "ORDER BY m.displayOrder")
-    List<SyllabusModule> findByBatchIdWithTopics(@Param("batchId") Long batchId);
+    List<SyllabusModule> findByBatchIdWithSubmodulesAndTopics(@Param("batchId") Long batchId);
 
     /**
      * Delete all modules for a batch

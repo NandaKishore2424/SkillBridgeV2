@@ -4,8 +4,10 @@ import com.skillbridge.batch.entity.Batch;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.syllabus.dto.*;
 import com.skillbridge.syllabus.entity.SyllabusModule;
+import com.skillbridge.syllabus.entity.SyllabusSubmodule;
 import com.skillbridge.syllabus.entity.SyllabusTopic;
 import com.skillbridge.syllabus.repository.SyllabusModuleRepository;
+import com.skillbridge.syllabus.repository.SyllabusSubmoduleRepository;
 import com.skillbridge.syllabus.repository.SyllabusTopicRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,34 +19,42 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Service for managing batch syllabus (modules and topics)
+ * Service for managing batch curriculum (modules, sub-modules, and topics)
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional
 public class SyllabusService {
 
     private final SyllabusModuleRepository moduleRepository;
+    private final SyllabusSubmoduleRepository submoduleRepository;
     private final SyllabusTopicRepository topicRepository;
     private final BatchRepository batchRepository;
 
+    // ===================================================================
+    // CURRICULUM (Full 3-level structure)
+    // ===================================================================
+
     /**
-     * Get complete syllabus for a batch
+     * Get complete curriculum for a batch (modules -> submodules -> topics)
      */
     @Transactional(readOnly = true)
-    public List<SyllabusModuleDTO> getSyllabusByBatchId(Long batchId) {
-        log.info("Fetching syllabus for batch {}", batchId);
+    public List<SyllabusModuleDTO> getCurriculumByBatchId(Long batchId) {
+        log.info("Fetching curriculum for batch {}", batchId);
 
-        List<SyllabusModule> modules = moduleRepository.findByBatchIdWithTopics(batchId);
+        List<SyllabusModule> modules = moduleRepository.findByBatchIdWithSubmodulesAndTopics(batchId);
 
         return modules.stream()
                 .map(this::convertToModuleDTO)
                 .collect(Collectors.toList());
     }
 
+    // ===================================================================
+    // MODULE Operations
+    // ===================================================================
+
     /**
-     * Create a new module for a batch
+     * Create a new module for a batch with optional sub-modules
      */
     public SyllabusModuleDTO createModule(Long batchId, CreateModuleRequest request) {
         log.info("Creating module '{}' for batch {}", request.getName(), batchId);
@@ -62,25 +72,21 @@ public class SyllabusService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .displayOrder(request.getDisplayOrder())
-                .topics(new ArrayList<>())
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
+                .submodules(new ArrayList<>())
                 .build();
 
-        // Add topics if provided
-        if (request.getTopics() != null && !request.getTopics().isEmpty()) {
-            for (CreateTopicRequest topicRequest : request.getTopics()) {
-                SyllabusTopic topic = SyllabusTopic.builder()
-                        .module(module)
-                        .name(topicRequest.getName())
-                        .description(topicRequest.getDescription())
-                        .displayOrder(topicRequest.getDisplayOrder())
-                        .isCompleted(false)
-                        .build();
-                module.addTopic(topic);
+        // Add sub-modules if provided
+        if (request.getSubmodules() != null && !request.getSubmodules().isEmpty()) {
+            for (CreateSubmoduleRequest submoduleRequest : request.getSubmodules()) {
+                SyllabusSubmodule submodule = buildSubmodule(module, submoduleRequest);
+                module.addSubmodule(submodule);
             }
         }
 
         SyllabusModule savedModule = moduleRepository.save(module);
-        log.info("Created module {} with {} topics", savedModule.getId(), savedModule.getTopics().size());
+        log.info("Created module {} with {} sub-modules", savedModule.getId(), savedModule.getSubmodules().size());
 
         return convertToModuleDTO(savedModule);
     }
@@ -101,23 +107,30 @@ public class SyllabusService {
             module.setDescription(request.getDescription());
         }
         if (request.getDisplayOrder() != null) {
-            // Check if new display order conflicts
-            if (!request.getDisplayOrder().equals(module.getDisplayOrder())) {
-                if (moduleRepository.existsByBatchIdAndDisplayOrder(
-                        module.getBatch().getId(), request.getDisplayOrder())) {
-                    throw new RuntimeException(
-                            "A module with display order " + request.getDisplayOrder() + " already exists");
-                }
-                module.setDisplayOrder(request.getDisplayOrder());
+            // Check for conflicts
+            if (!module.getDisplayOrder().equals(request.getDisplayOrder()) &&
+                    moduleRepository.existsByBatchIdAndDisplayOrder(module.getBatch().getId(),
+                            request.getDisplayOrder())) {
+                throw new RuntimeException(
+                        "A module with display order " + request.getDisplayOrder() + " already exists");
             }
+            module.setDisplayOrder(request.getDisplayOrder());
+        }
+        if (request.getStartDate() != null) {
+            module.setStartDate(request.getStartDate());
+        }
+        if (request.getEndDate() != null) {
+            module.setEndDate(request.getEndDate());
         }
 
         SyllabusModule updatedModule = moduleRepository.save(module);
+        log.info("Updated module {}", moduleId);
+
         return convertToModuleDTO(updatedModule);
     }
 
     /**
-     * Delete a module (will cascade delete all topics)
+     * Delete a module (will cascade delete all sub-modules and topics)
      */
     public void deleteModule(Long moduleId) {
         log.info("Deleting module {}", moduleId);
@@ -130,23 +143,103 @@ public class SyllabusService {
         log.info("Deleted module {}", moduleId);
     }
 
+    // ===================================================================
+    // SUB-MODULE Operations
+    // ===================================================================
+
     /**
-     * Add a topic to a module
+     * Create a sub-module under a module
      */
-    public SyllabusTopicDTO addTopicToModule(Long moduleId, CreateTopicRequest request) {
-        log.info("Adding topic '{}' to module {}", request.getName(), moduleId);
+    public SyllabusSubmoduleDTO createSubmodule(Long moduleId, CreateSubmoduleRequest request) {
+        log.info("Creating sub-module '{}' for module {}", request.getName(), moduleId);
 
         SyllabusModule module = moduleRepository.findById(moduleId)
                 .orElseThrow(() -> new RuntimeException("Module not found with id: " + moduleId));
 
-        // Check if display order already exists in this module
-        if (topicRepository.existsByModuleIdAndDisplayOrder(moduleId, request.getDisplayOrder())) {
+        // Check if display order already exists
+        if (submoduleRepository.existsByModuleIdAndDisplayOrder(moduleId, request.getDisplayOrder())) {
             throw new RuntimeException(
-                    "A topic with display order " + request.getDisplayOrder() + " already exists in this module");
+                    "A sub-module with display order " + request.getDisplayOrder() + " already exists");
         }
 
+        SyllabusSubmodule submodule = buildSubmodule(module, request);
+        SyllabusSubmodule savedSubmodule = submoduleRepository.save(submodule);
+
+        log.info("Created sub-module {} with {} topics", savedSubmodule.getId(), savedSubmodule.getTopics().size());
+
+        return convertToSubmoduleDTO(savedSubmodule);
+    }
+
+    /**
+     * Update a sub-module
+     */
+    public SyllabusSubmoduleDTO updateSubmodule(Long submoduleId, UpdateSubmoduleRequest request) {
+        log.info("Updating sub-module {}", submoduleId);
+
+        SyllabusSubmodule submodule = submoduleRepository.findById(submoduleId)
+                .orElseThrow(() -> new RuntimeException("Sub-module not found with id: " + submoduleId));
+
+        if (request.getName() != null) {
+            submodule.setName(request.getName());
+        }
+        if (request.getDescription() != null) {
+            submodule.setDescription(request.getDescription());
+        }
+        if (request.getDisplayOrder() != null) {
+            // Check for conflicts
+            if (!submodule.getDisplayOrder().equals(request.getDisplayOrder()) &&
+                    submoduleRepository.existsByModuleIdAndDisplayOrder(submodule.getModule().getId(),
+                            request.getDisplayOrder())) {
+                throw new RuntimeException(
+                        "A sub-module with display order " + request.getDisplayOrder() + " already exists");
+            }
+            submodule.setDisplayOrder(request.getDisplayOrder());
+        }
+        if (request.getStartDate() != null) {
+            submodule.setStartDate(request.getStartDate());
+        }
+        if (request.getEndDate() != null) {
+            submodule.setEndDate(request.getEndDate());
+        }
+        if (request.getWeekNumber() != null) {
+            submodule.setWeekNumber(request.getWeekNumber());
+        }
+
+        SyllabusSubmodule updatedSubmodule = submoduleRepository.save(submodule);
+        log.info("Updated sub-module {}", submoduleId);
+
+        return convertToSubmoduleDTO(updatedSubmodule);
+    }
+
+    /**
+     * Delete a sub-module (will cascade delete all topics)
+     */
+    public void deleteSubmodule(Long submoduleId) {
+        log.info("Deleting sub-module {}", submoduleId);
+
+        if (!submoduleRepository.existsById(submoduleId)) {
+            throw new RuntimeException("Sub-module not found with id: " + submoduleId);
+        }
+
+        submoduleRepository.deleteById(submoduleId);
+        log.info("Deleted sub-module {}", submoduleId);
+    }
+
+    // ===================================================================
+    // TOPIC Operations
+    // ===================================================================
+
+    /**
+     * Add a topic to a sub-module
+     */
+    public SyllabusTopicDTO addTopicToSubmodule(Long submoduleId, CreateTopicRequest request) {
+        log.info("Adding topic '{}' to sub-module {}", request.getName(), submoduleId);
+
+        SyllabusSubmodule submodule = submoduleRepository.findById(submoduleId)
+                .orElseThrow(() -> new RuntimeException("Sub-module not found with id: " + submoduleId));
+
         SyllabusTopic topic = SyllabusTopic.builder()
-                .module(module)
+                .submodule(submodule)
                 .name(request.getName())
                 .description(request.getDescription())
                 .displayOrder(request.getDisplayOrder())
@@ -154,7 +247,7 @@ public class SyllabusService {
                 .build();
 
         SyllabusTopic savedTopic = topicRepository.save(topic);
-        log.info("Created topic {}", savedTopic.getId());
+        log.info("Added topic {} to sub-module {}", savedTopic.getId(), submoduleId);
 
         return convertToTopicDTO(savedTopic);
     }
@@ -175,18 +268,12 @@ public class SyllabusService {
             topic.setDescription(request.getDescription());
         }
         if (request.getDisplayOrder() != null) {
-            // Check if new display order conflicts
-            if (!request.getDisplayOrder().equals(topic.getDisplayOrder())) {
-                if (topicRepository.existsByModuleIdAndDisplayOrder(
-                        topic.getModule().getId(), request.getDisplayOrder())) {
-                    throw new RuntimeException(
-                            "A topic with display order " + request.getDisplayOrder() + " already exists");
-                }
-                topic.setDisplayOrder(request.getDisplayOrder());
-            }
+            topic.setDisplayOrder(request.getDisplayOrder());
         }
 
         SyllabusTopic updatedTopic = topicRepository.save(topic);
+        log.info("Updated topic {}", topicId);
+
         return convertToTopicDTO(updatedTopic);
     }
 
@@ -208,7 +295,7 @@ public class SyllabusService {
      * Toggle topic completion status
      */
     public SyllabusTopicDTO toggleTopicCompletion(Long topicId) {
-        log.info("Toggling completion status for topic {}", topicId);
+        log.info("Toggling completion for topic {}", topicId);
 
         SyllabusTopic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new RuntimeException("Topic not found with id: " + topicId));
@@ -216,93 +303,102 @@ public class SyllabusService {
         topic.toggleCompletion();
         SyllabusTopic updatedTopic = topicRepository.save(topic);
 
-        log.info("Topic {} is now {}", topicId, updatedTopic.getIsCompleted() ? "completed" : "not completed");
+        log.info("Toggled topic {} completion to: {}", topicId, updatedTopic.getIsCompleted());
+
         return convertToTopicDTO(updatedTopic);
     }
 
-    /**
-     * Copy syllabus from one batch to another
-     */
-    public List<SyllabusModuleDTO> copySyllabusFromBatch(Long sourceBatchId, Long targetBatchId) {
-        log.info("Copying syllabus from batch {} to batch {}", sourceBatchId, targetBatchId);
+    // ===================================================================
+    // HELPER Methods
+    // ===================================================================
 
-        Batch targetBatch = batchRepository.findById(targetBatchId)
-                .orElseThrow(() -> new RuntimeException("Target batch not found with id: " + targetBatchId));
+    private SyllabusSubmodule buildSubmodule(SyllabusModule module, CreateSubmoduleRequest request) {
+        SyllabusSubmodule submodule = SyllabusSubmodule.builder()
+                .module(module)
+                .name(request.getName())
+                .description(request.getDescription())
+                .displayOrder(request.getDisplayOrder())
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
+                .weekNumber(request.getWeekNumber())
+                .topics(new ArrayList<>())
+                .build();
 
-        // Get source syllabus
-        List<SyllabusModule> sourceModules = moduleRepository.findByBatchIdWithTopics(sourceBatchId);
-
-        if (sourceModules.isEmpty()) {
-            throw new RuntimeException("Source batch has no syllabus to copy");
-        }
-
-        // Check if target already has syllabus
-        long existingModules = moduleRepository.countByBatchId(targetBatchId);
-        if (existingModules > 0) {
-            throw new RuntimeException("Target batch already has a syllabus. Delete it first before copying.");
-        }
-
-        List<SyllabusModule> copiedModules = new ArrayList<>();
-
-        for (SyllabusModule sourceModule : sourceModules) {
-            SyllabusModule newModule = SyllabusModule.builder()
-                    .batch(targetBatch)
-                    .name(sourceModule.getName())
-                    .description(sourceModule.getDescription())
-                    .displayOrder(sourceModule.getDisplayOrder())
-                    .topics(new ArrayList<>())
-                    .build();
-
-            // Copy topics
-            for (SyllabusTopic sourceTopic : sourceModule.getTopics()) {
-                SyllabusTopic newTopic = SyllabusTopic.builder()
-                        .module(newModule)
-                        .name(sourceTopic.getName())
-                        .description(sourceTopic.getDescription())
-                        .displayOrder(sourceTopic.getDisplayOrder())
-                        .isCompleted(false) // Reset completion status
+        // Add topics if provided
+        if (request.getTopics() != null && !request.getTopics().isEmpty()) {
+            for (CreateTopicRequest topicRequest : request.getTopics()) {
+                SyllabusTopic topic = SyllabusTopic.builder()
+                        .submodule(submodule)
+                        .name(topicRequest.getName())
+                        .description(topicRequest.getDescription())
+                        .displayOrder(topicRequest.getDisplayOrder())
+                        .isCompleted(false)
                         .build();
-                newModule.addTopic(newTopic);
+                submodule.addTopic(topic);
             }
-
-            copiedModules.add(newModule);
         }
 
-        List<SyllabusModule> savedModules = moduleRepository.saveAll(copiedModules);
-        log.info("Copied {} modules with topics from batch {} to batch {}",
-                savedModules.size(), sourceBatchId, targetBatchId);
-
-        return savedModules.stream()
-                .map(this::convertToModuleDTO)
-                .collect(Collectors.toList());
+        return submodule;
     }
 
-    /**
-     * Convert Module entity to DTO
-     */
-    private SyllabusModuleDTO convertToModuleDTO(SyllabusModule module) {
-        List<SyllabusTopicDTO> topicDTOs = module.getTopics().stream()
-                .map(this::convertToTopicDTO)
-                .collect(Collectors.toList());
+    // ===================================================================
+    // DTO Converters
+    // ===================================================================
 
-        long completedCount = module.getTopics().stream()
-                .filter(SyllabusTopic::getIsCompleted)
-                .count();
+    private SyllabusModuleDTO convertToModuleDTO(SyllabusModule module) {
+        List<SyllabusSubmoduleDTO> submoduleDTOs = module.getSubmodules() != null
+                ? module.getSubmodules().stream()
+                        .map(this::convertToSubmoduleDTO)
+                        .collect(Collectors.toList())
+                : new ArrayList<>();
+
+        int totalTopics = submoduleDTOs.stream()
+                .mapToInt(SyllabusSubmoduleDTO::getTopicsCount)
+                .sum();
+
+        int completedTopics = submoduleDTOs.stream()
+                .mapToInt(SyllabusSubmoduleDTO::getCompletedTopicsCount)
+                .sum();
 
         return SyllabusModuleDTO.builder()
                 .id(module.getId())
                 .name(module.getName())
                 .description(module.getDescription())
                 .displayOrder(module.getDisplayOrder())
-                .topics(topicDTOs)
-                .topicsCount(module.getTopics().size())
-                .completedTopicsCount((int) completedCount)
+                .startDate(module.getStartDate())
+                .endDate(module.getEndDate())
+                .submodules(submoduleDTOs)
+                .submodulesCount(submoduleDTOs.size())
+                .totalTopicsCount(totalTopics)
+                .completedTopicsCount(completedTopics)
                 .build();
     }
 
-    /**
-     * Convert Topic entity to DTO
-     */
+    private SyllabusSubmoduleDTO convertToSubmoduleDTO(SyllabusSubmodule submodule) {
+        List<SyllabusTopicDTO> topicDTOs = submodule.getTopics() != null
+                ? submodule.getTopics().stream()
+                        .map(this::convertToTopicDTO)
+                        .collect(Collectors.toList())
+                : new ArrayList<>();
+
+        int completedCount = (int) topicDTOs.stream()
+                .filter(SyllabusTopicDTO::getIsCompleted)
+                .count();
+
+        return SyllabusSubmoduleDTO.builder()
+                .id(submodule.getId())
+                .name(submodule.getName())
+                .description(submodule.getDescription())
+                .displayOrder(submodule.getDisplayOrder())
+                .startDate(submodule.getStartDate())
+                .endDate(submodule.getEndDate())
+                .weekNumber(submodule.getWeekNumber())
+                .topics(topicDTOs)
+                .topicsCount(topicDTOs.size())
+                .completedTopicsCount(completedCount)
+                .build();
+    }
+
     private SyllabusTopicDTO convertToTopicDTO(SyllabusTopic topic) {
         return SyllabusTopicDTO.builder()
                 .id(topic.getId())

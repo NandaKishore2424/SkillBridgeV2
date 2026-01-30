@@ -69,7 +69,7 @@ public class BatchController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'TRAINER')")
     public ResponseEntity<BatchDTO> getBatchById(@PathVariable Long id) {
         log.info("Fetching batch with id: {}", id);
         Optional<Batch> batch = batchRepository.findById(id);
