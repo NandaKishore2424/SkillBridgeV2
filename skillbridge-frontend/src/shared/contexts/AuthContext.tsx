@@ -12,7 +12,7 @@
  * - Automatic token refresh on 401 errors
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { AuthContextValue, AuthState, LoginCredentials, RegisterData } from '@/shared/types/auth'
 import type { User, UserRole } from '@/shared/types'
@@ -48,11 +48,11 @@ function decodeJWT(token: string): any {
   if (!token || !isJWT(token)) {
     return null // Not a JWT, return null
   }
-  
+
   try {
     const base64Url = token.split('.')[1]
     if (!base64Url) return null
-    
+
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
     const jsonPayload = decodeURIComponent(
       atob(base64)
@@ -74,7 +74,7 @@ function decodeJWT(token: string): any {
 function isTokenExpired(token: string): boolean {
   if (!token) return true
   if (!isJWT(token)) return false // Non-JWT tokens are considered valid (backend will validate)
-  
+
   const decoded = decodeJWT(token)
   if (!decoded || !decoded.exp) return true
   return decoded.exp * 1000 < Date.now()
@@ -88,7 +88,7 @@ function getUserFromToken(token: string): User | null {
   if (!isJWT(token)) {
     return null // Not a JWT, user should come from API response
   }
-  
+
   const decoded = decodeJWT(token)
   if (!decoded) return null
 
@@ -136,12 +136,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
               console.error('Error parsing stored user:', e)
             }
           }
-          
+
           // If no user in localStorage and token is JWT, try to extract from token
           if (!user && isJWT(storedAccessToken)) {
             user = getUserFromToken(storedAccessToken)
           }
-          
+
           // If we have a token but no user, still consider authenticated (user will be fetched from API if needed)
           if (user || storedAccessToken) {
             setState({
@@ -200,7 +200,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const handleAuthSuccess = async (response: authAPI.AuthResponse): Promise<User | null> => {
     // Priority: response.user > token (if JWT) > null
     let user: User | null = null
-    
+
     // First, try to get user from response (backend provides this)
     if (response.user) {
       user = {
@@ -209,6 +209,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         role: response.user.role as UserRole,
         collegeId: response.user.collegeId,
         isActive: response.user.isActive !== false,
+        accountStatus: response.user.accountStatus,
+        profileCompleted: response.user.profileCompleted,
       }
     } else if (isJWT(response.accessToken)) {
       // Fallback: try to extract from JWT token if it's a JWT
@@ -245,7 +247,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('[AuthContext] Login started')
       const response = await authAPI.login(credentials)
       console.log('[AuthContext] Login response:', response)
-      
+
       const user = await handleAuthSuccess(response)
       console.log('[AuthContext] User after handleAuthSuccess:', user)
 
@@ -263,7 +265,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
             redirectPath = '/trainer/dashboard'
             break
           case 'STUDENT':
-            redirectPath = '/student/dashboard'
+            // Check if student needs to complete profile setup
+            if (user.accountStatus === 'PENDING_SETUP' || !user.profileCompleted) {
+              redirectPath = '/student/profile-setup'
+            } else {
+              redirectPath = '/student/dashboard'
+            }
             break
           default:
             redirectPath = '/dashboard'

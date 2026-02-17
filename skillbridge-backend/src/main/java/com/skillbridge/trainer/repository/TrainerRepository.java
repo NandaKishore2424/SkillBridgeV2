@@ -9,11 +9,11 @@ import java.util.Optional;
 
 @Repository
 public interface TrainerRepository extends JpaRepository<Trainer, Long> {
-    Optional<Trainer> findByUserId(Long userId);
+    Optional<Trainer> findByUser_Id(Long userId);
 
     List<Trainer> findByCollegeId(Long collegeId);
 
-    boolean existsByUserId(Long userId);
+    boolean existsByUser_Id(Long userId);
 
     long countByCollegeId(Long collegeId);
 }
