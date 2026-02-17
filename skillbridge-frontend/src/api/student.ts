@@ -93,11 +93,8 @@ export interface EnrollmentResponse {
   appliedAt: string
 }
 
-export const applyToBatch = async (batchId: number): Promise<EnrollmentResponse> => {
-  const response = await apiClient.post<EnrollmentResponse>('/student/batches/apply', {
-    batchId,
-  })
-  return response.data
+export const applyToBatch = async (batchId: number): Promise<void> => {
+  await apiClient.post(`/student/batches/apply`, { batchId })
 }
 
 // ==================== Progress Tracking ====================
@@ -115,3 +112,50 @@ export const getMyProgress = async (batchId: number): Promise<{
   return response.data
 }
 
+// ==================== Profile Setup ====================
+
+export interface StudentProfileUpdateData {
+  fullName: string
+  phone: string
+  degree: string
+  branch: string
+  year: number
+  rollNumber: string
+  bio?: string
+  githubUrl?: string
+  portfolioUrl?: string
+  resumeUrl?: string
+}
+
+export interface StudentProfileResponse {
+  id: number
+  userId: number
+  collegeId: number
+  fullName: string
+  rollNumber: string
+  degree: string
+  branch: string
+  year: number
+  phone: string
+  githubUrl?: string
+  portfolioUrl?: string
+  resumeUrl?: string
+  bio?: string
+  accountStatus: string
+  profileCompleted: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Complete student profile setup (first-time login)
+ */
+export const completeProfile = async (
+  data: StudentProfileUpdateData
+): Promise<StudentProfileResponse> => {
+  const response = await apiClient.put<StudentProfileResponse>(
+    '/students/profile/complete',
+    data
+  )
+  return response.data
+}

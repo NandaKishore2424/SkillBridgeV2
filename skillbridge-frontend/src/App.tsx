@@ -40,6 +40,7 @@ import BatchDetailsPage from './pages/trainer/BatchDetailsPage'
 // Student pages
 import { StudentDashboard } from './pages/student/dashboard/StudentDashboard'
 import StudentFeedback from './pages/student/StudentFeedback'
+import { ProfileSetup } from './pages/student/ProfileSetup'
 
 function App() {
   return (
@@ -224,6 +225,9 @@ function App() {
       />
 
       {/* Protected Routes - Student */}
+      {/* Profile Setup - Public for authenticated students with PENDING_SETUP */}
+      <Route path="/student/profile-setup" element={<ProfileSetup />} />
+
       <Route
         path="/student/dashboard"
         element={

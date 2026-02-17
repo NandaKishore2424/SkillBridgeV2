@@ -1,46 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
-import { Button } from '@/shared/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
-import { UserPlus, Loader2 } from 'lucide-react';
-import { enrollmentApi, type BatchEnrollment } from '@/api/batchManagement';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { Users, Loader2, Mail } from 'lucide-react';
+import { getBatchStudents } from '@/api/trainer';
 
 interface StudentsTabProps {
     batchId: number;
 }
 
 export default function StudentsTab({ batchId }: StudentsTabProps) {
-    const { user } = useAuth();
-    const isAdmin = user?.role === 'ADMIN';
-
-    const { data: enrollment, isLoading } = useQuery({
-        queryKey: ['enrollment', batchId],
-        queryFn: async () => {
-            const response = await enrollmentApi.getBatchEnrollments(batchId);
-            return response.data as BatchEnrollment;
-        },
-        enabled: isAdmin, // Only admins can view enrollments directly
+    const { data: students, isLoading } = useQuery({
+        queryKey: ['batch-students', batchId],
+        queryFn: () => getBatchStudents(batchId),
     });
-
-    if (!isAdmin) {
-        return (
-            <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                    <UserPlus className="h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">Student Management</h3>
-                    <p className="text-muted-foreground mb-4 max-w-sm">
-                        As a trainer, you can request to add or remove students from this batch.
-                        Requests will need administrator approval.
-                    </p>
-                    <Button>
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Request Student Addition
-                    </Button>
-                </CardContent>
-            </Card>
-        );
-    }
 
     if (isLoading) {
         return (
@@ -52,7 +24,7 @@ export default function StudentsTab({ batchId }: StudentsTabProps) {
         );
     }
 
-    const students = enrollment?.enrolledStudents || [];
+    const studentList = students || [];
 
     return (
         <div className="space-y-4">
@@ -61,32 +33,27 @@ export default function StudentsTab({ batchId }: StudentsTabProps) {
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div>
-                            <CardTitle>Enrolled Students ({students.length})</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                <Users className="h-5 w-5" />
+                                Enrolled Students ({studentList.length})
+                            </CardTitle>
                             <CardDescription>
-                                Manage student enrollments for this batch
+                                Students enrolled in this batch
                             </CardDescription>
                         </div>
-                        <Button>
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Add Student
-                        </Button>
                     </div>
                 </CardHeader>
             </Card>
 
             {/* Students Table */}
-            {students.length === 0 ? (
+            {studentList.length === 0 ? (
                 <Card>
                     <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                        <UserPlus className="h-12 w-12 text-muted-foreground mb-4" />
+                        <Users className="h-12 w-12 text-muted-foreground mb-4" />
                         <h3 className="text-lg font-semibold mb-2">No students enrolled</h3>
-                        <p className="text-muted-foreground mb-4 max-w-sm">
-                            Add stu students to this batch to get started.
+                        <p className="text-muted-foreground max-w-sm">
+                            No students have been enrolled in this batch yet.
                         </p>
-                        <Button>
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Add First Student
-                        </Button>
                     </CardContent>
                 </Card>
             ) : (
@@ -98,23 +65,18 @@ export default function StudentsTab({ batchId }: StudentsTabProps) {
                                     <TableHead>Roll Number</TableHead>
                                     <TableHead>Name</TableHead>
                                     <TableHead>Email</TableHead>
-                                    <TableHead>Department</TableHead>
-                                    <TableHead>Year</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {students.map((student) => (
-                                    <TableRow key={student.studentId}>
+                                {studentList.map((student) => (
+                                    <TableRow key={student.id}>
                                         <TableCell className="font-mono">{student.rollNumber}</TableCell>
                                         <TableCell className="font-medium">{student.fullName}</TableCell>
-                                        <TableCell>{student.email}</TableCell>
-                                        <TableCell>{student.department}</TableCell>
-                                        <TableCell>{student.year}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" className="text-destructive">
-                                                Remove
-                                            </Button>
+                                        <TableCell>
+                                            <a href={`mailto:${student.email}`} className="flex items-center gap-1 text-primary hover:underline">
+                                                <Mail className="h-3 w-3" />
+                                                {student.email}
+                                            </a>
                                         </TableCell>
                                     </TableRow>
                                 ))}

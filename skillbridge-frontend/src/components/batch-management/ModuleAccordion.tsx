@@ -9,6 +9,8 @@ import { syllabusApi, type SyllabusModule, type SyllabusSubmodule, type Syllabus
 import { useToast } from '@/shared/hooks/use-toast';
 import EditModuleDialog from './EditModuleDialog';
 import CreateSubmoduleDialog from './CreateSubmoduleDialog';
+import EditSubmoduleDialog from './EditSubmoduleDialog';
+import AddTopicDialog from './AddTopicDialog';
 
 interface ModuleAccordionProps {
     module: SyllabusModule;
@@ -184,6 +186,7 @@ export default function ModuleAccordion({ module, batchId, onDelete }: ModuleAcc
                                 <SubmoduleAccordion
                                     key={submodule.id}
                                     submodule={submodule}
+                                    batchId={batchId}
                                     onToggleTopic={handleToggleTopic}
                                     onDeleteTopic={handleDeleteTopic}
                                     onDeleteSubmodule={() => handleDeleteSubmodule(submodule.id)}
@@ -222,14 +225,19 @@ interface SubmoduleAccordionProps {
     onToggleTopic: (topicId: number) => void;
     onDeleteTopic: (topicId: number) => void;
     onDeleteSubmodule: () => void;
+    batchId: number;
 }
 
 function SubmoduleAccordion({
     submodule,
     onToggleTopic,
     onDeleteTopic,
-    onDeleteSubmodule
+    onDeleteSubmodule,
+    batchId
 }: SubmoduleAccordionProps) {
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [isAddTopicOpen, setIsAddTopicOpen] = useState(false);
+
     const formatDateRange = (start?: string, end?: string) => {
         if (!start && !end) return '';
         try {
@@ -287,7 +295,12 @@ function SubmoduleAccordion({
                 )}
 
                 <div className="flex gap-2 mb-3">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setIsEditOpen(true)}
+                    >
                         <Pencil className="h-3 w-3 mr-1" />
                         Edit
                     </Button>
@@ -300,7 +313,12 @@ function SubmoduleAccordion({
                         <Trash2 className="h-3 w-3 mr-1" />
                         Delete
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setIsAddTopicOpen(true)}
+                    >
                         <Plus className="h-3 w-3 mr-1" />
                         Add Topic
                     </Button>
@@ -323,6 +341,21 @@ function SubmoduleAccordion({
                         No topics yet. Click "Add Topic" to get started.
                     </p>
                 )}
+
+                {/* Dialogs */}
+                <EditSubmoduleDialog
+                    submodule={submodule}
+                    batchId={batchId}
+                    isOpen={isEditOpen}
+                    onClose={() => setIsEditOpen(false)}
+                />
+
+                <AddTopicDialog
+                    submoduleId={submodule.id}
+                    batchId={batchId}
+                    isOpen={isAddTopicOpen}
+                    onClose={() => setIsAddTopicOpen(false)}
+                />
             </AccordionContent>
         </AccordionItem>
     );

@@ -80,7 +80,7 @@ public class TrainerService {
     }
 
     public TrainerDTO getTrainerProfile(Long userId) {
-        Trainer trainer = trainerRepository.findByUserId(userId)
+        Trainer trainer = trainerRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Trainer profile not found"));
         return mapToDTO(trainer);
     }
@@ -99,7 +99,7 @@ public class TrainerService {
 
     @Transactional
     public TrainerDTO updateTrainerProfile(Long userId, UpdateTrainerProfileRequest request) {
-        Trainer trainer = trainerRepository.findByUserId(userId)
+        Trainer trainer = trainerRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Trainer profile not found"));
 
         if (request.getFullName() != null)

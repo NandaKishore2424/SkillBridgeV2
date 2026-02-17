@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Repository
 public interface StudentRepository extends JpaRepository<Student, Long> {
-    Optional<Student> findByUserId(Long userId);
+    Optional<Student> findByUser_Id(Long userId);
 
     List<Student> findByCollegeId(Long collegeId);
 
@@ -17,7 +17,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
 
     boolean existsByRollNumberAndCollegeId(String rollNumber, Long collegeId);
 
-    boolean existsByUserId(Long userId);
+    boolean existsByUser_Id(Long userId);
 
     long countByCollegeId(Long collegeId);
 }

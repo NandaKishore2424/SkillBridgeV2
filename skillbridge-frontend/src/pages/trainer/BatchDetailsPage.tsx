@@ -6,7 +6,6 @@ import { Button } from '@/shared/components/ui/button';
 import { ArrowLeft, BookOpen, Calendar, Users } from 'lucide-react';
 import { batchApi } from '@/api/batchManagement';
 import SyllabusTab from '@/components/batch-management/SyllabusTab';
-import TimelineTab from '@/components/batch-management/TimelineTab';
 import StudentsTab from '@/components/batch-management/StudentsTab';
 
 export default function BatchDetailsPage() {
@@ -107,14 +106,10 @@ export default function BatchDetailsPage() {
 
             {/* Tabs */}
             <Tabs defaultValue="syllabus" className="space-y-4">
-                <TabsList className="grid w-full grid-cols-3 lg:w-auto">
+                <TabsList className="grid w-full grid-cols-2 lg:w-auto">
                     <TabsTrigger value="syllabus" className="gap-2">
                         <BookOpen className="h-4 w-4" />
                         Syllabus
-                    </TabsTrigger>
-                    <TabsTrigger value="timeline" className="gap-2">
-                        <Calendar className="h-4 w-4" />
-                        Timeline
                     </TabsTrigger>
                     <TabsTrigger value="students" className="gap-2">
                         <Users className="h-4 w-4" />
@@ -124,10 +119,6 @@ export default function BatchDetailsPage() {
 
                 <TabsContent value="syllabus">
                     <SyllabusTab batchId={batchId} />
-                </TabsContent>
-
-                <TabsContent value="timeline">
-                    <TimelineTab batchId={batchId} />
                 </TabsContent>
 
                 <TabsContent value="students">
