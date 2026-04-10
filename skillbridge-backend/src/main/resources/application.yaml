@@ -11,5 +11,13 @@ spring:
   profiles:
     active: local
 
+jwt:
+  secret: "change-me-in-prod-use-env"
+  accessTokenTtlSeconds: 3600
+  refreshTokenTtlSeconds: 1209600
+
+rateLimit:
+  requestsPerMinute: 120
+
 # When 'dev' profile is active, Spring Boot will also load application-dev.yaml
 # This allows us to have environment-specific settings

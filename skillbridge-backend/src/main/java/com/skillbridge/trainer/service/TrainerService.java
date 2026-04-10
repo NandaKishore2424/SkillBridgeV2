@@ -13,6 +13,8 @@ import com.skillbridge.trainer.entity.Trainer;
 import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,6 +97,11 @@ public class TrainerService {
         return trainerRepository.findByCollegeId(collegeId).stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
+    }
+
+    public Page<TrainerDTO> getTrainersByCollege(Long collegeId, Pageable pageable) {
+        return trainerRepository.findByCollegeId(collegeId, pageable)
+                .map(this::mapToDTO);
     }
 
     @Transactional

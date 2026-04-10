@@ -7,6 +7,7 @@ import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
 import com.skillbridge.company.repository.CompanyRepository;
@@ -15,6 +16,8 @@ import com.skillbridge.trainer.entity.Trainer;
 import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -42,7 +45,10 @@ public class BatchController {
 
     @GetMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<BatchDTO>> getAllBatches() {
+    public ResponseEntity<PagedResponse<BatchDTO>> getAllBatches(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
         log.info("Fetching all batches for college admin");
         // Get college ID from authenticated user
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -61,11 +67,17 @@ public class BatchController {
             return ResponseEntity.badRequest().build();
         }
 
-        List<Batch> batches = batchRepository.findByCollegeId(collegeId);
-        List<BatchDTO> batchDTOs = batches.stream()
+        Page<Batch> batches = batchRepository.findByCollegeId(collegeId, PageRequest.of(page, size));
+        List<BatchDTO> batchDTOs = batches.getContent().stream()
                 .map(this::convertToDTO)
                 .collect(java.util.stream.Collectors.toList());
-        return ResponseEntity.ok(batchDTOs);
+        return ResponseEntity.ok(PagedResponse.<BatchDTO>builder()
+            .items(batchDTOs)
+            .page(batches.getNumber())
+            .size(batches.getSize())
+            .totalElements(batches.getTotalElements())
+            .totalPages(batches.getTotalPages())
+            .build());
     }
 
     @GetMapping("/{id}")

@@ -2,7 +2,6 @@ package com.skillbridge.bulkupload.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillbridge.auth.entity.Role;
-import com.skillbridge.auth.entity.Role.RoleName;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.RoleRepository;
 import com.skillbridge.auth.repository.UserRepository;
@@ -46,6 +45,63 @@ public class BulkUploadService {
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
+    private final BulkUploadJobService bulkUploadJobService;
+
+        public BulkUploadResponse startStudentUpload(byte[] data, String fileName, Long collegeId, Long uploadedByUserId) {
+        User uploader = userRepository.findById(uploadedByUserId)
+            .orElseThrow(() -> new RuntimeException("Uploader not found"));
+        College college = collegeRepository.findById(collegeId)
+            .orElseThrow(() -> new RuntimeException("College not found"));
+
+        BulkUpload bulkUpload = BulkUpload.builder()
+            .college(college)
+            .uploadedBy(uploader)
+            .entityType("STUDENT")
+            .fileName(fileName)
+            .totalRows(0)
+            .status("PROCESSING")
+            .build();
+        bulkUpload = bulkUploadRepository.save(bulkUpload);
+
+        bulkUploadJobService.processStudentUploadAsync(data, fileName, bulkUpload.getId(), collegeId);
+
+        return BulkUploadResponse.builder()
+            .uploadId(bulkUpload.getId())
+            .totalRows(0)
+            .successfulRows(0)
+            .failedRows(0)
+            .errors(new ArrayList<>())
+            .status("PROCESSING")
+            .build();
+        }
+
+        public BulkUploadResponse startTrainerUpload(byte[] data, String fileName, Long collegeId, Long uploadedByUserId) {
+        User uploader = userRepository.findById(uploadedByUserId)
+            .orElseThrow(() -> new RuntimeException("Uploader not found"));
+        College college = collegeRepository.findById(collegeId)
+            .orElseThrow(() -> new RuntimeException("College not found"));
+
+        BulkUpload bulkUpload = BulkUpload.builder()
+            .college(college)
+            .uploadedBy(uploader)
+            .entityType("TRAINER")
+            .fileName(fileName)
+            .totalRows(0)
+            .status("PROCESSING")
+            .build();
+        bulkUpload = bulkUploadRepository.save(bulkUpload);
+
+        bulkUploadJobService.processTrainerUploadAsync(data, fileName, bulkUpload.getId(), collegeId);
+
+        return BulkUploadResponse.builder()
+            .uploadId(bulkUpload.getId())
+            .totalRows(0)
+            .successfulRows(0)
+            .failedRows(0)
+            .errors(new ArrayList<>())
+            .status("PROCESSING")
+            .build();
+        }
 
     public BulkUploadResponse uploadStudents(MultipartFile file, Long collegeId, Long uploadedByUserId) {
         log.info("Starting bulk upload for students. CollegeID: {}, UserID: {}", collegeId, uploadedByUserId);
@@ -364,6 +420,7 @@ public class BulkUploadService {
                 .build();
         bulkUploadResultRepository.save(result);
     }
+
 
     public List<BulkUpload> getHistory(Long collegeId) {
         return bulkUploadRepository.findByCollegeIdOrderByCreatedAtDesc(collegeId);

@@ -5,11 +5,14 @@ import com.skillbridge.college.entity.College;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
 import com.skillbridge.company.repository.CompanyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -32,7 +35,10 @@ public class CompanyController {
 
     @GetMapping
     @PreAuthorize("hasRole('SYSTEM_ADMIN') or hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<Company>> getAllCompanies() {
+    public ResponseEntity<PagedResponse<CompanyDTO>> getAllCompanies(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
         log.info("Fetching all companies");
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User user = (User) auth.getPrincipal();
@@ -48,18 +54,24 @@ public class CompanyController {
             }
         }
 
-        List<Company> companies;
+        Page<Company> companies;
         if (userCollegeId == null) {
-            // SYSTEM_ADMIN
-            companies = companyRepository.findAll();
+            companies = companyRepository.findAll(PageRequest.of(page, size));
         } else {
-            // COLLEGE_ADMIN - filter by college
-            final Long finalCollegeId = userCollegeId; // Make final for lambda
-            companies = companyRepository.findAll().stream()
-                    .filter(company -> company.getCollege().getId().equals(finalCollegeId))
-                    .toList();
+            companies = companyRepository.findByCollegeId(userCollegeId, PageRequest.of(page, size));
         }
-        return ResponseEntity.ok(companies);
+
+        List<CompanyDTO> items = companies.getContent().stream()
+                .map(this::convertToDTO)
+                .toList();
+
+        return ResponseEntity.ok(PagedResponse.<CompanyDTO>builder()
+                .items(items)
+                .page(companies.getNumber())
+                .size(companies.getSize())
+                .totalElements(companies.getTotalElements())
+                .totalPages(companies.getTotalPages())
+                .build());
     }
 
     @GetMapping("/{id}")
@@ -83,7 +95,7 @@ public class CompanyController {
 
         // Check if user is SYSTEM_ADMIN
         boolean isSystemAdmin = user.getRoles().stream()
-                .anyMatch(role -> role.getName().equals("ROLE_SYSTEM_ADMIN"));
+            .anyMatch(role -> role.getName().equals("SYSTEM_ADMIN"));
 
         // For SYSTEM_ADMIN: use collegeId from request if provided
         // For COLLEGE_ADMIN: use their college ID
