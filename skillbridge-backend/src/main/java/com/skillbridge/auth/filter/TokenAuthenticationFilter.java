@@ -2,6 +2,7 @@ package com.skillbridge.auth.filter;
 
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.UserRepository;
+import com.skillbridge.auth.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
     private final UserRepository userRepository;
+    private final JwtService jwtService;
 
     @Override
     protected void doFilterInternal(
@@ -48,34 +50,30 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7); // Remove "Bearer " prefix
         
         try {
-            // For simple tokens: "token_{userId}_{timestamp}"
-            if (token.startsWith("token_")) {
-                String[] parts = token.split("_");
-                if (parts.length >= 2) {
-                    Long userId = Long.parseLong(parts[1]);
-                    
-                    User user = userRepository.findById(userId)
-                        .orElse(null);
-                    
-                    if (user != null && user.getIsActive()) {
-                        // Extract roles
-                        var authorities = user.getRoles().stream()
-                            .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
-                            .collect(Collectors.toList());
-                        
-                        UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
+            if (!jwtService.isTokenValid(token)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            Long userId = jwtService.getUserId(token);
+            User user = userRepository.findById(userId).orElse(null);
+
+            if (user != null && user.getIsActive()) {
+                var authorities = user.getRoles().stream()
+                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
+                        .collect(Collectors.toList());
+
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
                                 user,
                                 null,
                                 authorities
-                            );
-                        
-                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
-                        
-                        log.debug("Authenticated user: {} with roles: {}", user.getEmail(), authorities);
-                    }
-                }
+                        );
+
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                log.debug("Authenticated user: {} with roles: {}", user.getEmail(), authorities);
             }
         } catch (Exception e) {
             log.warn("Failed to authenticate token: {}", e.getMessage());

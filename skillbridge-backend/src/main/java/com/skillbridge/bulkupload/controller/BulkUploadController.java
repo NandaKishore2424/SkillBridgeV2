@@ -43,9 +43,20 @@ public class BulkUploadController {
         // If it's your entity, it has collegeId.
 
         Long collegeId = user.getCollegeId();
-        // Fallback or validation if collegeId is null
+        csvParserService.validateCsvFormat(file, "STUDENT");
 
-        return ResponseEntity.ok(bulkUploadService.uploadStudents(file, collegeId, user.getId()));
+        try {
+            byte[] data = file.getBytes();
+            BulkUploadResponse response = bulkUploadService.startStudentUpload(
+                    data,
+                    file.getOriginalFilename(),
+                    collegeId,
+                    user.getId()
+            );
+            return ResponseEntity.accepted().body(response);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to read upload file: " + e.getMessage());
+        }
     }
 
     @PostMapping("/trainers/bulk-upload")
@@ -55,7 +66,20 @@ public class BulkUploadController {
             @AuthenticationPrincipal User user) {
 
         Long collegeId = user.getCollegeId();
-        return ResponseEntity.ok(bulkUploadService.uploadTrainers(file, collegeId, user.getId()));
+        csvParserService.validateCsvFormat(file, "TRAINER");
+
+        try {
+            byte[] data = file.getBytes();
+            BulkUploadResponse response = bulkUploadService.startTrainerUpload(
+                    data,
+                    file.getOriginalFilename(),
+                    collegeId,
+                    user.getId()
+            );
+            return ResponseEntity.accepted().body(response);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to read upload file: " + e.getMessage());
+        }
     }
 
     @GetMapping("/students/bulk-upload/template")

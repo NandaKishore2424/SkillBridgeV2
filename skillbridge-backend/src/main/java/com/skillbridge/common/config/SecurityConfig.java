@@ -1,6 +1,8 @@
 package com.skillbridge.common.config;
 
 import com.skillbridge.auth.filter.TokenAuthenticationFilter;
+import com.skillbridge.common.tenant.TenantFilter;
+import com.skillbridge.common.throttle.RateLimitingFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -22,9 +24,17 @@ import java.util.List;
 public class SecurityConfig {
 
     private final TokenAuthenticationFilter tokenAuthenticationFilter;
+    private final TenantFilter tenantFilter;
+    private final RateLimitingFilter rateLimitingFilter;
 
-    public SecurityConfig(TokenAuthenticationFilter tokenAuthenticationFilter) {
+    public SecurityConfig(
+            TokenAuthenticationFilter tokenAuthenticationFilter,
+            TenantFilter tenantFilter,
+            RateLimitingFilter rateLimitingFilter
+    ) {
         this.tokenAuthenticationFilter = tokenAuthenticationFilter;
+        this.tenantFilter = tenantFilter;
+        this.rateLimitingFilter = rateLimitingFilter;
     }
 
     @Bean
@@ -35,7 +45,9 @@ public class SecurityConfig {
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
+            .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(tenantFilter, TokenAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/colleges/active").permitAll() // Public endpoint for registration
