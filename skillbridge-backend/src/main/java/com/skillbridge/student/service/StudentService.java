@@ -6,6 +6,7 @@ import com.skillbridge.auth.repository.RoleRepository;
 import com.skillbridge.auth.repository.UserRepository;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.shared.messaging.AIEventPublisher;
 import com.skillbridge.student.dto.*;
 import com.skillbridge.student.entity.*;
 import com.skillbridge.student.repository.*;
@@ -34,6 +35,7 @@ public class StudentService {
     private final StudentProjectRepository studentProjectRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AIEventPublisher aiEventPublisher; // injected for async AI notifications
 
     @Transactional
     public StudentDTO createStudent(CreateStudentRequest request) {
@@ -130,6 +132,11 @@ public class StudentService {
 
         student.setUpdatedAt(LocalDateTime.now());
         Student updated = studentRepository.save(student);
+
+        // After saving, notify the AI service asynchronously via RabbitMQ.
+        // This runs AFTER the transaction commits so the AI service reads fresh data.
+        aiEventPublisher.publishProfileUpdated(updated.getId(), updated.getCollege().getId());
+
         return mapToDTO(updated);
     }
 
@@ -157,6 +164,9 @@ public class StudentService {
                 .build();
 
         studentSkillRepository.save(studentSkill);
+
+        // Notify the AI service that this student has a new skill to analyze.
+        aiEventPublisher.publishSkillUpdated(student.getId(), student.getCollege().getId(), skill.getId());
     }
 
     @Transactional
@@ -171,6 +181,9 @@ public class StudentService {
         studentSkill.setProficiencyLevel(proficiencyLevel);
         studentSkill.setUpdatedAt(LocalDateTime.now());
         studentSkillRepository.save(studentSkill);
+
+        // Notify the AI service that a proficiency level changed — re-run gap analysis.
+        aiEventPublisher.publishSkillUpdated(student.getId(), student.getCollege().getId(), skillId);
     }
 
     @Transactional

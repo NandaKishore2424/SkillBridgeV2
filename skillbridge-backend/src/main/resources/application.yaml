@@ -5,11 +5,24 @@
 spring:
   application:
     name: skillbridge-backend
-  
+
+  # RabbitMQ / CloudAMQP Configuration (shared across all profiles)
+  rabbitmq:
+    addresses: amqps://gvcxbqgm:Nm-4KJfWbJ73S0vHX-RZgWKcdDD0rsLW@puffin.rmq2.cloudamqp.com/gvcxbqgm
+
   # Active profile - change this to switch environments
   # Options: dev, local, prod
   profiles:
     active: local
 
-# When 'dev' profile is active, Spring Boot will also load application-dev.yaml
+jwt:
+  secret: "change-me-in-prod-use-env"
+  accessTokenTtlSeconds: 3600
+  refreshTokenTtlSeconds: 1209600
+
+rateLimit:
+  requestsPerMinute: 120
+
+# When 'local' profile is active, Spring Boot will also load application-local.yaml
 # This allows us to have environment-specific settings
+
