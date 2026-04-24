@@ -63,6 +63,8 @@ export function TrainersList() {
   const queryClient = useQueryClient()
   const location = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(0)
+  const pageSize = 20
   const { showSuccess, showError } = useToastNotifications()
 
   // Show success message from navigation state
@@ -75,12 +77,12 @@ export function TrainersList() {
 
   // Fetch trainers
   const {
-    data: trainers,
+    data: trainersPage,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['admin', 'trainers'],
-    queryFn: getTrainers,
+    queryKey: ['admin', 'trainers', page, pageSize],
+    queryFn: () => getTrainers(page, pageSize),
   })
 
   // Update trainer status mutation
@@ -99,7 +101,7 @@ export function TrainersList() {
   })
 
   // Filter trainers
-  const filteredTrainers = trainers?.filter((trainer) => {
+  const filteredTrainers = trainersPage?.items?.filter((trainer) => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
@@ -180,7 +182,7 @@ export function TrainersList() {
               <CardHeader>
                 <CardTitle>All Trainers</CardTitle>
                 <CardDescription>
-                  {filteredTrainers?.length || 0} trainer(s) found
+                  {trainersPage?.totalElements || 0} trainer(s) found
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -276,6 +278,31 @@ export function TrainersList() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Pagination */}
+            {trainersPage && trainersPage.totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Page {trainersPage.page + 1} of {trainersPage.totalPages}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p) => Math.max(p - 1, 0))}
+                    disabled={trainersPage.page === 0}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p) => Math.min(p + 1, trainersPage.totalPages - 1))}
+                    disabled={trainersPage.page >= trainersPage.totalPages - 1}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </PageWrapper>
       </AuthenticatedLayout>

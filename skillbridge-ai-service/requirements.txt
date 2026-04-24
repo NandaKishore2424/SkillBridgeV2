@@ -2,3 +2,8 @@ fastapi
 uvicorn
 pika
 python-dotenv
+langchain
+langchain-community
+langchain-huggingface
+sentence-transformers
+psycopg2-binary

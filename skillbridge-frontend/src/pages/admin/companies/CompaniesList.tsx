@@ -53,6 +53,8 @@ const HIRING_TYPE_LABELS: Record<Company['hiringType'], string> = {
 export function CompaniesList() {
   const location = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(0)
+  const pageSize = 20
   const { showSuccess } = useToastNotifications()
 
   // Show success message from navigation state
@@ -65,16 +67,16 @@ export function CompaniesList() {
 
   // Fetch companies
   const {
-    data: companies,
+    data: companiesPage,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['admin', 'companies'],
-    queryFn: getCompanies,
+    queryKey: ['admin', 'companies', page, pageSize],
+    queryFn: () => getCompanies(page, pageSize),
   })
 
   // Filter companies
-  const filteredCompanies = companies?.filter((company) => {
+  const filteredCompanies = companiesPage?.items?.filter((company) => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
@@ -134,7 +136,7 @@ export function CompaniesList() {
               <CardHeader>
                 <CardTitle>All Companies</CardTitle>
                 <CardDescription>
-                  {filteredCompanies?.length || 0} company(ies) found
+                  {companiesPage?.totalElements || 0} company(ies) found
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -232,6 +234,31 @@ export function CompaniesList() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Pagination */}
+            {companiesPage && companiesPage.totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Page {companiesPage.page + 1} of {companiesPage.totalPages}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p) => Math.max(p - 1, 0))}
+                    disabled={companiesPage.page === 0}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p) => Math.min(p + 1, companiesPage.totalPages - 1))}
+                    disabled={companiesPage.page >= companiesPage.totalPages - 1}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </PageWrapper>
       </AuthenticatedLayout>

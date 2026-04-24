@@ -60,16 +60,18 @@ import {
 export function StudentsList() {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(0)
+  const pageSize = 20
   const { showSuccess, showError } = useToastNotifications()
 
   // Fetch students
   const {
-    data: students,
+    data: studentsPage,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['admin', 'students'],
-    queryFn: getStudents,
+    queryKey: ['admin', 'students', page, pageSize],
+    queryFn: () => getStudents(page, pageSize),
   })
 
   // Update student status mutation
@@ -88,7 +90,7 @@ export function StudentsList() {
   })
 
   // Filter students
-  const filteredStudents = students?.filter((student) => {
+  const filteredStudents = studentsPage?.items?.filter((student) => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
@@ -163,7 +165,7 @@ export function StudentsList() {
               <CardHeader>
                 <CardTitle>All Students</CardTitle>
                 <CardDescription>
-                  {filteredStudents?.length || 0} student(s) found
+                  {studentsPage?.totalElements || 0} student(s) found
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -253,6 +255,31 @@ export function StudentsList() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Pagination */}
+            {studentsPage && studentsPage.totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Page {studentsPage.page + 1} of {studentsPage.totalPages}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p) => Math.max(p - 1, 0))}
+                    disabled={studentsPage.page === 0}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p) => Math.min(p + 1, studentsPage.totalPages - 1))}
+                    disabled={studentsPage.page >= studentsPage.totalPages - 1}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </PageWrapper>
       </AuthenticatedLayout>

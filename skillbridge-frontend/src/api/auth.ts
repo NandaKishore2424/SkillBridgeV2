@@ -60,10 +60,9 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
 /**
  * Refresh access token
  */
-export const refreshToken = async (refreshToken: string): Promise<AuthResponse> => {
-  const response = await apiClient.post<AuthResponse>('/auth/refresh', {
-    refreshToken,
-  });
+export const refreshToken = async (refreshToken?: string | null): Promise<AuthResponse> => {
+  const payload = refreshToken ? { refreshToken } : {};
+  const response = await apiClient.post<AuthResponse>('/auth/refresh', payload);
   return response.data;
 };
 
@@ -77,6 +76,12 @@ export const logout = async (): Promise<void> => {
       await apiClient.post('/auth/logout', { refreshToken });
     } catch (error) {
       // Continue with logout even if API call fails
+      console.error('Logout API call failed:', error);
+    }
+  } else {
+    try {
+      await apiClient.post('/auth/logout', {});
+    } catch (error) {
       console.error('Logout API call failed:', error);
     }
   }

@@ -8,6 +8,14 @@
 import apiClient from './client'
 import type { Batch, BatchStatus, College, Student } from '@/shared/types'
 
+export interface PagedResponse<T> {
+  items: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 // ==================== Dashboard ====================
 
 export interface DashboardStats {
@@ -44,8 +52,10 @@ export interface BatchWithDetails extends Batch {
   companyCount: number
 }
 
-export const getBatches = async (): Promise<BatchWithDetails[]> => {
-  const response = await apiClient.get<BatchWithDetails[]>('/admin/batches')
+export const getBatches = async (page = 0, size = 20): Promise<PagedResponse<BatchWithDetails>> => {
+  const response = await apiClient.get<PagedResponse<BatchWithDetails>>('/admin/batches', {
+    params: { page, size },
+  })
   return response.data
 }
 
@@ -97,8 +107,10 @@ export interface CreateCompanyRequest {
   notes?: string
 }
 
-export const getCompanies = async (): Promise<Company[]> => {
-  const response = await apiClient.get<Company[]>('/admin/companies')
+export const getCompanies = async (page = 0, size = 20): Promise<PagedResponse<Company>> => {
+  const response = await apiClient.get<PagedResponse<Company>>('/admin/companies', {
+    params: { page, size },
+  })
   return response.data
 }
 
@@ -160,8 +172,10 @@ export interface CreateTrainerRequest {
   bio?: string
 }
 
-export const getTrainers = async (): Promise<Trainer[]> => {
-  const response = await apiClient.get<Trainer[]>('/admin/trainers')
+export const getTrainers = async (page = 0, size = 20): Promise<PagedResponse<Trainer>> => {
+  const response = await apiClient.get<PagedResponse<Trainer>>('/admin/trainers', {
+    params: { page, size },
+  })
   return response.data
 }
 
@@ -215,8 +229,10 @@ export interface StudentWithDetails extends Student {
   enrolledBatchIds?: number[]
 }
 
-export const getStudents = async (): Promise<StudentWithDetails[]> => {
-  const response = await apiClient.get<StudentWithDetails[]>('/admin/students')
+export const getStudents = async (page = 0, size = 20): Promise<PagedResponse<StudentWithDetails>> => {
+  const response = await apiClient.get<PagedResponse<StudentWithDetails>>('/admin/students', {
+    params: { page, size },
+  })
   return response.data
 }
 
