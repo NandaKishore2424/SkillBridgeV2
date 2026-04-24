@@ -86,8 +86,24 @@ export function Header({
               )}
             </Button>
           )}
-          
-          <Link to="/" className="flex items-center gap-2">
+
+          {/* Logo - Navigate to dashboard if logged in, home if not */}
+          <Link
+            to={
+              user
+                ? user.role === 'SYSTEM_ADMIN'
+                  ? '/admin/dashboard'
+                  : user.role === 'COLLEGE_ADMIN'
+                    ? '/admin/college-admin/dashboard'
+                    : user.role === 'TRAINER'
+                      ? '/trainer/dashboard'
+                      : user.role === 'STUDENT'
+                        ? '/student/dashboard'
+                        : '/'
+                : '/'
+            }
+            className="flex items-center gap-2"
+          >
             <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary text-primary-foreground font-bold">
               SB
             </div>

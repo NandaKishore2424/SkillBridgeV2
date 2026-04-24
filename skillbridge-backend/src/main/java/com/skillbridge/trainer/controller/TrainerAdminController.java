@@ -1,18 +1,20 @@
 package com.skillbridge.trainer.controller;
 
 import com.skillbridge.auth.entity.User;
+import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.trainer.dto.CreateTrainerRequest;
 import com.skillbridge.trainer.dto.TrainerDTO;
 import com.skillbridge.trainer.service.TrainerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -25,11 +27,20 @@ public class TrainerAdminController {
 
     @GetMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<TrainerDTO>> getAllTrainers() {
+    public ResponseEntity<PagedResponse<TrainerDTO>> getAllTrainers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User user = (User) auth.getPrincipal();
-        List<TrainerDTO> trainers = trainerService.getAllTrainersByCollege(user.getCollegeId());
-        return ResponseEntity.ok(trainers);
+        Page<TrainerDTO> trainers = trainerService.getTrainersByCollege(user.getCollegeId(), PageRequest.of(page, size));
+        return ResponseEntity.ok(PagedResponse.<TrainerDTO>builder()
+                .items(trainers.getContent())
+                .page(trainers.getNumber())
+                .size(trainers.getSize())
+                .totalElements(trainers.getTotalElements())
+                .totalPages(trainers.getTotalPages())
+                .build());
     }
 
     @PostMapping

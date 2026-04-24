@@ -23,4 +23,9 @@ public class BatchDTO {
     private LocalDate endDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // Counts for UI display
+    private int trainerCount;
+    private int companyCount;
+    private int studentCount;
 }

@@ -12,20 +12,43 @@ import { Button } from '@/shared/components/ui'
 import { Header } from '@/shared/components/layout'
 import { useAuth } from '@/shared/hooks/useAuth'
 import { GraduationCap, Users, BookOpen, Briefcase, ArrowRight } from 'lucide-react'
+import { useEffect } from 'react'
 
 export function Landing() {
-  const { user, logout } = useAuth()
+  const { user, logout, isAuthenticated } = useAuth()
   const navigate = useNavigate()
-  
+
+  // Redirect authenticated users to their dashboard
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      let dashboardPath = '/'
+      switch (user.role) {
+        case 'SYSTEM_ADMIN':
+          dashboardPath = '/admin/dashboard'
+          break
+        case 'COLLEGE_ADMIN':
+          dashboardPath = '/admin/college-admin/dashboard'
+          break
+        case 'TRAINER':
+          dashboardPath = '/trainer/dashboard'
+          break
+        case 'STUDENT':
+          dashboardPath = '/student/dashboard'
+          break
+      }
+      navigate(dashboardPath, { replace: true })
+    }
+  }, [isAuthenticated, user, navigate])
+
   const handleLogout = async () => {
     await logout()
     navigate('/')
   }
-  
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
-      <Header 
+      <Header
         user={user ? { email: user.email, role: user.role } : undefined}
         onLogout={handleLogout}
       />

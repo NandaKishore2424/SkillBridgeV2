@@ -11,6 +11,8 @@ export interface User {
   role: UserRole;
   collegeId?: number;
   isActive: boolean;
+  accountStatus?: string;
+  profileCompleted?: boolean;
 }
 
 // College types

@@ -1,17 +1,19 @@
 package com.skillbridge.student.controller;
 
 import com.skillbridge.auth.entity.User;
+import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.student.dto.StudentDTO;
 import com.skillbridge.student.service.StudentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/admin/students")
@@ -23,11 +25,20 @@ public class StudentAdminController {
 
     @GetMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<StudentDTO>> getAllStudents() {
+    public ResponseEntity<PagedResponse<StudentDTO>> getAllStudents(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User user = (User) auth.getPrincipal();
-        List<StudentDTO> students = studentService.getAllStudentsByCollege(user.getCollegeId());
-        return ResponseEntity.ok(students);
+        Page<StudentDTO> students = studentService.getStudentsByCollege(user.getCollegeId(), PageRequest.of(page, size));
+        return ResponseEntity.ok(PagedResponse.<StudentDTO>builder()
+                .items(students.getContent())
+                .page(students.getNumber())
+                .size(students.getSize())
+                .totalElements(students.getTotalElements())
+                .totalPages(students.getTotalPages())
+                .build());
     }
 
     @GetMapping("/{id}")

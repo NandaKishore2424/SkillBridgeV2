@@ -12,6 +12,8 @@ import com.skillbridge.student.entity.*;
 import com.skillbridge.student.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -91,7 +93,7 @@ public class StudentService {
     }
 
     public StudentDTO getStudentProfile(Long userId) {
-        Student student = studentRepository.findByUserId(userId)
+        Student student = studentRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Student profile not found"));
         return mapToDTO(student);
     }
@@ -108,9 +110,14 @@ public class StudentService {
                 .collect(Collectors.toList());
     }
 
+    public Page<StudentDTO> getStudentsByCollege(Long collegeId, Pageable pageable) {
+        return studentRepository.findByCollegeId(collegeId, pageable)
+                .map(this::mapToDTO);
+    }
+
     @Transactional
     public StudentDTO updateStudentProfile(Long userId, UpdateStudentProfileRequest request) {
-        Student student = studentRepository.findByUserId(userId)
+        Student student = studentRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Student profile not found"));
 
         if (request.getFullName() != null)
@@ -140,9 +147,92 @@ public class StudentService {
         return mapToDTO(updated);
     }
 
+    /**
+     * Complete student profile setup - called when student first logs in with
+     * PENDING_SETUP status
+     * Updates student profile data and changes user account status to ACTIVE
+     * 
+     * @param userId      User ID of the student
+     * @param profileData Complete profile data from setup wizard
+     * @return StudentProfileDTO with updated profile information
+     * @throws RuntimeException if student not found or profile already completed
+     */
+    @Transactional
+    public StudentProfileDTO completeProfile(Long userId, StudentProfileUpdateDTO profileData) {
+        log.info("Completing profile for user ID: {}", userId);
+
+        // Fetch student and user entities
+        Student student = studentRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new RuntimeException("Student profile not found"));
+
+        User user = student.getUser();
+
+        // Validate that profile is not already completed
+        if (user.getProfileCompleted() != null && user.getProfileCompleted()) {
+            log.warn("Profile already completed for user: {}", user.getEmail());
+            throw new RuntimeException("Profile has already been completed");
+        }
+
+        // Update student profile fields
+        student.setFullName(profileData.getFullName());
+        student.setPhone(profileData.getPhone());
+        student.setDegree(profileData.getDegree());
+        student.setBranch(profileData.getBranch());
+        student.setYear(profileData.getYear());
+        student.setRollNumber(profileData.getRollNumber());
+
+        // Optional fields - only set if provided
+        if (profileData.getBio() != null && !profileData.getBio().trim().isEmpty()) {
+            student.setBio(profileData.getBio());
+        }
+        if (profileData.getGithubUrl() != null && !profileData.getGithubUrl().trim().isEmpty()) {
+            student.setGithubUrl(profileData.getGithubUrl());
+        }
+        if (profileData.getPortfolioUrl() != null && !profileData.getPortfolioUrl().trim().isEmpty()) {
+            student.setPortfolioUrl(profileData.getPortfolioUrl());
+        }
+        if (profileData.getResumeUrl() != null && !profileData.getResumeUrl().trim().isEmpty()) {
+            student.setResumeUrl(profileData.getResumeUrl());
+        }
+
+        student.setUpdatedAt(LocalDateTime.now());
+
+        // Update user account status
+        user.setAccountStatus("ACTIVE");
+        user.setProfileCompleted(true);
+        user.setUpdatedAt(LocalDateTime.now());
+
+        // Save both entities (cascade should handle this, but being explicit)
+        userRepository.save(user);
+        Student savedStudent = studentRepository.save(student);
+
+        log.info("Profile completed successfully for user: {} ({})", user.getEmail(), userId);
+
+        // Map to response DTO
+        return StudentProfileDTO.builder()
+                .id(savedStudent.getId())
+                .userId(user.getId())
+                .collegeId(savedStudent.getCollege().getId())
+                .fullName(savedStudent.getFullName())
+                .rollNumber(savedStudent.getRollNumber())
+                .degree(savedStudent.getDegree())
+                .branch(savedStudent.getBranch())
+                .year(savedStudent.getYear())
+                .phone(savedStudent.getPhone())
+                .githubUrl(savedStudent.getGithubUrl())
+                .portfolioUrl(savedStudent.getPortfolioUrl())
+                .resumeUrl(savedStudent.getResumeUrl())
+                .bio(savedStudent.getBio())
+                .accountStatus(user.getAccountStatus())
+                .profileCompleted(user.getProfileCompleted())
+                .createdAt(savedStudent.getCreatedAt())
+                .updatedAt(savedStudent.getUpdatedAt())
+                .build();
+    }
+
     @Transactional
     public void addSkill(Long userId, AddStudentSkillRequest request) {
-        Student student = studentRepository.findByUserId(userId)
+        Student student = studentRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Student profile not found"));
 
         Skill skill = skillRepository.findById(request.getSkillId())
@@ -171,7 +261,7 @@ public class StudentService {
 
     @Transactional
     public void updateSkillProficiency(Long userId, Long skillId, Integer proficiencyLevel) {
-        Student student = studentRepository.findByUserId(userId)
+        Student student = studentRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Student profile not found"));
 
         StudentSkillId id = new StudentSkillId(student.getId(), skillId);
@@ -188,7 +278,7 @@ public class StudentService {
 
     @Transactional
     public void removeSkill(Long userId, Long skillId) {
-        Student student = studentRepository.findByUserId(userId)
+        Student student = studentRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Student profile not found"));
 
         studentSkillRepository.deleteByStudentIdAndSkillId(student.getId(), skillId);
@@ -196,7 +286,7 @@ public class StudentService {
 
     @Transactional
     public StudentProjectDTO addProject(Long userId, CreateStudentProjectRequest request) {
-        Student student = studentRepository.findByUserId(userId)
+        Student student = studentRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Student profile not found"));
 
         StudentProject project = StudentProject.builder()
@@ -218,7 +308,7 @@ public class StudentService {
 
     @Transactional
     public void deleteProject(Long userId, Long projectId) {
-        Student student = studentRepository.findByUserId(userId)
+        Student student = studentRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new RuntimeException("Student profile not found"));
 
         StudentProject project = studentProjectRepository.findById(projectId)

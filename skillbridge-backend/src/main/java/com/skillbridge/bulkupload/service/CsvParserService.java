@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -28,6 +29,14 @@ public class CsvParserService {
         return parseCsv(file, TrainerUploadDTO.class);
     }
 
+    public List<StudentUploadDTO> parseStudentCsv(byte[] data, String fileName) {
+        return parseCsv(data, fileName, StudentUploadDTO.class);
+    }
+
+    public List<TrainerUploadDTO> parseTrainerCsv(byte[] data, String fileName) {
+        return parseCsv(data, fileName, TrainerUploadDTO.class);
+    }
+
     private <T> List<T> parseCsv(MultipartFile file, Class<T> clazz) {
         try (Reader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             // First, read and log the header line
@@ -37,10 +46,6 @@ public class CsvParserService {
             log.info("CSV Headers found: {}", headerLine);
             log.info("Parsing CSV for class: {}", clazz.getSimpleName());
             headerReader.close();
-
-            // Now parse with a fresh reader
-            Reader actualReader = new BufferedReader(
-                    new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
 
             HeaderColumnNameMappingStrategy<T> strategy = new HeaderColumnNameMappingStrategy<>();
             strategy.setType(clazz);
@@ -62,6 +67,36 @@ public class CsvParserService {
             log.error(
                     "Error processing CSV data. Expected headers for {}: Full Name, Email, Roll Number, Degree, Branch, Year",
                     clazz.getSimpleName(), e);
+            throw new RuntimeException("Error processing CSV data: " + e.getMessage() +
+                    ". Please ensure CSV has correct headers: Full Name, Email, Roll Number, Degree, Branch, Year");
+        }
+    }
+
+    private <T> List<T> parseCsv(byte[] data, String fileName, Class<T> clazz) {
+        try {
+            try (BufferedReader headerReader = new BufferedReader(
+                    new InputStreamReader(new ByteArrayInputStream(data), StandardCharsets.UTF_8))) {
+                String headerLine = headerReader.readLine();
+                log.info("CSV Headers found ({}): {}", fileName, headerLine);
+                log.info("Parsing CSV for class: {}", clazz.getSimpleName());
+            }
+
+            Reader reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(data), StandardCharsets.UTF_8));
+            HeaderColumnNameMappingStrategy<T> strategy = new HeaderColumnNameMappingStrategy<>();
+            strategy.setType(clazz);
+
+            CsvToBean<T> csvToBean = new CsvToBeanBuilder<T>(reader)
+                    .withMappingStrategy(strategy)
+                    .withIgnoreLeadingWhiteSpace(true)
+                    .withType(clazz)
+                    .withThrowExceptions(true)
+                    .build();
+
+            List<T> results = csvToBean.parse();
+            log.info("Successfully parsed {} rows from CSV", results.size());
+            return results;
+        } catch (Exception e) {
+            log.error("Error processing CSV data for {}", clazz.getSimpleName(), e);
             throw new RuntimeException("Error processing CSV data: " + e.getMessage() +
                     ". Please ensure CSV has correct headers: Full Name, Email, Roll Number, Degree, Branch, Year");
         }
