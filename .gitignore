@@ -1,0 +1,23 @@
+# Python Environments & Secrets
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Datasets
+skillbridge-etl-pipeline/data/
+*.csv
+*.zip
+
+# Java Build Files
+target/
+*.jar
+
+# Node.js
+node_modules/
+dist/
+
+# IDE Files
+.idea/
+.vscode/
+.cursor/

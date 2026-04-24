@@ -49,6 +49,8 @@ export function TrainerBulkUploadPage() {
     const { data: history, isLoading: isHistoryLoading } = useQuery({
         queryKey: ['admin', 'trainers', 'upload-history'],
         queryFn: getTrainerUploadHistory,
+        refetchInterval: (data) =>
+            data?.some((record) => record.status === 'PROCESSING') ? 5000 : false,
     })
 
     // Upload Mutation
@@ -56,7 +58,10 @@ export function TrainerBulkUploadPage() {
         mutationFn: uploadTrainers,
         onSuccess: (data) => {
             setUploadResult(data)
-            showSuccess(`Processed ${data.totalRows} records`)
+            const message = data.status === 'PROCESSING'
+                ? 'Upload queued. Processing in background.'
+                : `Processed ${data.totalRows} records`
+            showSuccess(message)
             queryClient.invalidateQueries({ queryKey: ['admin', 'trainers', 'upload-history'] })
             setFile(null)
             const fileInput = document.getElementById('file-upload') as HTMLInputElement
@@ -187,7 +192,9 @@ export function TrainerBulkUploadPage() {
                             <Alert variant={uploadResult.failedRows > 0 ? "destructive" : "default"} className={uploadResult.failedRows === 0 ? "border-green-500 text-green-700 bg-green-50" : ""}>
                                 {uploadResult.failedRows === 0 ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                                 <AlertDescription>
-                                    <div className="font-medium mb-2">Upload Completed</div>
+                                    <div className="font-medium mb-2">
+                                        {uploadResult.status === 'PROCESSING' ? 'Upload Queued' : 'Upload Completed'}
+                                    </div>
                                     <div className="grid grid-cols-3 gap-4 text-sm">
                                         <div>Total: {uploadResult.totalRows}</div>
                                         <div className="text-green-600">Success: {uploadResult.successfulRows}</div>

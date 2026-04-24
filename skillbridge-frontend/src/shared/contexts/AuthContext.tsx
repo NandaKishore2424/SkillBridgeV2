@@ -6,7 +6,7 @@
  * 
  * Features:
  * - User state management
- * - Token storage (access token in memory + localStorage, refresh token in localStorage)
+ * - Token storage (access token in memory + localStorage, refresh token via HttpOnly cookie)
  * - Login/logout/register functions
  * - Token refresh logic
  * - Automatic token refresh on 401 errors
@@ -165,8 +165,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
             clearAuthState()
           }
         } else {
-          // No tokens, user is not authenticated
-          clearAuthState()
+          // No refresh token stored, try cookie-based refresh
+          try {
+            const response = await authAPI.refreshToken(null)
+            await handleAuthSuccess(response)
+          } catch (error) {
+            // No tokens, user is not authenticated
+            clearAuthState()
+          }
         }
       } catch (error) {
         console.error('Error initializing auth:', error)
@@ -219,7 +225,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Store tokens
     localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken)
-    localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
+    // Refresh token is stored in HttpOnly cookie for security. Keep localStorage only if it exists already.
+    if (localStorage.getItem(REFRESH_TOKEN_KEY)) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
+    }
     if (user) {
       localStorage.setItem(USER_KEY, JSON.stringify(user))
     }
@@ -228,7 +237,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setState({
       user,
       accessToken: response.accessToken,
-      refreshToken: response.refreshToken,
+      refreshToken: null,
       isAuthenticated: true,
       isLoading: false,
       error: null,

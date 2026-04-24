@@ -78,6 +78,8 @@ export function BatchesList() {
   const location = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<BatchStatus | 'ALL'>('ALL')
+  const [page, setPage] = useState(0)
+  const pageSize = 20
   const { showSuccess, showError } = useToastNotifications()
 
   // Show success message from navigation state
@@ -90,12 +92,12 @@ export function BatchesList() {
 
   // Fetch batches
   const {
-    data: batches,
+    data: batchesPage,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['admin', 'batches'],
-    queryFn: getBatches,
+    queryKey: ['admin', 'batches', page, pageSize],
+    queryFn: () => getBatches(page, pageSize),
   })
 
   // Update batch status mutation
@@ -112,7 +114,7 @@ export function BatchesList() {
   })
 
   // Filter batches
-  const filteredBatches = batches?.filter((batch) => {
+  const filteredBatches = batchesPage?.items?.filter((batch) => {
     const matchesSearch =
       !searchQuery ||
       batch.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -197,7 +199,7 @@ export function BatchesList() {
               <CardHeader>
                 <CardTitle>All Batches</CardTitle>
                 <CardDescription>
-                  {filteredBatches?.length || 0} batch(es) found
+                  {batchesPage?.totalElements || 0} batch(es) found
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -327,6 +329,31 @@ export function BatchesList() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Pagination */}
+            {batchesPage && batchesPage.totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Page {batchesPage.page + 1} of {batchesPage.totalPages}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p) => Math.max(p - 1, 0))}
+                    disabled={batchesPage.page === 0}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage((p) => Math.min(p + 1, batchesPage.totalPages - 1))}
+                    disabled={batchesPage.page >= batchesPage.totalPages - 1}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </PageWrapper>
       </AuthenticatedLayout>
