@@ -48,7 +48,7 @@ public class FeedbackServiceImpl implements FeedbackService {
         feedback.setType(request.getType());
 
         if (request.getType() == FeedbackType.STUDENT_TO_TRAINER) {
-            Student student = studentRepository.findByUserId(user.getId())
+            Student student = studentRepository.findByUser_Id(user.getId())
                     .orElseThrow(() -> new EntityNotFoundException("Student profile not found"));
             feedback.setStudent(student);
             
@@ -61,7 +61,7 @@ public class FeedbackServiceImpl implements FeedbackService {
             feedback.setTrainer(trainer);
 
         } else if (request.getType() == FeedbackType.TRAINER_TO_STUDENT) {
-            Trainer trainer = trainerRepository.findByUserId(user.getId())
+            Trainer trainer = trainerRepository.findByUser_Id(user.getId())
                     .orElseThrow(() -> new EntityNotFoundException("Trainer profile not found"));
             feedback.setTrainer(trainer);
 
@@ -115,13 +115,13 @@ public class FeedbackServiceImpl implements FeedbackService {
         boolean isTrainer = user.getRoles().stream().anyMatch(r -> r.getName().equals("TRAINER"));
 
         if (isStudent) {
-            Student student = studentRepository.findByUserId(user.getId())
+            Student student = studentRepository.findByUser_Id(user.getId())
                     .orElseThrow(() -> new EntityNotFoundException("Student profile not found"));
             return feedbackRepository.findByStudentId(student.getId()).stream()
                     .map(this::mapToDTO)
                     .collect(Collectors.toList());
         } else if (isTrainer) {
-            Trainer trainer = trainerRepository.findByUserId(user.getId())
+            Trainer trainer = trainerRepository.findByUser_Id(user.getId())
                     .orElseThrow(() -> new EntityNotFoundException("Trainer profile not found"));
             return feedbackRepository.findByTrainerId(trainer.getId()).stream()
                     .map(this::mapToDTO)

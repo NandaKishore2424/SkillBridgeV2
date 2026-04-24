@@ -48,7 +48,7 @@ interface StatCardProps {
 }
 
 function StatCard({ title, value, description, icon, link }: StatCardProps) {
-  const content = (
+  return (
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
@@ -69,8 +69,6 @@ function StatCard({ title, value, description, icon, link }: StatCardProps) {
       </CardContent>
     </Card>
   )
-
-  return link ? <Link to={link}>{content}</Link> : content
 }
 
 const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'outline'> = {

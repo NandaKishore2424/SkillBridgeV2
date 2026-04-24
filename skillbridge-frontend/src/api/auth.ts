@@ -36,6 +36,8 @@ export interface AuthResponse {
     role: string;
     collegeId?: number;
     isActive: boolean;
+    accountStatus?: string;
+    profileCompleted?: boolean;
   };
 }
 

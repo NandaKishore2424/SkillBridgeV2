@@ -6,11 +6,16 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "college_admins")
+@FilterDef(name = "collegeFilter", parameters = @ParamDef(name = "collegeId", type = Long.class))
+@Filter(name = "collegeFilter", condition = "college_id = :collegeId")
 @Data
 @Builder
 @NoArgsConstructor

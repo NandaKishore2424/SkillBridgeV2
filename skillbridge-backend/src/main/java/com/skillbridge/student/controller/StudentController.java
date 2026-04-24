@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 
@@ -46,6 +47,27 @@ public class StudentController {
         User user = (User) auth.getPrincipal();
         StudentDTO updated = studentService.updateStudentProfile(user.getId(), request);
         return ResponseEntity.ok(updated);
+    }
+
+    /**
+     * Complete student profile setup
+     * Called when student first logs in with PENDING_SETUP status
+     * 
+     * @param profileData Complete profile data from setup wizard
+     * @return StudentProfileDTO with updated profile
+     */
+    @PutMapping("/profile/complete")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<StudentProfileDTO> completeProfile(
+            @Valid @RequestBody StudentProfileUpdateDTO profileData) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        User user = (User) auth.getPrincipal();
+
+        log.info("Profile completion request received for user: {}", user.getEmail());
+
+        StudentProfileDTO profile = studentService.completeProfile(user.getId(), profileData);
+
+        return ResponseEntity.ok(profile);
     }
 
     @PostMapping("/me/skills")
