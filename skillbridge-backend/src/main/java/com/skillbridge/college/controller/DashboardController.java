@@ -1,6 +1,5 @@
 package com.skillbridge.college.controller;
 
-import com.skillbridge.auth.entity.User;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
@@ -20,6 +19,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
+import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 
 @RestController
 @RequestMapping("/api/v1/admin/dashboard")
@@ -42,7 +44,7 @@ public class DashboardController {
         try {
             // Get college ID from authenticated user
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            User user = (User) auth.getPrincipal();
+            AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
             Long collegeId = user.getCollegeId();
 
             // If collegeId is null, try to get it from CollegeAdmin entity
@@ -77,7 +79,7 @@ public class DashboardController {
             return ResponseEntity.ok(stats);
         } catch (Exception e) {
             log.error("Error fetching dashboard stats", e);
-            throw new RuntimeException("Failed to fetch dashboard stats: " + e.getMessage(), e);
+            throw new InternalServerException("Failed to fetch dashboard stats: " + e.getMessage(), e);
         }
     }
 

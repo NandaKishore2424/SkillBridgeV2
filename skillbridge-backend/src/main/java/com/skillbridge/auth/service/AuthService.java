@@ -19,6 +19,10 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.UUID;
+import com.skillbridge.common.exception.BusinessRuleException;
+import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.common.exception.UnauthorizedException;
 
 @Service
 @Slf4j
@@ -53,19 +57,19 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> {
                     log.warn("Login failed: User not found with email: {}", request.getEmail());
-                    return new RuntimeException("Invalid email or password");
+                    return new UnauthorizedException("Invalid email or password");
                 });
 
         // Check if user is active
         if (!user.getIsActive()) {
             log.warn("Login failed: User account is inactive for email: {}", request.getEmail());
-            throw new RuntimeException("Account is inactive");
+            throw new UnauthorizedException("Account is inactive");
         }
 
         // Verify password
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             log.warn("Login failed: Invalid password for email: {}", request.getEmail());
-            throw new RuntimeException("Invalid email or password");
+            throw new UnauthorizedException("Invalid email or password");
         }
 
         // Get primary role
@@ -103,23 +107,23 @@ public class AuthService {
         log.debug("Attempting token refresh");
         if (refreshToken == null || refreshToken.isBlank()) {
             log.warn("Missing refresh token");
-            throw new RuntimeException("Refresh token is required");
+            throw new UnauthorizedException("Refresh token is required");
         }
 
         String tokenHash = hashToken(refreshToken);
         RefreshToken storedToken = refreshTokenRepository.findByTokenHashAndRevokedFalse(tokenHash)
-                .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
+                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
 
         if (storedToken.getExpiresAt().isBefore(LocalDateTime.now())) {
             storedToken.setRevoked(true);
             refreshTokenRepository.save(storedToken);
-            throw new RuntimeException("Refresh token expired");
+            throw new UnauthorizedException("Refresh token expired");
         }
 
         User user = storedToken.getUser();
         if (!user.getIsActive()) {
             log.warn("User account is inactive");
-            throw new RuntimeException("Account is inactive");
+            throw new UnauthorizedException("Account is inactive");
         }
 
         String primaryRole = user.getRoles().stream()
@@ -157,10 +161,10 @@ public class AuthService {
     @Transactional
     public void changePassword(Long userId, String oldPassword, String newPassword) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
-            throw new RuntimeException("Invalid old password");
+            throw new UnauthorizedException("Invalid old password");
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
@@ -171,15 +175,14 @@ public class AuthService {
     @Transactional
     public AuthResponse firstLogin(String email, String temporaryPassword, String newPassword) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(temporaryPassword, user.getPasswordHash())) {
-            throw new RuntimeException("Invalid temporary password");
+            throw new UnauthorizedException("Invalid temporary password");
         }
 
         if (!Boolean.TRUE.equals(user.getMustChangePassword())) {
-            throw new RuntimeException(
-                    "User is not required to change password via first-login flow. Use change-password.");
+            throw new BusinessRuleException("User is not required to change password via first-login flow. Use change-password.");
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
@@ -253,7 +256,7 @@ public class AuthService {
             byte[] hashed = digest.digest(token.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(hashed);
         } catch (Exception ex) {
-            throw new RuntimeException("Failed to hash token");
+            throw new InternalServerException("Failed to hash token");
         }
     }
 }

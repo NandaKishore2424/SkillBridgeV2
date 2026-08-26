@@ -15,8 +15,13 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * REST Controller for Admin Enrollment Management
- * Admins can directly add/remove students and approve/reject trainer requests
+ * Admin enrollment management: direct add/remove of students, and approval or
+ * rejection of trainer requests.
+ *
+ * <p>Every endpoint here was guarded by {@code hasRole('ADMIN')} until this
+ * change. No such role exists — {@link com.skillbridge.auth.entity.Role.RoleName}
+ * defines SYSTEM_ADMIN, COLLEGE_ADMIN, TRAINER and STUDENT — so all six returned
+ * 403 to every caller, permanently. Guard on roles that exist.
  */
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -32,7 +37,7 @@ public class AdminEnrollmentController {
      * GET /api/v1/admin/batches/{batchId}/enrollments
      */
     @GetMapping("/batches/{batchId}/enrollments")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
     public ResponseEntity<BatchEnrollmentDTO> getBatchEnrollments(@PathVariable Long batchId) {
         log.info("Admin API: Get enrollments for batch {}", batchId);
         BatchEnrollmentDTO enrollments = enrollmentService.getBatchEnrollments(batchId);
@@ -44,7 +49,7 @@ public class AdminEnrollmentController {
      * POST /api/v1/admin/batches/{batchId}/enrollments/{studentId}
      */
     @PostMapping("/batches/{batchId}/enrollments/{studentId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
     public ResponseEntity<EnrolledStudentDTO> enrollStudent(
             @PathVariable Long batchId,
             @PathVariable Long studentId) {
@@ -58,7 +63,7 @@ public class AdminEnrollmentController {
      * DELETE /api/v1/admin/batches/{batchId}/enrollments/{studentId}
      */
     @DeleteMapping("/batches/{batchId}/enrollments/{studentId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
     public ResponseEntity<Void> removeStudent(
             @PathVariable Long batchId,
             @PathVariable Long studentId) {
@@ -72,7 +77,7 @@ public class AdminEnrollmentController {
      * GET /api/v1/admin/enrollment-requests/pending
      */
     @GetMapping("/enrollment-requests/pending")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
     public ResponseEntity<List<EnrollmentRequestDTO>> getPendingRequests() {
         log.info("Admin API: Get all pending enrollment requests");
         List<EnrollmentRequestDTO> requests = enrollmentService.getPendingRequests();
@@ -84,7 +89,7 @@ public class AdminEnrollmentController {
      * POST /api/v1/admin/enrollment-requests/{requestId}/approve
      */
     @PostMapping("/enrollment-requests/{requestId}/approve")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
     public ResponseEntity<EnrollmentRequestDTO> approveRequest(
             @PathVariable Long requestId,
             Authentication authentication) {
@@ -100,7 +105,7 @@ public class AdminEnrollmentController {
      * POST /api/v1/admin/enrollment-requests/{requestId}/reject
      */
     @PostMapping("/enrollment-requests/{requestId}/reject")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
     public ResponseEntity<EnrollmentRequestDTO> rejectRequest(
             @PathVariable Long requestId,
             Authentication authentication) {

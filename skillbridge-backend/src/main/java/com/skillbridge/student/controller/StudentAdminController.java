@@ -1,6 +1,5 @@
 package com.skillbridge.student.controller;
 
-import com.skillbridge.auth.entity.User;
 import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.student.dto.StudentDTO;
 import com.skillbridge.student.service.StudentService;
@@ -13,6 +12,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 
 
 @RestController
@@ -30,7 +31,7 @@ public class StudentAdminController {
             @RequestParam(defaultValue = "20") int size
     ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         Page<StudentDTO> students = studentService.getStudentsByCollege(user.getCollegeId(), PageRequest.of(page, size));
         return ResponseEntity.ok(PagedResponse.<StudentDTO>builder()
                 .items(students.getContent())

@@ -24,6 +24,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import com.skillbridge.common.exception.ConflictException;
+import com.skillbridge.common.exception.ForbiddenException;
+import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -43,21 +47,21 @@ public class StudentService {
     public StudentDTO createStudent(CreateStudentRequest request) {
         // Validate college
         College college = collegeRepository.findById(request.getCollegeId())
-                .orElseThrow(() -> new RuntimeException("College not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("College not found"));
 
         // Check if roll number already exists for this college
         if (studentRepository.existsByRollNumberAndCollegeId(request.getRollNumber(), request.getCollegeId())) {
-            throw new RuntimeException("Roll number already exists for this college");
+            throw new ConflictException("Roll number already exists for this college");
         }
 
         // Check if user with email already exists
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("User with this email already exists");
+            throw new ConflictException("User with this email already exists");
         }
 
         // Get STUDENT role
         Role studentRole = roleRepository.findByName("STUDENT")
-                .orElseThrow(() -> new RuntimeException("Required role not found"));
+                .orElseThrow(() -> new InternalServerException("Required role not found"));
 
         Set<Role> roles = new HashSet<>();
         roles.add(studentRole);
@@ -94,13 +98,13 @@ public class StudentService {
 
     public StudentDTO getStudentProfile(Long userId) {
         Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
         return mapToDTO(student);
     }
 
     public StudentDTO getStudentById(Long studentId) {
         Student student = studentRepository.findById(studentId)
-                .orElseThrow(() -> new RuntimeException("Student not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found"));
         return mapToDTO(student);
     }
 
@@ -118,7 +122,7 @@ public class StudentService {
     @Transactional
     public StudentDTO updateStudentProfile(Long userId, UpdateStudentProfileRequest request) {
         Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
 
         if (request.getFullName() != null)
             student.setFullName(request.getFullName());
@@ -163,14 +167,14 @@ public class StudentService {
 
         // Fetch student and user entities
         Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
 
         User user = student.getUser();
 
         // Validate that profile is not already completed
         if (user.getProfileCompleted() != null && user.getProfileCompleted()) {
             log.warn("Profile already completed for user: {}", user.getEmail());
-            throw new RuntimeException("Profile has already been completed");
+            throw new ConflictException("Profile has already been completed");
         }
 
         // Update student profile fields
@@ -233,15 +237,15 @@ public class StudentService {
     @Transactional
     public void addSkill(Long userId, AddStudentSkillRequest request) {
         Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
 
         Skill skill = skillRepository.findById(request.getSkillId())
-                .orElseThrow(() -> new RuntimeException("Skill not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Skill not found"));
 
         // Check if skill already exists
         StudentSkillId skillId = new StudentSkillId(student.getId(), skill.getId());
         if (studentSkillRepository.existsById(skillId)) {
-            throw new RuntimeException("Skill already added");
+            throw new ConflictException("Skill already added");
         }
 
         StudentSkill studentSkill = StudentSkill.builder()
@@ -262,11 +266,11 @@ public class StudentService {
     @Transactional
     public void updateSkillProficiency(Long userId, Long skillId, Integer proficiencyLevel) {
         Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
 
         StudentSkillId id = new StudentSkillId(student.getId(), skillId);
         StudentSkill studentSkill = studentSkillRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Skill not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Skill not found"));
 
         studentSkill.setProficiencyLevel(proficiencyLevel);
         studentSkill.setUpdatedAt(LocalDateTime.now());
@@ -279,7 +283,7 @@ public class StudentService {
     @Transactional
     public void removeSkill(Long userId, Long skillId) {
         Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
 
         studentSkillRepository.deleteByStudentIdAndSkillId(student.getId(), skillId);
     }
@@ -287,7 +291,7 @@ public class StudentService {
     @Transactional
     public StudentProjectDTO addProject(Long userId, CreateStudentProjectRequest request) {
         Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
 
         StudentProject project = StudentProject.builder()
                 .student(student)
@@ -309,13 +313,13 @@ public class StudentService {
     @Transactional
     public void deleteProject(Long userId, Long projectId) {
         Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
 
         StudentProject project = studentProjectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
         if (!project.getStudent().getId().equals(student.getId())) {
-            throw new RuntimeException("Unauthorized to delete this project");
+            throw new ForbiddenException("Unauthorized to delete this project");
         }
 
         studentProjectRepository.delete(project);

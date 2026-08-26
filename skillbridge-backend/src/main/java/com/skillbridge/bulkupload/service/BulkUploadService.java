@@ -28,6 +28,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import com.skillbridge.common.exception.ConflictException;
+import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -49,9 +52,9 @@ public class BulkUploadService {
 
         public BulkUploadResponse startStudentUpload(byte[] data, String fileName, Long collegeId, Long uploadedByUserId) {
         User uploader = userRepository.findById(uploadedByUserId)
-            .orElseThrow(() -> new RuntimeException("Uploader not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Uploader not found"));
         College college = collegeRepository.findById(collegeId)
-            .orElseThrow(() -> new RuntimeException("College not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("College not found"));
 
         BulkUpload bulkUpload = BulkUpload.builder()
             .college(college)
@@ -77,9 +80,9 @@ public class BulkUploadService {
 
         public BulkUploadResponse startTrainerUpload(byte[] data, String fileName, Long collegeId, Long uploadedByUserId) {
         User uploader = userRepository.findById(uploadedByUserId)
-            .orElseThrow(() -> new RuntimeException("Uploader not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Uploader not found"));
         College college = collegeRepository.findById(collegeId)
-            .orElseThrow(() -> new RuntimeException("College not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("College not found"));
 
         BulkUpload bulkUpload = BulkUpload.builder()
             .college(college)
@@ -111,9 +114,9 @@ public class BulkUploadService {
 
         // Create initial BulkUpload record
         User uploader = userRepository.findById(uploadedByUserId)
-                .orElseThrow(() -> new RuntimeException("Uploader not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Uploader not found"));
         College college = collegeRepository.findById(collegeId)
-                .orElseThrow(() -> new RuntimeException("College not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("College not found"));
 
         BulkUpload bulkUpload = BulkUpload.builder()
                 .college(college)
@@ -136,7 +139,7 @@ public class BulkUploadService {
 
             // Get student role
             Role studentRole = roleRepository.findByName("STUDENT")
-                    .orElseThrow(() -> new RuntimeException("Role STUDENT not found"));
+                    .orElseThrow(() -> new InternalServerException("Role STUDENT not found"));
             Set<Role> roles = new HashSet<>();
             roles.add(studentRole);
 
@@ -291,9 +294,9 @@ public class BulkUploadService {
         csvParserService.validateCsvFormat(file, "TRAINER");
 
         User uploader = userRepository.findById(uploadedByUserId)
-                .orElseThrow(() -> new RuntimeException("Uploader not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Uploader not found"));
         College college = collegeRepository.findById(collegeId)
-                .orElseThrow(() -> new RuntimeException("College not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("College not found"));
 
         BulkUpload bulkUpload = BulkUpload.builder()
                 .college(college)
@@ -314,7 +317,7 @@ public class BulkUploadService {
             bulkUpload.setTotalRows(trainers.size());
 
             Role trainerRole = roleRepository.findByName("TRAINER")
-                    .orElseThrow(() -> new RuntimeException("Role TRAINER not found"));
+                    .orElseThrow(() -> new InternalServerException("Role TRAINER not found"));
             Set<Role> roles = new HashSet<>();
             roles.add(trainerRole);
 
@@ -428,7 +431,7 @@ public class BulkUploadService {
 
     public void resendInvitation(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         // This is simplified. In prod, generate a new random password or reset token.
         // For this flow, we are sending current email as password or we should reset
@@ -446,10 +449,10 @@ public class BulkUploadService {
                 emailService.sendWelcomeEmail(user, user.getEmail());
             } catch (Exception e) {
                 log.error("Failed to resend welcome email", e);
-                throw new RuntimeException("Failed to send email");
+                throw new InternalServerException("Failed to send email");
             }
         } else {
-            throw new RuntimeException("User is already active or not in pending state");
+            throw new ConflictException("User is already active or not in pending state");
         }
     }
 }

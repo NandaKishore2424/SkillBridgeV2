@@ -2,6 +2,7 @@ package com.skillbridge.auth.filter;
 
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.UserRepository;
+import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -10,14 +11,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.stream.Collectors;
 
 /**
  * Token Authentication Filter
@@ -58,22 +57,24 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
             Long userId = jwtService.getUserId(token);
             User user = userRepository.findById(userId).orElse(null);
 
-            if (user != null && user.getIsActive()) {
-                var authorities = user.getRoles().stream()
-                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
-                        .collect(Collectors.toList());
+            if (user != null && Boolean.TRUE.equals(user.getIsActive())) {
+                // Wrap the entity in a detached UserDetails snapshot. Putting the
+                // managed entity itself into the security context is what made
+                // authentication.getName() return the whole object — password
+                // hash included — instead of the email.
+                AuthenticatedUser principal = new AuthenticatedUser(user);
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
-                                user,
+                                principal,
                                 null,
-                                authorities
+                                principal.getAuthorities()
                         );
 
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                log.debug("Authenticated user: {} with roles: {}", user.getEmail(), authorities);
+                log.debug("Authenticated user {} with roles {}", principal.getEmail(), principal.getRoles());
             }
         } catch (Exception e) {
             log.warn("Failed to authenticate token: {}", e.getMessage());

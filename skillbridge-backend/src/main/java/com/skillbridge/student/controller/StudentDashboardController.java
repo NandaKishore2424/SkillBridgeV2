@@ -1,6 +1,5 @@
 package com.skillbridge.student.controller;
 
-import com.skillbridge.auth.entity.User;
 import com.skillbridge.batch.dto.BatchDTO;
 import com.skillbridge.student.dto.StudentDashboardStatsDTO;
 import com.skillbridge.student.dto.RecommendedBatchDTO;
@@ -17,6 +16,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.common.exception.BadRequestException;
+import com.skillbridge.student.dto.BatchApplicationDTO;
+import com.skillbridge.student.service.StudentEnrollmentService;
+import org.springframework.http.HttpStatus;
 
 /**
  * Student Dashboard Controller
@@ -31,6 +36,7 @@ import java.util.Map;
 public class StudentDashboardController {
 
     private final StudentDashboardService dashboardService;
+    private final StudentEnrollmentService enrollmentService;
 
     /**
      * Get dashboard statistics for the logged-in student
@@ -39,7 +45,7 @@ public class StudentDashboardController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<StudentDashboardStatsDTO> getDashboardStats() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Fetching dashboard stats for student: {}", user.getEmail());
 
         StudentDashboardStatsDTO stats = dashboardService.getDashboardStats(user.getId());
@@ -53,7 +59,7 @@ public class StudentDashboardController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<List<RecommendedBatchDTO>> getRecommendedBatches() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Fetching recommended batches for student: {}", user.getEmail());
 
         List<RecommendedBatchDTO> batches = dashboardService.getRecommendedBatches(user.getId());
@@ -67,7 +73,7 @@ public class StudentDashboardController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<List<BatchDTO>> getAvailableBatches() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Fetching available batches for student: {}", user.getEmail());
 
         List<BatchDTO> batches = dashboardService.getAvailableBatches(user.getCollegeId());
@@ -81,7 +87,7 @@ public class StudentDashboardController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<List<StudentBatchDTO>> getMyBatches() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Fetching enrolled batches for student: {}", user.getEmail());
 
         List<StudentBatchDTO> batches = dashboardService.getStudentBatches(user.getId());
@@ -95,7 +101,7 @@ public class StudentDashboardController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<StudentBatchDTO> getBatchDetails(@PathVariable Long batchId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Fetching batch {} details for student: {}", batchId, user.getEmail());
 
         StudentBatchDTO batch = dashboardService.getBatchDetails(user.getId(), batchId);
@@ -103,19 +109,48 @@ public class StudentDashboardController {
     }
 
     /**
-     * Apply to a batch
+     * Apply to a batch.
+     *
+     * <p>Idempotent: re-applying returns the existing application with
+     * {@code duplicate: true} rather than creating a second one or failing, so a
+     * double-clicked button and a network retry both do the right thing.
      */
     @PostMapping("/batches/apply")
     @PreAuthorize("hasRole('STUDENT')")
-    public ResponseEntity<Map<String, Object>> applyToBatch(@RequestBody Map<String, Long> request) {
+    public ResponseEntity<BatchApplicationDTO> applyToBatch(@RequestBody Map<String, Long> request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
+
         Long batchId = request.get("batchId");
+        if (batchId == null) {
+            throw new BadRequestException("batchId is required");
+        }
 
         log.info("Student {} applying to batch {}", user.getEmail(), batchId);
 
-        Map<String, Object> result = dashboardService.applyToBatch(user.getId(), batchId);
-        return ResponseEntity.ok(result);
+        BatchApplicationDTO result = enrollmentService.applyToBatch(user.getId(), batchId);
+        return ResponseEntity.status(result.isDuplicate() ? HttpStatus.OK : HttpStatus.CREATED)
+                .body(result);
+    }
+
+    /**
+     * The signed-in student's applications, newest first.
+     */
+    @GetMapping("/applications")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<List<BatchApplicationDTO>> getMyApplications() {
+        AuthenticatedUser user = SecurityUtils.currentUser();
+        return ResponseEntity.ok(enrollmentService.getMyApplications(user.getId()));
+    }
+
+    /**
+     * Withdraw an application that has not been reviewed yet.
+     */
+    @PostMapping("/applications/{applicationId}/withdraw")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<BatchApplicationDTO> withdrawApplication(@PathVariable Long applicationId) {
+        AuthenticatedUser user = SecurityUtils.currentUser();
+        return ResponseEntity.ok(enrollmentService.withdrawApplication(user.getId(), applicationId));
     }
 
     /**
@@ -125,7 +160,7 @@ public class StudentDashboardController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<StudentProgressDTO> getBatchProgress(@PathVariable Long batchId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Fetching progress for student {} in batch {}", user.getEmail(), batchId);
 
         StudentProgressDTO progress = dashboardService.getStudentProgress(user.getId(), batchId);

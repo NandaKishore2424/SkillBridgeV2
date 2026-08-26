@@ -1,6 +1,5 @@
 package com.skillbridge.trainer.controller;
 
-import com.skillbridge.auth.entity.User;
 import com.skillbridge.trainer.dto.TrainerDTO;
 import com.skillbridge.trainer.dto.UpdateTrainerProfileRequest;
 import com.skillbridge.trainer.service.TrainerService;
@@ -11,6 +10,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 
 @RestController
 @RequestMapping("/api/v1/trainers")
@@ -24,7 +25,7 @@ public class TrainerController {
     @PreAuthorize("hasRole('TRAINER')")
     public ResponseEntity<TrainerDTO> getMyProfile() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         TrainerDTO trainer = trainerService.getTrainerProfile(user.getId());
         return ResponseEntity.ok(trainer);
     }
@@ -40,7 +41,7 @@ public class TrainerController {
     @PreAuthorize("hasRole('TRAINER')")
     public ResponseEntity<TrainerDTO> updateMyProfile(@RequestBody UpdateTrainerProfileRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         TrainerDTO updated = trainerService.updateTrainerProfile(user.getId(), request);
         return ResponseEntity.ok(updated);
     }

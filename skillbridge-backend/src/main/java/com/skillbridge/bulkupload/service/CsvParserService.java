@@ -16,6 +16,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import com.skillbridge.common.exception.BadRequestException;
 
 @Service
 @Slf4j
@@ -62,12 +63,12 @@ public class CsvParserService {
             return results;
         } catch (IOException e) {
             log.error("Error parsing CSV file", e);
-            throw new RuntimeException("Failed to parse CSV file: " + e.getMessage());
+            throw new BadRequestException("Failed to parse CSV file: " + e.getMessage());
         } catch (Exception e) {
             log.error(
                     "Error processing CSV data. Expected headers for {}: Full Name, Email, Roll Number, Degree, Branch, Year",
                     clazz.getSimpleName(), e);
-            throw new RuntimeException("Error processing CSV data: " + e.getMessage() +
+            throw new BadRequestException("Error processing CSV data: " + e.getMessage() +
                     ". Please ensure CSV has correct headers: Full Name, Email, Roll Number, Degree, Branch, Year");
         }
     }
@@ -97,7 +98,7 @@ public class CsvParserService {
             return results;
         } catch (Exception e) {
             log.error("Error processing CSV data for {}", clazz.getSimpleName(), e);
-            throw new RuntimeException("Error processing CSV data: " + e.getMessage() +
+            throw new BadRequestException("Error processing CSV data: " + e.getMessage() +
                     ". Please ensure CSV has correct headers: Full Name, Email, Roll Number, Degree, Branch, Year");
         }
     }

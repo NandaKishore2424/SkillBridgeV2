@@ -1,6 +1,5 @@
 package com.skillbridge.trainer.controller;
 
-import com.skillbridge.auth.entity.User;
 import com.skillbridge.trainer.dto.TrainerDashboardStatsDTO;
 import com.skillbridge.trainer.dto.TrainerBatchDTO;
 import com.skillbridge.trainer.dto.TrainerStudentDTO;
@@ -14,6 +13,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 
 @RestController
 @RequestMapping("/api/v1/trainer")
@@ -27,7 +28,7 @@ public class TrainerDashboardController {
     @PreAuthorize("hasRole('TRAINER')")
     public ResponseEntity<TrainerDashboardStatsDTO> getDashboardStats() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Getting dashboard stats for trainer: {}", user.getEmail());
 
         TrainerDashboardStatsDTO stats = dashboardService.getDashboardStats(user.getId());
@@ -38,7 +39,7 @@ public class TrainerDashboardController {
     @PreAuthorize("hasRole('TRAINER')")
     public ResponseEntity<List<TrainerBatchDTO>> getTrainerBatches() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Getting batches for trainer: {}", user.getEmail());
 
         List<TrainerBatchDTO> batches = dashboardService.getTrainerBatches(user.getId());
@@ -49,7 +50,7 @@ public class TrainerDashboardController {
     @PreAuthorize("hasRole('TRAINER')")
     public ResponseEntity<List<TrainerStudentDTO>> getBatchStudents(@PathVariable Long batchId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Getting students for batch {} by trainer: {}", batchId, user.getEmail());
 
         List<TrainerStudentDTO> students = dashboardService.getBatchStudents(user.getId(), batchId);

@@ -46,6 +46,17 @@ public interface SyllabusModuleRepository extends JpaRepository<SyllabusModule, 
     List<SyllabusModule> findByBatchIdWithSubmodulesAndTopics(@Param("batchId") Long batchId);
 
     /**
+     * Module names for a set of batches, as {@code [batchId, name]} rows.
+     *
+     * <p>Feeds the recommendation engine's keyword extraction. Returns a
+     * projection rather than entities because the caller wants two scalars per
+     * row and has no use for a managed {@code SyllabusModule} — hydrating dozens
+     * of entities to read one string off each is pure overhead.
+     */
+    @Query("SELECT m.batch.id, m.name FROM SyllabusModule m WHERE m.batch.id IN :batchIds")
+    List<Object[]> findModuleNamesByBatchIds(@Param("batchIds") List<Long> batchIds);
+
+    /**
      * Delete all modules for a batch
      */
     void deleteByBatchId(Long batchId);

@@ -1,6 +1,5 @@
 package com.skillbridge.company.controller;
 
-import com.skillbridge.auth.entity.User;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
@@ -21,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 
 @RestController
 @RequestMapping("/api/v1/admin/companies")
@@ -41,7 +42,7 @@ public class CompanyController {
     ) {
         log.info("Fetching all companies");
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
 
         // SYSTEM_ADMIN can see all, COLLEGE_ADMIN only sees their college's companies
         Long userCollegeId = user.getCollegeId();
@@ -76,10 +77,13 @@ public class CompanyController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('SYSTEM_ADMIN') or hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<Company> getCompanyById(@PathVariable Long id) {
+    public ResponseEntity<CompanyDTO> getCompanyById(@PathVariable Long id) {
         log.info("Fetching company with id: {}", id);
+        // Company holds a lazy college. Returning the entity serialises that
+        // association outside any transaction, which open-in-view used to paper
+        // over; the DTO makes the boundary explicit instead.
         return companyRepository.findById(id)
-                .map(ResponseEntity::ok)
+                .map(c -> ResponseEntity.ok(convertToDTO(c)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -90,12 +94,10 @@ public class CompanyController {
 
         // Get college ID from authenticated user
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         Long collegeId = null;
 
-        // Check if user is SYSTEM_ADMIN
-        boolean isSystemAdmin = user.getRoles().stream()
-            .anyMatch(role -> role.getName().equals("SYSTEM_ADMIN"));
+        boolean isSystemAdmin = user.isSystemAdmin();
 
         // For SYSTEM_ADMIN: use collegeId from request if provided
         // For COLLEGE_ADMIN: use their college ID
@@ -142,15 +144,15 @@ public class CompanyController {
 
         Company savedCompany = companyRepository.save(company);
         log.info("Company created successfully with ID: {}", savedCompany.getId());
-        return ResponseEntity.ok(savedCompany);
+        return ResponseEntity.ok(convertToDTO(savedCompany));
     }
 
     // Helper method to convert Company entity to DTO
     private CompanyDTO convertToDTO(Company company) {
         return CompanyDTO.builder()
                 .id(company.getId())
-                .collegeId(company.getCollege().getId())
-                .collegeName(company.getCollege().getName())
+                .collegeId(company.getCollege() == null ? null : company.getCollege().getId())
+                .collegeName(company.getCollege() == null ? null : company.getCollege().getName())
                 .name(company.getName())
                 .domain(company.getDomain())
                 .hiringType(company.getHiringType())

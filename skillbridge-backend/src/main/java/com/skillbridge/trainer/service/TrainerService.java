@@ -24,6 +24,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import com.skillbridge.common.exception.ConflictException;
+import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -39,16 +42,16 @@ public class TrainerService {
     public TrainerDTO createTrainer(CreateTrainerRequest request) {
         // Validate college
         College college = collegeRepository.findById(request.getCollegeId())
-                .orElseThrow(() -> new RuntimeException("College not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("College not found"));
 
         // Check if user with email already exists
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("User with this email already exists");
+            throw new ConflictException("User with this email already exists");
         }
 
         // Get TRAINER role
         Role trainerRole = roleRepository.findByName("TRAINER")
-                .orElseThrow(() -> new RuntimeException("Required role not found"));
+                .orElseThrow(() -> new InternalServerException("Required role not found"));
 
         Set<Role> roles = new HashSet<>();
         roles.add(trainerRole);
@@ -83,13 +86,13 @@ public class TrainerService {
 
     public TrainerDTO getTrainerProfile(Long userId) {
         Trainer trainer = trainerRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Trainer profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Trainer profile not found"));
         return mapToDTO(trainer);
     }
 
     public TrainerDTO getTrainerById(Long trainerId) {
         Trainer trainer = trainerRepository.findById(trainerId)
-                .orElseThrow(() -> new RuntimeException("Trainer not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Trainer not found"));
         return mapToDTO(trainer);
     }
 
@@ -107,7 +110,7 @@ public class TrainerService {
     @Transactional
     public TrainerDTO updateTrainerProfile(Long userId, UpdateTrainerProfileRequest request) {
         Trainer trainer = trainerRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Trainer profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Trainer profile not found"));
 
         if (request.getFullName() != null)
             trainer.setFullName(request.getFullName());
@@ -132,7 +135,7 @@ public class TrainerService {
     @Transactional
     public void updateTrainerStatus(Long trainerId, boolean isActive) {
         Trainer trainer = trainerRepository.findById(trainerId)
-                .orElseThrow(() -> new RuntimeException("Trainer not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Trainer not found"));
 
         User user = trainer.getUser();
         user.setIsActive(isActive);

@@ -3,143 +3,198 @@ package com.skillbridge.student.service;
 import com.skillbridge.batch.dto.BatchDTO;
 import com.skillbridge.batch.entity.Batch;
 import com.skillbridge.batch.repository.BatchRepository;
+import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.enrollment.entity.Enrollment;
+import com.skillbridge.enrollment.repository.EnrollmentRepository;
+import com.skillbridge.enrollment.repository.projection.StudentStatsProjection;
+import com.skillbridge.progress.entity.StudentBatchProgress;
+import com.skillbridge.progress.entity.TopicProgress;
+import com.skillbridge.progress.repository.StudentBatchProgressRepository;
+import com.skillbridge.progress.repository.TopicProgressRepository;
 import com.skillbridge.student.dto.*;
 import com.skillbridge.student.entity.Student;
 import com.skillbridge.student.repository.StudentRepository;
+import com.skillbridge.trainer.entity.Trainer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Read model behind the student dashboard.
+ *
+ * <p>Every method in this class previously returned a placeholder — hardcoded
+ * zeroes for the statistics, empty lists for batches and recommendations. The
+ * data existed; nothing read it.
+ *
+ * <p>The recurring concern throughout is query count. This is the most-visited
+ * screen in the product, and the obvious implementation of each method is an
+ * N+1: one query for the enrollments, then one per batch for its progress, its
+ * trainers, its student count. Each method below notes how it avoids that.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class StudentDashboardService {
+
+    private static final int RECOMMENDATION_LIMIT = 6;
 
     private final StudentRepository studentRepository;
     private final BatchRepository batchRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final TopicProgressRepository progressRepository;
+    private final StudentBatchProgressRepository summaryRepository;
+    private final BatchRecommendationService recommendationService;
 
-    @Transactional(readOnly = true)
+    /**
+     * Every counter on the dashboard, from one round trip.
+     *
+     * <p>The naive version is five separate counts. At roughly 30ms to a hosted
+     * database that is 150ms of latency before any rendering happens, on the page
+     * every student opens first.
+     */
     public StudentDashboardStatsDTO getDashboardStats(Long userId) {
-        log.debug("Getting dashboard stats for user: {}", userId);
+        Student student = requireStudent(userId);
 
-        Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(
-                        () -> new RuntimeException("Student profile not found. Please complete your profile setup."));
+        StudentStatsProjection stats = enrollmentRepository.aggregateStatsForStudent(student.getId());
 
-        // For now, return empty stats - will be implemented when enrollment module
-        // exists
+        if (stats == null) {
+            return emptyStats();
+        }
+
         return StudentDashboardStatsDTO.builder()
-                .enrolledBatches(0)
-                .activeBatches(0)
-                .completedBatches(0)
-                .totalTopicsCompleted(0)
+                .enrolledBatches(stats.getTotalEnrolled())
+                .activeBatches(stats.getActiveCount())
+                .completedBatches(stats.getCompletedCount())
+                .upcomingBatches(stats.getUpcomingCount())
+                .pendingApplications(stats.getPendingRequests())
+                .totalTopicsCompleted(stats.getTopicsCompleted())
+                .totalTopicsAssigned(stats.getTopicsAssigned())
+                .overallProgressPercent(percent(stats.getTopicsCompleted(), stats.getTopicsAssigned()))
                 .build();
     }
 
-    @Transactional(readOnly = true)
-    public List<RecommendedBatchDTO> getRecommendedBatches(Long userId) {
-        log.debug("Getting recommended batches for user: {}", userId);
-
-        // For now, return empty list - full recommendation logic can be implemented
-        // later
-        return new ArrayList<>();
-    }
-
-    @Transactional(readOnly = true)
-    public List<BatchDTO> getAvailableBatches(Long collegeId) {
-        log.debug("Getting available batches for college: {}", collegeId);
-
-        // Find batches with status OPEN or ACTIVE
-        List<Batch> batches = batchRepository.findByCollegeId(collegeId);
-
-        return batches.stream()
-                .filter(b -> "OPEN".equals(b.getStatus()) || "ACTIVE".equals(b.getStatus()))
-                .map(this::convertToBatchDTO)
-                .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
+    /**
+     * The batches this student is enrolled in, each with its progress.
+     *
+     * <p>Two queries regardless of how many batches there are: one fetch-joined
+     * read of the enrollments, and one read of the pre-aggregated progress
+     * summaries keyed by batch. Asking for progress per batch inside the mapping
+     * loop would be an N+1 on exactly the screen where it hurts most.
+     */
     public List<StudentBatchDTO> getStudentBatches(Long userId) {
-        log.debug("Getting batches for student user: {}", userId);
+        Student student = requireStudent(userId);
 
-        Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student not found"));
+        List<Enrollment> enrollments =
+                enrollmentRepository.findAllWithBatchDetailsByStudentId(student.getId());
 
-        // For now, return empty list - will be implemented when enrollment module
-        // exists
-        return new ArrayList<>();
+        if (enrollments.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> batchIds = enrollments.stream()
+                .map(e -> e.getBatch().getId())
+                .toList();
+
+        Map<Long, StudentBatchProgress> progressByBatch = summaryRepository
+                .findByStudentIdAndBatchIdIn(student.getId(), batchIds).stream()
+                .collect(Collectors.toMap(StudentBatchProgress::getBatchId, Function.identity()));
+
+        return enrollments.stream()
+                .map(e -> toStudentBatchDto(e, progressByBatch.get(e.getBatch().getId())))
+                .toList();
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * Batches open to this student, excluding ones they are already in.
+     */
+    public List<BatchDTO> getAvailableBatches(Long collegeId) {
+        if (collegeId == null) {
+            return List.of();
+        }
+        return batchRepository.findAvailableForCollege(collegeId).stream()
+                .map(this::toBatchDto)
+                .toList();
+    }
+
+    /**
+     * Scored recommendations, each with a reason.
+     *
+     * <p>Delegated to {@link BatchRecommendationService}; see that class for why
+     * the scoring is a transparent heuristic rather than a model.
+     */
+    public List<RecommendedBatchDTO> getRecommendedBatches(Long userId) {
+        Student student = requireStudent(userId);
+        return recommendationService.recommend(student, RECOMMENDATION_LIMIT);
+    }
+
+    /** One enrolled batch in detail. */
     public StudentBatchDTO getBatchDetails(Long userId, Long batchId) {
-        log.debug("Getting batch {} details for user: {}", batchId, userId);
+        Student student = requireStudent(userId);
 
-        Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student not found"));
+        Enrollment enrollment = enrollmentRepository
+                .findByBatchIdAndStudentId(batchId, student.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "You are not enrolled in this batch."));
 
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new RuntimeException("Batch not found"));
+        StudentBatchProgress summary = summaryRepository
+                .findByStudentIdAndBatchId(student.getId(), batchId)
+                .orElse(null);
 
-        return convertToStudentBatchDTO(batch);
+        return toStudentBatchDto(enrollment, summary);
     }
 
-    @Transactional
-    public Map<String, Object> applyToBatch(Long userId, Long batchId) {
-        log.debug("User {} applying to batch {}", userId, batchId);
-
-        Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student not found"));
-
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new RuntimeException("Batch not found"));
-
-        // For now, return success response - will create enrollment when module exists
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", 1L);
-        result.put("batchId", batchId);
-        result.put("status", "PENDING");
-        result.put("appliedAt", LocalDateTime.now());
-        result.put("message", "Application functionality coming soon");
-
-        return result;
-    }
-
-    @Transactional(readOnly = true)
+    /**
+     * Flat per-topic progress for one batch.
+     *
+     * <p>Kept for the existing client contract. The richer tree-shaped view lives
+     * on {@code ProgressController} at {@code /progress/detail}, which is what new
+     * UI should use.
+     */
     public StudentProgressDTO getStudentProgress(Long userId, Long batchId) {
-        log.debug("Getting progress for user {} in batch {}", userId, batchId);
+        Student student = requireStudent(userId);
 
-        Student student = studentRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new RuntimeException("Student not found"));
+        Batch batch = batchRepository.findByIdAndDeletedAtIsNull(batchId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Batch", batchId));
 
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new RuntimeException("Batch not found"));
+        if (enrollmentRepository.findByBatchIdAndStudentId(batchId, student.getId()).isEmpty()) {
+            throw new ResourceNotFoundException("You are not enrolled in this batch.");
+        }
 
-        // For now, return empty progress - will be implemented when progress module
-        // exists
+        List<TopicProgress> rows =
+                progressRepository.findFullProgressForStudentInBatch(student.getId(), batchId);
+
+        List<StudentProgressDTO.TopicProgress> topics = rows.stream()
+                .map(p -> StudentProgressDTO.TopicProgress.builder()
+                        .id(p.getTopic().getId())
+                        .title(p.getTopic().getName())
+                        .description(p.getTopic().getDescription())
+                        .status(p.getStatus().name())
+                        .feedback(p.getComment())
+                        .updatedAt(p.getUpdatedAt())
+                        .build())
+                .toList();
+
         return StudentProgressDTO.builder()
-                .batchId(batchId)
+                .batchId(batch.getId())
                 .batchName(batch.getName())
-                .topics(new ArrayList<>())
+                .topics(topics)
                 .build();
     }
 
-    private BatchDTO convertToBatchDTO(Batch batch) {
-        return BatchDTO.builder()
-                .id(batch.getId())
-                .name(batch.getName())
-                .description(batch.getDescription())
-                .status(batch.getStatus())
-                .startDate(batch.getStartDate())
-                .endDate(batch.getEndDate())
-                .build();
-    }
+    // ------------------------------------------------------------------
+    // Mapping
+    // ------------------------------------------------------------------
 
-    private StudentBatchDTO convertToStudentBatchDTO(Batch batch) {
+    private StudentBatchDTO toStudentBatchDto(Enrollment enrollment, StudentBatchProgress summary) {
+        Batch batch = enrollment.getBatch();
+
         StudentBatchDTO dto = new StudentBatchDTO();
         dto.setId(batch.getId());
         dto.setName(batch.getName());
@@ -147,11 +202,101 @@ public class StudentDashboardService {
         dto.setStatus(batch.getStatus());
         dto.setStartDate(batch.getStartDate());
         dto.setEndDate(batch.getEndDate());
-        dto.setEnrolledAt(LocalDateTime.now());
-        dto.setTrainers(new ArrayList<>());
-        dto.setCompanies(new ArrayList<>());
-        dto.setProgress(null);
+        dto.setCreatedAt(batch.getCreatedAt());
+        dto.setUpdatedAt(batch.getUpdatedAt());
+        dto.setCollegeId(batch.getCollege() == null ? null : batch.getCollege().getId());
+        dto.setCollegeName(batch.getCollege() == null ? null : batch.getCollege().getName());
+        dto.setEnrolledAt(enrollment.getEnrolledAt());
+
+        dto.setTrainers(batch.getTrainers().stream()
+                .map(this::toTrainerInfo)
+                .toList());
+
+        dto.setCompanies(batch.getCompanies().stream()
+                .map(c -> StudentBatchDTO.CompanyInfo.builder()
+                        .id(c.getId())
+                        .name(c.getName())
+                        .build())
+                .toList());
+
+        dto.setTrainerCount(batch.getTrainers().size());
+        dto.setCompanyCount(batch.getCompanies().size());
+        dto.setProgress(toProgressInfo(summary));
 
         return dto;
+    }
+
+    private StudentBatchDTO.TrainerInfo toTrainerInfo(Trainer trainer) {
+        return StudentBatchDTO.TrainerInfo.builder()
+                .id(trainer.getId())
+                .fullName(trainer.getFullName())
+                .build();
+    }
+
+    /**
+     * Progress panel for one batch.
+     *
+     * <p>A student with no summary row yet — enrolled, but the batch has no
+     * syllabus — gets zeroes rather than null, so the UI has nothing to
+     * special-case.
+     */
+    private StudentBatchDTO.ProgressInfo toProgressInfo(StudentBatchProgress summary) {
+        if (summary == null) {
+            return StudentBatchDTO.ProgressInfo.builder()
+                    .totalTopics(0)
+                    .completedTopics(0)
+                    .inProgressTopics(0)
+                    .pendingTopics(0)
+                    .completionPercentage(0.0)
+                    .build();
+        }
+
+        int pending = summary.getTopicsTotal()
+                - summary.getTopicsCompleted()
+                - summary.getTopicsInProgress()
+                - summary.getTopicsNeedsWork();
+
+        return StudentBatchDTO.ProgressInfo.builder()
+                .totalTopics(summary.getTopicsTotal())
+                .completedTopics(summary.getTopicsCompleted())
+                .inProgressTopics(summary.getTopicsInProgress())
+                .pendingTopics(Math.max(0, pending))
+                .completionPercentage(summary.getWeightedPercent().doubleValue())
+                .build();
+    }
+
+    private BatchDTO toBatchDto(Batch batch) {
+        return BatchDTO.builder()
+                .id(batch.getId())
+                .name(batch.getName())
+                .description(batch.getDescription())
+                .status(batch.getStatus())
+                .startDate(batch.getStartDate())
+                .endDate(batch.getEndDate())
+                .createdAt(batch.getCreatedAt())
+                .updatedAt(batch.getUpdatedAt())
+                .collegeId(batch.getCollege() == null ? null : batch.getCollege().getId())
+                .build();
+    }
+
+    // ------------------------------------------------------------------
+
+    private Student requireStudent(Long userId) {
+        return studentRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No student profile found. Complete your profile setup first."));
+    }
+
+    private StudentDashboardStatsDTO emptyStats() {
+        return StudentDashboardStatsDTO.builder()
+                .enrolledBatches(0).activeBatches(0).completedBatches(0).upcomingBatches(0)
+                .pendingApplications(0).totalTopicsCompleted(0).totalTopicsAssigned(0)
+                .overallProgressPercent(0)
+                .build();
+    }
+
+    /** Guards the zero-topic case, which is otherwise a division by zero. */
+    private int percent(int done, int total) {
+        return total == 0 ? 0 : (int) Math.round(done * 100.0 / total);
     }
 }

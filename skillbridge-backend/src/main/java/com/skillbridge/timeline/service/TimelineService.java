@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import com.skillbridge.common.exception.BusinessRuleException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
 
 /**
  * Service for managing batch timeline sessions
@@ -51,18 +53,17 @@ public class TimelineService {
         log.info("Creating session {} for batch {}", request.getSessionNumber(), batchId);
 
         Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new RuntimeException("Batch not found with id: " + batchId));
+                .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
 
         // Check if session number already exists
         if (sessionRepository.existsByBatchIdAndSessionNumber(batchId, request.getSessionNumber())) {
-            throw new RuntimeException(
-                    "Session number " + request.getSessionNumber() + " already exists for this batch");
+            throw new BusinessRuleException("Session number " + request.getSessionNumber() + " already exists for this batch");
         }
 
         SyllabusTopic topic = null;
         if (request.getTopicId() != null) {
             topic = topicRepository.findById(request.getTopicId())
-                    .orElseThrow(() -> new RuntimeException("Topic not found with id: " + request.getTopicId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Topic not found with id: " + request.getTopicId()));
         }
 
         TimelineSession session = TimelineSession.builder()
@@ -87,14 +88,14 @@ public class TimelineService {
         log.info("Updating session {}", sessionId);
 
         TimelineSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new RuntimeException("Session not found with id: " + sessionId));
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found with id: " + sessionId));
 
         if (request.getSessionNumber() != null) {
             // Check if new session number conflicts
             if (!request.getSessionNumber().equals(session.getSessionNumber())) {
                 if (sessionRepository.existsByBatchIdAndSessionNumber(
                         session.getBatch().getId(), request.getSessionNumber())) {
-                    throw new RuntimeException("Session number " + request.getSessionNumber() + " already exists");
+                    throw new BusinessRuleException("Session number " + request.getSessionNumber() + " already exists");
                 }
                 session.setSessionNumber(request.getSessionNumber());
             }
@@ -110,7 +111,7 @@ public class TimelineService {
 
         if (request.getTopicId() != null) {
             SyllabusTopic topic = topicRepository.findById(request.getTopicId())
-                    .orElseThrow(() -> new RuntimeException("Topic not found with id: " + request.getTopicId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Topic not found with id: " + request.getTopicId()));
             session.setTopic(topic);
         }
 
@@ -129,7 +130,7 @@ public class TimelineService {
         log.info("Deleting session {}", sessionId);
 
         if (!sessionRepository.existsById(sessionId)) {
-            throw new RuntimeException("Session not found with id: " + sessionId);
+            throw new ResourceNotFoundException("Session not found with id: " + sessionId);
         }
 
         sessionRepository.deleteById(sessionId);

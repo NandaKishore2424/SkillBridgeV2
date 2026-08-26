@@ -1,6 +1,5 @@
 package com.skillbridge.student.controller;
 
-import com.skillbridge.auth.entity.User;
 import com.skillbridge.student.dto.*;
 import com.skillbridge.student.entity.Skill;
 import com.skillbridge.student.service.StudentService;
@@ -15,6 +14,8 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 
 @RestController
 @RequestMapping("/api/v1/students")
@@ -28,7 +29,7 @@ public class StudentController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<StudentDTO> getMyProfile() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         StudentDTO student = studentService.getStudentProfile(user.getId());
         return ResponseEntity.ok(student);
     }
@@ -44,7 +45,7 @@ public class StudentController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<StudentDTO> updateMyProfile(@RequestBody UpdateStudentProfileRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         StudentDTO updated = studentService.updateStudentProfile(user.getId(), request);
         return ResponseEntity.ok(updated);
     }
@@ -61,7 +62,7 @@ public class StudentController {
     public ResponseEntity<StudentProfileDTO> completeProfile(
             @Valid @RequestBody StudentProfileUpdateDTO profileData) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
 
         log.info("Profile completion request received for user: {}", user.getEmail());
 
@@ -74,7 +75,7 @@ public class StudentController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<Void> addSkill(@RequestBody AddStudentSkillRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         studentService.addSkill(user.getId(), request);
         return ResponseEntity.ok().build();
     }
@@ -85,7 +86,7 @@ public class StudentController {
             @PathVariable Long skillId,
             @RequestBody Map<String, Integer> request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         studentService.updateSkillProficiency(user.getId(), skillId, request.get("proficiencyLevel"));
         return ResponseEntity.ok().build();
     }
@@ -94,7 +95,7 @@ public class StudentController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<Void> removeSkill(@PathVariable Long skillId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         studentService.removeSkill(user.getId(), skillId);
         return ResponseEntity.ok().build();
     }
@@ -103,7 +104,7 @@ public class StudentController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<StudentProjectDTO> addProject(@RequestBody CreateStudentProjectRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         StudentProjectDTO project = studentService.addProject(user.getId(), request);
         return ResponseEntity.ok(project);
     }
@@ -112,7 +113,7 @@ public class StudentController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<Void> deleteProject(@PathVariable Long projectId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         studentService.deleteProject(user.getId(), projectId);
         return ResponseEntity.ok().build();
     }

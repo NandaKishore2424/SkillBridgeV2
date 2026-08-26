@@ -1,28 +1,72 @@
-# Main Application Configuration
-# This is the default configuration file
-# Environment-specific configs (application-dev.yaml, application-prod.yaml) override this
+# ============================================================================
+# Main application configuration
+# ============================================================================
+# NO SECRET MAY EVER APPEAR IN THIS FILE. Not as a default, not in a comment,
+# not "temporarily". This file is committed to git; anything in it is public to
+# everyone with repository access, and stays in the history after removal.
+#
+# Every credential below is read from the environment and has no fallback, so a
+# missing variable fails loudly at startup rather than silently starting with a
+# known-bad default. See .env.example for the full list.
+# ============================================================================
 
 spring:
   application:
     name: skillbridge-backend
 
-  # RabbitMQ / CloudAMQP Configuration (shared across all profiles)
-  rabbitmq:
-    addresses: amqps://gvcxbqgm:Nm-4KJfWbJ73S0vHX-RZgWKcdDD0rsLW@puffin.rmq2.cloudamqp.com/gvcxbqgm
-
-  # Active profile - change this to switch environments
-  # Options: dev, local, prod
+  # Active profile. Override with SPRING_PROFILES_ACTIVE.
   profiles:
-    active: local
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+
+  rabbitmq:
+    addresses: ${AMQP_URL}
+
+  jpa:
+    # validate, never update. Hibernate must not be allowed to alter the schema:
+    # Flyway owns it, and an accidental auto-DDL is how migrations and reality
+    # drift apart in the first place.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    # Versions 11, 13 and 14 were never committed; V13 and V14 now fill that gap
+    # so an empty database can bootstrap. On the live database, where V15/V16 are
+    # already applied, Flyway needs permission to apply a lower version after a
+    # higher one. Both gap-fillers are written to be no-ops there.
+    out-of-order: true
 
 jwt:
-  secret: "change-me-in-prod-use-env"
-  accessTokenTtlSeconds: 3600
-  refreshTokenTtlSeconds: 1209600
+  secret: ${JWT_SECRET}
+  accessTokenTtlSeconds: ${JWT_ACCESS_TTL:3600}
+  refreshTokenTtlSeconds: ${JWT_REFRESH_TTL:1209600}
 
 rateLimit:
-  requestsPerMinute: 120
+  requestsPerMinute: ${RATE_LIMIT_RPM:120}
 
-# When 'local' profile is active, Spring Boot will also load application-local.yaml
-# This allows us to have environment-specific settings
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized

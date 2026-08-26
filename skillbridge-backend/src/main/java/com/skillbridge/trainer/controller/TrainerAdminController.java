@@ -1,6 +1,5 @@
 package com.skillbridge.trainer.controller;
 
-import com.skillbridge.auth.entity.User;
 import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.trainer.dto.CreateTrainerRequest;
 import com.skillbridge.trainer.dto.TrainerDTO;
@@ -16,6 +15,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 
 @RestController
 @RequestMapping("/api/v1/admin/trainers")
@@ -32,7 +33,7 @@ public class TrainerAdminController {
             @RequestParam(defaultValue = "20") int size
     ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         Page<TrainerDTO> trainers = trainerService.getTrainersByCollege(user.getCollegeId(), PageRequest.of(page, size));
         return ResponseEntity.ok(PagedResponse.<TrainerDTO>builder()
                 .items(trainers.getContent())
@@ -47,7 +48,7 @@ public class TrainerAdminController {
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<TrainerDTO> createTrainer(@RequestBody CreateTrainerRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         request.setCollegeId(user.getCollegeId());
         TrainerDTO trainer = trainerService.createTrainer(request);
         return ResponseEntity.ok(trainer);

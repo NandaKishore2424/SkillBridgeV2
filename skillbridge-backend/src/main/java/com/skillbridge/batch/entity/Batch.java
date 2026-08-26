@@ -53,6 +53,30 @@ public class Batch {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    /**
+     * Maximum active enrollments. Null means uncapped.
+     *
+     * <p>Enforced in {@code StudentEnrollmentService} under a row lock, not by a
+     * database constraint — a constraint cannot count rows in another table.
+     */
+    @Column(name = "capacity")
+    private Integer capacity;
+
+    /**
+     * Soft delete marker. Every read path must filter on {@code IS NULL}.
+     *
+     * <p>Batches are referenced by enrollments, progress rows and syllabus trees;
+     * a hard delete would either cascade away a student's history or fail on a
+     * foreign key. Neither is what an admin means by "remove this batch".
+     */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private Long version = 0L;
+
     // Many-to-Many relationship with Trainers
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "batch_trainers", joinColumns = @JoinColumn(name = "batch_id"), inverseJoinColumns = @JoinColumn(name = "trainer_id"))
@@ -78,5 +102,14 @@ public class Batch {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    /** Whether students may apply. Enrollment closes once the batch is running. */
+    public boolean isOpenForEnrollment() {
+        return !isDeleted() && ("OPEN".equals(status) || "UPCOMING".equals(status));
     }
 }

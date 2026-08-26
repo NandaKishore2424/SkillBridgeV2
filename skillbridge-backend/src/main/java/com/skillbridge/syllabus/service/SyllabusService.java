@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.skillbridge.common.exception.BusinessRuleException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
 
 /**
  * Service for managing batch curriculum (modules, sub-modules, and topics)
@@ -60,11 +62,11 @@ public class SyllabusService {
         log.info("Creating module '{}' for batch {}", request.getName(), batchId);
 
         Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new RuntimeException("Batch not found with id: " + batchId));
+                .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
 
         // Check if display order already exists
         if (moduleRepository.existsByBatchIdAndDisplayOrder(batchId, request.getDisplayOrder())) {
-            throw new RuntimeException("A module with display order " + request.getDisplayOrder() + " already exists");
+            throw new BusinessRuleException("A module with display order " + request.getDisplayOrder() + " already exists");
         }
 
         SyllabusModule module = SyllabusModule.builder()
@@ -98,7 +100,7 @@ public class SyllabusService {
         log.info("Updating module {}", moduleId);
 
         SyllabusModule module = moduleRepository.findById(moduleId)
-                .orElseThrow(() -> new RuntimeException("Module not found with id: " + moduleId));
+                .orElseThrow(() -> new ResourceNotFoundException("Module not found with id: " + moduleId));
 
         if (request.getName() != null) {
             module.setName(request.getName());
@@ -111,8 +113,7 @@ public class SyllabusService {
             if (!module.getDisplayOrder().equals(request.getDisplayOrder()) &&
                     moduleRepository.existsByBatchIdAndDisplayOrder(module.getBatch().getId(),
                             request.getDisplayOrder())) {
-                throw new RuntimeException(
-                        "A module with display order " + request.getDisplayOrder() + " already exists");
+                throw new BusinessRuleException("A module with display order " + request.getDisplayOrder() + " already exists");
             }
             module.setDisplayOrder(request.getDisplayOrder());
         }
@@ -136,7 +137,7 @@ public class SyllabusService {
         log.info("Deleting module {}", moduleId);
 
         if (!moduleRepository.existsById(moduleId)) {
-            throw new RuntimeException("Module not found with id: " + moduleId);
+            throw new ResourceNotFoundException("Module not found with id: " + moduleId);
         }
 
         moduleRepository.deleteById(moduleId);
@@ -154,12 +155,11 @@ public class SyllabusService {
         log.info("Creating sub-module '{}' for module {}", request.getName(), moduleId);
 
         SyllabusModule module = moduleRepository.findById(moduleId)
-                .orElseThrow(() -> new RuntimeException("Module not found with id: " + moduleId));
+                .orElseThrow(() -> new ResourceNotFoundException("Module not found with id: " + moduleId));
 
         // Check if display order already exists
         if (submoduleRepository.existsByModuleIdAndDisplayOrder(moduleId, request.getDisplayOrder())) {
-            throw new RuntimeException(
-                    "A sub-module with display order " + request.getDisplayOrder() + " already exists");
+            throw new BusinessRuleException("A sub-module with display order " + request.getDisplayOrder() + " already exists");
         }
 
         SyllabusSubmodule submodule = buildSubmodule(module, request);
@@ -177,7 +177,7 @@ public class SyllabusService {
         log.info("Updating sub-module {}", submoduleId);
 
         SyllabusSubmodule submodule = submoduleRepository.findById(submoduleId)
-                .orElseThrow(() -> new RuntimeException("Sub-module not found with id: " + submoduleId));
+                .orElseThrow(() -> new ResourceNotFoundException("Sub-module not found with id: " + submoduleId));
 
         if (request.getName() != null) {
             submodule.setName(request.getName());
@@ -190,8 +190,7 @@ public class SyllabusService {
             if (!submodule.getDisplayOrder().equals(request.getDisplayOrder()) &&
                     submoduleRepository.existsByModuleIdAndDisplayOrder(submodule.getModule().getId(),
                             request.getDisplayOrder())) {
-                throw new RuntimeException(
-                        "A sub-module with display order " + request.getDisplayOrder() + " already exists");
+                throw new BusinessRuleException("A sub-module with display order " + request.getDisplayOrder() + " already exists");
             }
             submodule.setDisplayOrder(request.getDisplayOrder());
         }
@@ -218,7 +217,7 @@ public class SyllabusService {
         log.info("Deleting sub-module {}", submoduleId);
 
         if (!submoduleRepository.existsById(submoduleId)) {
-            throw new RuntimeException("Sub-module not found with id: " + submoduleId);
+            throw new ResourceNotFoundException("Sub-module not found with id: " + submoduleId);
         }
 
         submoduleRepository.deleteById(submoduleId);
@@ -236,7 +235,7 @@ public class SyllabusService {
         log.info("Adding topic '{}' to sub-module {}", request.getName(), submoduleId);
 
         SyllabusSubmodule submodule = submoduleRepository.findById(submoduleId)
-                .orElseThrow(() -> new RuntimeException("Sub-module not found with id: " + submoduleId));
+                .orElseThrow(() -> new ResourceNotFoundException("Sub-module not found with id: " + submoduleId));
 
         SyllabusTopic topic = SyllabusTopic.builder()
                 .submodule(submodule)
@@ -259,7 +258,7 @@ public class SyllabusService {
         log.info("Updating topic {}", topicId);
 
         SyllabusTopic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new RuntimeException("Topic not found with id: " + topicId));
+                .orElseThrow(() -> new ResourceNotFoundException("Topic not found with id: " + topicId));
 
         if (request.getName() != null) {
             topic.setName(request.getName());
@@ -284,7 +283,7 @@ public class SyllabusService {
         log.info("Deleting topic {}", topicId);
 
         if (!topicRepository.existsById(topicId)) {
-            throw new RuntimeException("Topic not found with id: " + topicId);
+            throw new ResourceNotFoundException("Topic not found with id: " + topicId);
         }
 
         topicRepository.deleteById(topicId);
@@ -298,7 +297,7 @@ public class SyllabusService {
         log.info("Toggling completion for topic {}", topicId);
 
         SyllabusTopic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new RuntimeException("Topic not found with id: " + topicId));
+                .orElseThrow(() -> new ResourceNotFoundException("Topic not found with id: " + topicId));
 
         topic.toggleCompletion();
         SyllabusTopic updatedTopic = topicRepository.save(topic);

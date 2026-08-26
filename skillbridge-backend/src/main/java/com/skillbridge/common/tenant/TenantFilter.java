@@ -1,6 +1,6 @@
 package com.skillbridge.common.tenant;
 
-import com.skillbridge.auth.entity.User;
+import com.skillbridge.auth.security.AuthenticatedUser;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -31,11 +31,9 @@ public class TenantFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof User user) {
-            boolean isSystemAdmin = user.getRoles().stream()
-                    .anyMatch(role -> "SYSTEM_ADMIN".equals(role.getName()));
-
-            if (!isSystemAdmin && user.getCollegeId() != null) {
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof AuthenticatedUser user) {
+            // SYSTEM_ADMIN is deliberately unscoped and sees every college.
+            if (!user.isSystemAdmin() && user.getCollegeId() != null) {
                 try {
                     Session session = entityManager.unwrap(Session.class);
                     session.enableFilter("collegeFilter")

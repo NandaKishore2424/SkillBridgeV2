@@ -16,6 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.Set;
+import com.skillbridge.common.exception.ConflictException;
+import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -34,18 +37,18 @@ public class CollegeAdminService {
 
         // Check if college exists
         College college = collegeRepository.findById(collegeId)
-            .orElseThrow(() -> new RuntimeException("College not found with id: " + collegeId));
+            .orElseThrow(() -> new ResourceNotFoundException("College not found with id: " + collegeId));
 
         // Check if email already exists
         if (userRepository.existsByEmail(request.email)) {
-            throw new RuntimeException("User with email already exists: " + request.email);
+            throw new ConflictException("User with email already exists: " + request.email);
         }
 
         // Get COLLEGE_ADMIN role - find by enum and convert to string
         Role collegeAdminRole = roleRepository.findAll().stream()
             .filter(role -> "COLLEGE_ADMIN".equals(role.getName()))
             .findFirst()
-            .orElseThrow(() -> new RuntimeException("COLLEGE_ADMIN role not found"));
+            .orElseThrow(() -> new InternalServerException("COLLEGE_ADMIN role not found"));
 
         // Create user
         User user = User.builder()

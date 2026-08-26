@@ -29,6 +29,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import com.skillbridge.common.exception.BusinessRuleException;
+import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.common.exception.UnauthorizedException;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 
 @RestController
 @RequestMapping("/api/v1/admin/batches")
@@ -52,7 +58,7 @@ public class BatchController {
         log.info("Fetching all batches for college admin");
         // Get college ID from authenticated user
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
+        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         Long collegeId = user.getCollegeId();
 
         // If collegeId is null, try to get it from CollegeAdmin entity
@@ -121,20 +127,15 @@ public class BatchController {
 
     @PostMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<Batch> createBatch(@RequestBody CreateBatchRequest request) {
+    public ResponseEntity<BatchDTO> createBatch(@RequestBody CreateBatchRequest request) {
         log.info("Creating batch: {}", request.name);
 
         try {
             // Get college ID from authenticated user
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            log.debug("Authentication principal type: {}", auth.getPrincipal().getClass().getName());
-
-            if (!(auth.getPrincipal() instanceof User)) {
-                log.error("Principal is not a User instance: {}", auth.getPrincipal());
-                throw new RuntimeException("Authentication error: Invalid user principal");
-            }
-
-            User user = (User) auth.getPrincipal();
+            // requirePrincipal already raises 401 for a missing or unexpected
+            // principal, so the hand-rolled instanceof check that used to live
+            // here (and logged the whole principal object) is redundant.
+            AuthenticatedUser user = SecurityUtils.currentUser();
             Long collegeId = user.getCollegeId();
 
             // If collegeId is null, try to get it from CollegeAdmin entity
@@ -151,7 +152,7 @@ public class BatchController {
 
             if (collegeId == null) {
                 log.error("User {} does not have a collegeId", user.getEmail());
-                throw new RuntimeException("User does not have a college assigned");
+                throw new BusinessRuleException("User does not have a college assigned");
             }
 
             // Make final for lambda expression
@@ -159,7 +160,7 @@ public class BatchController {
 
             // Verify college exists
             var college = collegeRepository.findById(finalCollegeId)
-                    .orElseThrow(() -> new RuntimeException("College not found with id: " + finalCollegeId));
+                    .orElseThrow(() -> new ResourceNotFoundException("College not found with id: " + finalCollegeId));
 
             // Parse dates from strings if provided
             LocalDate startDate = null;
@@ -206,19 +207,19 @@ public class BatchController {
 
             Batch savedBatch = batchRepository.save(batch);
             log.info("Successfully created batch with id: {}", savedBatch.getId());
-            return ResponseEntity.ok(savedBatch);
+            return ResponseEntity.ok(convertToDTO(savedBatch));
         } catch (RuntimeException e) {
             log.error("Failed to create batch: {}", e.getMessage(), e);
             throw e;
         } catch (Exception e) {
             log.error("Unexpected error creating batch: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to create batch: " + e.getMessage(), e);
+            throw new InternalServerException("Failed to create batch: " + e.getMessage(), e);
         }
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<Batch> updateBatch(@PathVariable Long id, @RequestBody CreateBatchRequest request) {
+    public ResponseEntity<BatchDTO> updateBatch(@PathVariable Long id, @RequestBody CreateBatchRequest request) {
         log.info("Updating batch with id: {}", id);
         Optional<Batch> batchOpt = batchRepository.findById(id);
         if (batchOpt.isEmpty()) {
@@ -258,12 +259,12 @@ public class BatchController {
         }
 
         Batch updatedBatch = batchRepository.save(batch);
-        return ResponseEntity.ok(updatedBatch);
+        return ResponseEntity.ok(convertToDTO(updatedBatch));
     }
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<Batch> updateBatchStatus(
+    public ResponseEntity<BatchDTO> updateBatchStatus(
             @PathVariable Long id,
             @RequestBody StatusUpdateRequest request) {
         log.info("Updating batch status for id: {} to {}", id, request.status);
@@ -274,7 +275,7 @@ public class BatchController {
         Batch batch = batchOpt.get();
         batch.setStatus(request.status);
         Batch updatedBatch = batchRepository.save(batch);
-        return ResponseEntity.ok(updatedBatch);
+        return ResponseEntity.ok(convertToDTO(updatedBatch));
     }
 
     @PostMapping("/{id}/trainers")

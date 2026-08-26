@@ -28,6 +28,8 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -50,9 +52,9 @@ public class BulkUploadJobService {
     public void processStudentUploadAsync(byte[] data, String fileName, Long bulkUploadId, Long collegeId) {
         log.info("Async student upload started. UploadId: {}", bulkUploadId);
         BulkUpload bulkUpload = bulkUploadRepository.findById(bulkUploadId)
-                .orElseThrow(() -> new RuntimeException("Bulk upload record not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Bulk upload record not found"));
         College college = collegeRepository.findById(collegeId)
-                .orElseThrow(() -> new RuntimeException("College not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("College not found"));
 
         int successCount = 0;
         int failedCount = 0;
@@ -62,7 +64,7 @@ public class BulkUploadJobService {
             bulkUpload.setTotalRows(students.size());
 
             Role studentRole = roleRepository.findByName("STUDENT")
-                    .orElseThrow(() -> new RuntimeException("Role STUDENT not found"));
+                    .orElseThrow(() -> new InternalServerException("Role STUDENT not found"));
             Set<Role> roles = new HashSet<>();
             roles.add(studentRole);
 
@@ -106,9 +108,9 @@ public class BulkUploadJobService {
     public void processTrainerUploadAsync(byte[] data, String fileName, Long bulkUploadId, Long collegeId) {
         log.info("Async trainer upload started. UploadId: {}", bulkUploadId);
         BulkUpload bulkUpload = bulkUploadRepository.findById(bulkUploadId)
-                .orElseThrow(() -> new RuntimeException("Bulk upload record not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Bulk upload record not found"));
         College college = collegeRepository.findById(collegeId)
-                .orElseThrow(() -> new RuntimeException("College not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("College not found"));
 
         int successCount = 0;
         int failedCount = 0;
@@ -118,7 +120,7 @@ public class BulkUploadJobService {
             bulkUpload.setTotalRows(trainers.size());
 
             Role trainerRole = roleRepository.findByName("TRAINER")
-                    .orElseThrow(() -> new RuntimeException("Role TRAINER not found"));
+                    .orElseThrow(() -> new InternalServerException("Role TRAINER not found"));
             Set<Role> roles = new HashSet<>();
             roles.add(trainerRole);
 

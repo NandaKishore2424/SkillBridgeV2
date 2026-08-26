@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import com.skillbridge.common.exception.BadRequestException;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -55,7 +56,7 @@ public class BulkUploadController {
             );
             return ResponseEntity.accepted().body(response);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to read upload file: " + e.getMessage());
+            throw new BadRequestException("Failed to read upload file: " + e.getMessage());
         }
     }
 
@@ -78,7 +79,7 @@ public class BulkUploadController {
             );
             return ResponseEntity.accepted().body(response);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to read upload file: " + e.getMessage());
+            throw new BadRequestException("Failed to read upload file: " + e.getMessage());
         }
     }
 

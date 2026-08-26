@@ -1,23 +1,43 @@
-# Python Environments & Secrets
+# --- Secrets -----------------------------------------------------------------
+# Anything that can hold a live credential. .env.example is the only committed
+# template and must stay value-free.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Spring profile overrides hold real datasource credentials. Only the
+# .example templates are tracked.
+application-local.yaml
+application-local.yml
+application-dev.yaml
+application-dev.yml
+application-prod.yaml
+application-prod.yml
+!application-*.yaml.example
+!application-*.yml.example
+
+# --- Python ------------------------------------------------------------------
 venv/
 __pycache__/
 *.pyc
-.env
 
-# Datasets
+# --- Datasets ----------------------------------------------------------------
 skillbridge-etl-pipeline/data/
 *.csv
 *.zip
 
-# Java Build Files
+# --- Java build --------------------------------------------------------------
 target/
 *.jar
 
-# Node.js
+# --- Node --------------------------------------------------------------------
 node_modules/
 dist/
 
-# IDE Files
+# --- IDE ---------------------------------------------------------------------
 .idea/
 .vscode/
 .cursor/

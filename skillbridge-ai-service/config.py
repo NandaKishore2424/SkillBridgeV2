@@ -25,10 +25,10 @@ def _require_env(key: str) -> str:
 
 
 # ─── RabbitMQ ──────────────────────────────────────────────────────────────────
-AMQP_URL: str = os.getenv(
-    "AMQP_URL",
-    "amqps://gvcxbqgm:Nm-4KJfWbJ73S0vHX-RZgWKcdDD0rsLW@puffin.rmq2.cloudamqp.com/gvcxbqgm"
-)
+# No default. A hardcoded fallback here is how a live broker credential ended up
+# committed to git in the first place: the value works, so nobody notices it is
+# there. Missing config must fail at boot, which is exactly what _require_env does.
+AMQP_URL: str = _require_env("AMQP_URL")
 RABBITMQ_QUEUE: str = "ai.analysis.queue"
 
 # ─── Supabase / PostgreSQL ──────────────────────────────────────────────────────

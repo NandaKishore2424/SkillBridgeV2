@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.skillbridge.common.exception.ForbiddenException;
 
 @Service
 @RequiredArgsConstructor
@@ -86,7 +87,7 @@ public class TrainerDashboardService {
                 // Verify trainer has access to this batch
                 boolean hasAccess = trainerBatchRepository.existsByTrainerUserIdAndBatchId(userId, batchId);
                 if (!hasAccess) {
-                        throw new RuntimeException("Trainer does not have access to this batch");
+                        throw new ForbiddenException("Trainer does not have access to this batch");
                 }
 
                 List<Enrollment> enrollments = enrollmentRepository.findByBatchId(batchId);
