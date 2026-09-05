@@ -120,40 +120,6 @@ export const syllabusApi = {
 
 
 // ============================================================================
-// Timeline API
-// ============================================================================
-
-export const timelineApi = {
-    // Get timeline for a batch
-    getTimeline: (batchId: number) =>
-        apiClient.get(`/batches/${batchId}/timeline`),
-
-    // Create a session
-    createSession: (batchId: number, data: {
-        sessionNumber: number;
-        title: string;
-        description?: string;
-        topicId?: number;
-        plannedDate?: string;
-    }) =>
-        apiClient.post(`/batches/${batchId}/timeline/sessions`, data),
-
-    // Update a session
-    updateSession: (sessionId: number, data: {
-        sessionNumber?: number;
-        title?: string;
-        description?: string;
-        topicId?: number;
-        plannedDate?: string;
-    }) =>
-        apiClient.put(`/timeline/sessions/${sessionId}`, data),
-
-    // Delete a session
-    deleteSession: (sessionId: number) =>
-        apiClient.delete(`/timeline/sessions/${sessionId}`),
-};
-
-// ============================================================================
 // Enrollment API (Admin)
 // ============================================================================
 
@@ -241,16 +207,6 @@ export interface SyllabusModule {
     completedTopicsCount: number;
 }
 
-
-export interface TimelineSession {
-    id: number;
-    sessionNumber: number;
-    title: string;
-    description?: string;
-    topicId?: number;
-    topicName?: string;
-    plannedDate?: string;
-}
 
 export interface EnrolledStudent {
     studentId: number;

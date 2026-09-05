@@ -6,12 +6,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface StudentRepository extends JpaRepository<Student, Long> {
     Optional<Student> findByUser_Id(Long userId);
+
+    /** Bulk form of {@link #findByUser_Id}, so a list of rows resolves in one query. */
+    List<Student> findByUser_IdIn(Collection<Long> userIds);
 
     List<Student> findByCollegeId(Long collegeId);
     Page<Student> findByCollegeId(Long collegeId, Pageable pageable);
