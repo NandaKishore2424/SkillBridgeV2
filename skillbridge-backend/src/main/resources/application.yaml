@@ -27,9 +27,18 @@ spring:
     addresses: ${AMQP_URL}
 
   jpa:
-    # validate, never update. Hibernate must not be allowed to alter the schema:
-    # Flyway owns it, and an accidental auto-DDL is how migrations and reality
-    # drift apart in the first place.
+    # validate, never update. Hibernate must not be allowed to alter the schema.
+    #
+    # Flyway was removed on 2026-09-05 (personal project, one database, no
+    # second environment to reproduce). The schema is now applied directly to
+    # Supabase and this setting is the ONLY remaining guard against the code and
+    # the database drifting apart -- it is what caught both startup bugs that
+    # blocked Phase 00. Do not relax it to `update`: Hibernate will not create
+    # the trg_progress_denorm trigger, the partial unique indexes or the CHECK
+    # constraints this schema depends on, and it never removes anything.
+    #
+    # To change the schema: alter the entity, then apply the matching SQL to
+    # Supabase in the same change. Startup will tell you if you forgot.
     hibernate:
       ddl-auto: validate
     open-in-view: false
@@ -39,16 +48,6 @@ spring:
           batch_size: 50
         order_inserts: true
         order_updates: true
-
-  flyway:
-    enabled: true
-    baseline-on-migrate: false
-    validate-on-migrate: true
-    # Versions 11, 13 and 14 were never committed; V13 and V14 now fill that gap
-    # so an empty database can bootstrap. On the live database, where V15/V16 are
-    # already applied, Flyway needs permission to apply a lower version after a
-    # higher one. Both gap-fillers are written to be no-ops there.
-    out-of-order: true
 
 jwt:
   secret: ${JWT_SECRET}

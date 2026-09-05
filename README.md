@@ -9,7 +9,7 @@ A multi-tenant training management platform for colleges with an AI-powered skil
 | Layer | Technology |
 |---|---|
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, Shadcn UI |
-| Backend | Java 17, Spring Boot 3.5.8, Spring Security, JPA, Flyway |
+| Backend | Java 17, Spring Boot 3.5.8, Spring Security, JPA |
 | AI Service | Python 3.12, FastAPI, LangChain, MiniLM, pgvector |
 | Database | PostgreSQL on Supabase |
 | Message Broker | RabbitMQ via CloudAMQP |
