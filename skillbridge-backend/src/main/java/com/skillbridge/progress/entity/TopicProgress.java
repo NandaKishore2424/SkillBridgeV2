@@ -13,8 +13,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.Filter;
-import org.hibernate.annotations.FilterDef;
-import org.hibernate.annotations.ParamDef;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
@@ -28,7 +26,6 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "topic_progress", uniqueConstraints = @UniqueConstraint(
         name = "uk_topic_progress", columnNames = { "student_id", "syllabus_topic_id" }))
-@FilterDef(name = "collegeFilter", parameters = @ParamDef(name = "collegeId", type = Long.class))
 @Filter(name = "collegeFilter", condition = "college_id = :collegeId")
 @Getter
 @Setter

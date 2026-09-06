@@ -10,8 +10,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
-import org.hibernate.annotations.FilterDef;
-import org.hibernate.annotations.ParamDef;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -20,7 +18,6 @@ import java.util.Set;
 
 @Entity
 @Table(name = "batches")
-@FilterDef(name = "collegeFilter", parameters = @ParamDef(name = "collegeId", type = Long.class))
 @Filter(name = "collegeFilter", condition = "college_id = :collegeId")
 @Data
 @Builder
