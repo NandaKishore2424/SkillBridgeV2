@@ -29,19 +29,19 @@ public class TenantFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            Session session = entityManager.unwrap(Session.class);
 
-        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof AuthenticatedUser user) {
-            // SYSTEM_ADMIN is deliberately unscoped and sees every college.
-            if (!user.isSystemAdmin() && user.getCollegeId() != null) {
-                try {
-                    Session session = entityManager.unwrap(Session.class);
-                    session.enableFilter("collegeFilter")
-                            .setParameter("collegeId", user.getCollegeId());
-                } catch (Exception ex) {
-                    log.warn("Failed to enable tenant filter: {}", ex.getMessage());
-                }
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated()
+                    && auth.getPrincipal() instanceof AuthenticatedUser user
+                    // SYSTEM_ADMIN is deliberately unscoped and sees every college.
+                    && !user.isSystemAdmin() && user.getCollegeId() != null) {
+                session.enableFilter("collegeFilter")
+                        .setParameter("collegeId", user.getCollegeId());
             }
+        } catch (Exception ex) {
+            log.warn("Failed to enable Hibernate filters: {}", ex.getMessage());
         }
 
         filterChain.doFilter(request, response);

@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import com.skillbridge.common.tenant.SoftDeleteService;
 import java.util.Map;
 import jakarta.validation.Valid;
 import com.skillbridge.common.exception.BadRequestException;
@@ -27,6 +28,7 @@ import com.skillbridge.auth.security.SecurityUtils;
 @CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class StudentAdminController {
     private final StudentService studentService;
+    private final SoftDeleteService softDeleteService;
 
     @GetMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
@@ -79,6 +81,23 @@ public class StudentAdminController {
             throw new BadRequestException("isActive is required");
         }
         studentService.updateStudentStatus(id, isActive);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Soft-delete this student.
+     *
+     * <p>Marks {@code deleted_at} rather than removing the row: the audit
+     * trail, enrollments and progress history all reference it, and a hard
+     * delete would take them with it. Hidden from every read afterwards by the
+     * {@code activeFilter}.
+     *
+     * <p>Refused with 409 STUDENT_HAS_ENROLLMENTS while the student is in an active batch. Also deactivates the login.
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<Void> deleteStudent(@PathVariable Long id, Authentication auth) {
+        softDeleteService.deleteStudent(id, SecurityUtils.requirePrincipal(auth).getId());
         return ResponseEntity.noContent().build();
     }
 }

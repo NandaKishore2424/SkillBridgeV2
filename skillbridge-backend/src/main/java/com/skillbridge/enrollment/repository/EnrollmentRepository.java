@@ -100,4 +100,7 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.batch.id = :batchId AND e.status = 'ACTIVE'")
     long countActiveForUpdate(@Param("batchId") Long batchId);
+
+    /** Active enrollments for one student. Guards student deletion. */
+    int countByStudentIdAndStatus(Long studentId, EnrollmentState status);
 }

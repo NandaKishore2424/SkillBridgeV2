@@ -3,6 +3,7 @@ package com.skillbridge.student.entity;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.college.entity.College;
 import jakarta.persistence.*;
+import org.hibernate.annotations.SQLRestriction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +16,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "students")
+@SQLRestriction("deleted_at IS NULL")
 @Filter(name = "collegeFilter", condition = "college_id = :collegeId")
 @Data
 @Builder
@@ -78,4 +80,24 @@ public class Student {
     @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<StudentProject> projects = new ArrayList<>();
+
+    /**
+     * Soft delete marker. Null means live.
+     *
+     * <p>Set rather than issuing a DELETE, because a hard delete here cascades
+     * through users, enrollments, progress and the audit trail — unrecoverable,
+     * and for academic records not something to do casually. The
+     * {@code activeFilter} hides these rows from every query that goes through
+     * a repository; a deliberate read of deleted data has to disable it.
+     */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    /** Who deleted it. Kept so "who removed this student?" is answerable. */
+    @Column(name = "deleted_by")
+    private Long deletedBy;
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
 }

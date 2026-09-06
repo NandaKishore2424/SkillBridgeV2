@@ -13,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import com.skillbridge.common.tenant.SoftDeleteService;
 import jakarta.validation.Valid;
 import com.skillbridge.trainer.dto.UpdateTrainerAdminRequest;
 import com.skillbridge.batch.service.BatchAssignmentService;
@@ -28,6 +29,7 @@ import com.skillbridge.auth.security.SecurityUtils;
 @CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class TrainerAdminController {
     private final TrainerService trainerService;
+    private final SoftDeleteService softDeleteService;
     private final BatchAssignmentService batchAssignmentService;
 
     @GetMapping
@@ -111,5 +113,22 @@ public class TrainerAdminController {
         int count = batchAssignmentService.unassignTrainer(batchId, id);
         return ResponseEntity.ok(Map.of("success", true, "trainerId", id,
                 "batchId", batchId, "trainerCount", count));
+    }
+
+    /**
+     * Soft-delete this trainer.
+     *
+     * <p>Marks {@code deleted_at} rather than removing the row: the audit
+     * trail, enrollments and progress history all reference it, and a hard
+     * delete would take them with it. Hidden from every read afterwards by the
+     * {@code activeFilter}.
+     *
+     * <p>Refused with 409 TRAINER_HAS_BATCHES while the trainer is assigned to a live batch. Also deactivates the login.
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<Void> deleteTrainer(@PathVariable Long id, Authentication auth) {
+        softDeleteService.deleteTrainer(id, SecurityUtils.requirePrincipal(auth).getId());
+        return ResponseEntity.noContent().build();
     }
 }

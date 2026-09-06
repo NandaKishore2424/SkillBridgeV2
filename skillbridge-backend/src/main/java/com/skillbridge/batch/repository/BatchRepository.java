@@ -142,4 +142,19 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
     /** {@code [batchId, enrolledCount]} for a page of batches, in one query. */
     @Query("select e.batch.id, count(e.id) from Enrollment e where e.batch.id in :batchIds group by e.batch.id")
     List<Object[]> countEnrollmentsByBatchIds(@Param("batchIds") Collection<Long> batchIds);
+
+    /**
+     * Live batches this trainer is assigned to. Guards trainer deletion.
+     *
+     * <p>Counts through the join table explicitly and filters {@code deletedAt}
+     * itself rather than relying on {@code activeFilter}: a count that decides
+     * whether a delete is refused should not depend on whether a request-scoped
+     * filter happened to be enabled.
+     */
+    @Query("select count(b) from Batch b join b.trainers t where t.id = :trainerId and b.deletedAt is null")
+    long countLiveBatchesForTrainer(@Param("trainerId") Long trainerId);
+
+    /** Live batches this company is linked to. Guards company deletion. */
+    @Query("select count(b) from Batch b join b.companies c where c.id = :companyId and b.deletedAt is null")
+    long countLiveBatchesForCompany(@Param("companyId") Long companyId);
 }

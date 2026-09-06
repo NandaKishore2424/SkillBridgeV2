@@ -22,6 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import com.skillbridge.common.tenant.SoftDeleteService;
 
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,7 @@ import com.skillbridge.auth.security.SecurityUtils;
 public class CompanyController {
 
     private final CompanyRepository companyRepository;
+    private final SoftDeleteService softDeleteService;
     private final CollegeRepository collegeRepository;
     private final BatchRepository batchRepository;
     private final BatchAssignmentService batchAssignmentService;
@@ -238,5 +240,22 @@ public class CompanyController {
         int count = batchAssignmentService.unassignCompany(batchId, id);
         return ResponseEntity.ok(Map.of("success", true, "companyId", id,
                 "batchId", batchId, "companyCount", count));
+    }
+
+    /**
+     * Soft-delete this company.
+     *
+     * <p>Marks {@code deleted_at} rather than removing the row: the audit
+     * trail, enrollments and progress history all reference it, and a hard
+     * delete would take them with it. Hidden from every read afterwards by the
+     * {@code activeFilter}.
+     *
+     * <p>Refused with 409 COMPANY_LINKED_TO_BATCHES while the company is linked to a live batch.
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
+    public ResponseEntity<Void> deleteCompany(@PathVariable Long id, Authentication auth) {
+        softDeleteService.deleteCompany(id, SecurityUtils.requirePrincipal(auth).getId());
+        return ResponseEntity.noContent().build();
     }
 }

@@ -25,6 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import com.skillbridge.common.tenant.SoftDeleteService;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -46,6 +47,7 @@ import com.skillbridge.auth.security.SecurityUtils;
 public class BatchController {
 
     private final BatchRepository batchRepository;
+    private final SoftDeleteService softDeleteService;
     private final CollegeRepository collegeRepository;
     private final BatchAssignmentService batchAssignmentService;
     private final CollegeAdminRepository collegeAdminRepository;
@@ -445,5 +447,22 @@ public class BatchController {
 
     public static class AssignCompaniesRequest {
         public List<Long> companyIds;
+    }
+
+    /**
+     * Soft-delete this batch.
+     *
+     * <p>Marks {@code deleted_at} rather than removing the row: the audit
+     * trail, enrollments and progress history all reference it, and a hard
+     * delete would take them with it. Hidden from every read afterwards by the
+     * {@code activeFilter}.
+     *
+     * <p>Refused with 409 BATCH_HAS_ENROLLMENTS if students are actively enrolled and the batch is not COMPLETED.
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<Void> deleteBatch(@PathVariable Long id, Authentication auth) {
+        softDeleteService.deleteBatch(id, SecurityUtils.requirePrincipal(auth).getId());
+        return ResponseEntity.noContent().build();
     }
 }

@@ -5,6 +5,7 @@ import com.skillbridge.college.entity.College;
 import com.skillbridge.company.entity.Company;
 import com.skillbridge.trainer.entity.Trainer;
 import jakarta.persistence.*;
+import org.hibernate.annotations.SQLRestriction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,6 +19,7 @@ import java.util.Set;
 
 @Entity
 @Table(name = "batches")
+@SQLRestriction("deleted_at IS NULL")
 @Filter(name = "collegeFilter", condition = "college_id = :collegeId")
 @Data
 @Builder
@@ -68,6 +70,10 @@ public class Batch {
      */
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    /** Who deleted it. Added alongside the other soft-deletable entities. */
+    @Column(name = "deleted_by")
+    private Long deletedBy;
 
     @Version
     @Column(name = "version", nullable = false)
