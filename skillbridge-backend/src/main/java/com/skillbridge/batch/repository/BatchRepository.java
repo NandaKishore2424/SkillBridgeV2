@@ -101,4 +101,25 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
     /** {@code [batchId, companyCount]} rows. */
     @Query("select b.id, count(c.id) from Batch b left join b.companies c where b.id in :ids group by b.id")
     List<Object[]> countCompaniesByBatchIds(@Param("ids") Collection<Long> ids);
+
+    /**
+     * One batch with its trainers, and each trainer's {@code user}, loaded.
+     *
+     * <p>{@code GET /admin/batches/{id}/trainers} maps each trainer to a DTO
+     * carrying {@code email} and {@code isActive}, which live on {@code User}.
+     * Both hops are lazy, so a plain {@code findById} threw
+     * {@code LazyInitializationException} on the collection before it ever
+     * reached the user.
+     *
+     * <p>LEFT joins throughout: an inner join would return no row at all for a
+     * batch with no trainers, which the caller cannot distinguish from a batch
+     * that does not exist. A collection fetch is safe here only because this
+     * returns a single batch -- do not copy it onto a paginated query.
+     */
+    @Query("select distinct b from Batch b left join fetch b.trainers t left join fetch t.user where b.id = :id")
+    Optional<Batch> findByIdWithTrainers(@Param("id") Long id);
+
+    /** As {@link #findByIdWithTrainers}, for companies and their college. */
+    @Query("select distinct b from Batch b left join fetch b.companies c left join fetch c.college where b.id = :id")
+    Optional<Batch> findByIdWithCompanies(@Param("id") Long id);
 }

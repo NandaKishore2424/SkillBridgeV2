@@ -108,7 +108,8 @@ public class BatchController {
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<List<TrainerDTO>> getBatchTrainers(@PathVariable Long id) {
         log.info("Fetching trainers for batch: {}", id);
-        Optional<Batch> batchOpt = batchRepository.findById(id);
+        Optional<Batch> batchOpt = batchRepository.findByIdWithTrainers(id)
+                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()));
         if (batchOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -123,7 +124,8 @@ public class BatchController {
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<List<CompanyDTO>> getBatchCompanies(@PathVariable Long id) {
         log.info("Fetching companies for batch: {}", id);
-        Optional<Batch> batchOpt = batchRepository.findById(id);
+        Optional<Batch> batchOpt = batchRepository.findByIdWithCompanies(id)
+                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()));
         if (batchOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
