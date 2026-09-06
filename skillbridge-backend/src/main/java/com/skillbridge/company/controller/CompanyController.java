@@ -57,9 +57,9 @@ public class CompanyController {
 
         Page<Company> companies;
         if (userCollegeId == null) {
-            companies = companyRepository.findAll(PageRequest.of(page, size));
+            companies = companyRepository.findAllWithCollege(PageRequest.of(page, size));
         } else {
-            companies = companyRepository.findByCollegeId(userCollegeId, PageRequest.of(page, size));
+            companies = companyRepository.findByCollegeIdWithCollege(userCollegeId, PageRequest.of(page, size));
         }
 
         List<CompanyDTO> items = companies.getContent().stream()
@@ -82,7 +82,7 @@ public class CompanyController {
         // Company holds a lazy college. Returning the entity serialises that
         // association outside any transaction, which open-in-view used to paper
         // over; the DTO makes the boundary explicit instead.
-        return companyRepository.findById(id)
+        return companyRepository.findByIdWithCollege(id)
                 .map(c -> ResponseEntity.ok(convertToDTO(c)))
                 .orElse(ResponseEntity.notFound().build());
     }

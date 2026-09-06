@@ -58,7 +58,7 @@ export default function BatchDetailsPage() {
                 <div className="flex-1">
                     <h1 className="text-3xl font-bold">{batch.name}</h1>
                     <p className="text-muted-foreground mt-1">
-                        {batch.description || 'Manage syllabus, timeline, and students'}
+                        {batch.description || 'Manage syllabus, students, and progress'}
                     </p>
                 </div>
             </div>

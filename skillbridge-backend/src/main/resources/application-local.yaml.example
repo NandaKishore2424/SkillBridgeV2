@@ -1,15 +1,43 @@
-# Example Local Configuration File
-# 
-# INSTRUCTIONS:
-# 1. Copy this file to: application-local.yaml
-# 2. Replace YOUR_SUPABASE_HOST and YOUR_SUPABASE_PASSWORD with your actual values
-# 3. application-local.yaml is in .gitignore (won't be committed to Git)
+# Example local configuration
 #
-# This file overrides application-dev.yaml for local development
+# INSTRUCTIONS
+#   1. Copy this file to application-local.yaml (same directory).
+#   2. Fill in every YOUR_* placeholder below.
+#   3. application-local.yaml is gitignored and must stay that way.
+#
+# WHY THIS FILE EXISTS
+#   application.yaml reads every credential from the environment with no
+#   fallback, so the app refuses to start rather than booting with a known-bad
+#   default. Spring Boot does NOT read .env files -- .env.example is for the
+#   Python AI service, which genuinely reads it via python-dotenv. On the Java
+#   side you either export the variables into your shell or supply them here.
+#
+#   This file previously listed only the datasource, which was not enough to
+#   start the app: jwt.secret and spring.rabbitmq.addresses are equally
+#   required. Everything mandatory is now covered.
 
 spring:
   datasource:
+    # Supabase project ooqxedojvxetpwjldxab.
+    #   Direct connection:   db.<project-ref>.supabase.co        port 5432, username `postgres`
+    #   Session pooler:      aws-0-<region>.pooler.supabase.com  port 5432, username `postgres.<project-ref>`
+    # Take the exact host, port and username from
+    # Supabase dashboard -> Project Settings -> Database -> Connection string.
+    #
+    # Use a session pooler or a direct connection, NOT the transaction pooler
+    # (port 6543): it does not hold a session across statements, which breaks
+    # long-lived connections and any schema work you run through this app.
     url: jdbc:postgresql://YOUR_SUPABASE_HOST:5432/postgres
-    username: postgres
-    password: YOUR_SUPABASE_PASSWORD
+    username: YOUR_SUPABASE_DB_USER
+    password: YOUR_SUPABASE_DB_PASSWORD
 
+  rabbitmq:
+    # CloudAMQP, from the instance page. Form: amqps://user:pass@host/vhost
+    #
+    # ROTATE THIS FIRST. The old URL is in public git history at commit 2545669.
+    addresses: YOUR_AMQP_URL
+
+jwt:
+  # Generate a fresh one, do not reuse any value found in the repo or its history:
+  #   openssl rand -base64 48
+  secret: YOUR_JWT_SECRET

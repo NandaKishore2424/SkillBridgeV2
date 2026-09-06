@@ -41,3 +41,13 @@ dist/
 .idea/
 .vscode/
 .cursor/
+
+# --- Agent tooling -----------------------------------------------------------
+# Machine-local Claude Code state: per-developer permissions with absolute
+# paths, and skill symlinks pointing into .agents/. skills-lock.json is
+# committed instead, so the skills can be re-fetched on any machine.
+.claude/
+.agents/
+
+# Local helper, not part of the project.
+set-db-password.sh

@@ -39,9 +39,10 @@ spring:
     
     # Hibernate DDL mode
     hibernate:
-      # 'none' means: Don't auto-create/update tables
-      # We use Flyway migrations instead (better practice)
-      ddl-auto: none
+      # 'validate' means: check the schema matches the entities, change nothing.
+      # There is no migration tool any more -- schema changes are applied
+      # directly to Supabase, and this check is what tells you if you forgot one.
+      ddl-auto: validate
     
     # Show SQL queries in console (useful for debugging)
     show-sql: true
@@ -56,13 +57,6 @@ spring:
         # Transaction pooler doesn't support PREPARE statements
         jdbc:
           use_server_prepared_statement: false
-
-  # Flyway Configuration (Database Migrations)
-  flyway:
-    enabled: true                    # Enable Flyway
-    locations: classpath:db/migration  # Where migration files are
-    baseline-on-migrate: true         # Create baseline if DB is not empty
-    validate-on-migrate: true         # Validate migrations on startup
 
 # Server Configuration
 server:

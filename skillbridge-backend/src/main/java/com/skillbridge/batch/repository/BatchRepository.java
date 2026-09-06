@@ -73,4 +73,32 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM Batch b WHERE b.id = :id AND b.deletedAt IS NULL")
     Optional<Batch> findByIdForUpdate(@Param("id") Long id);
+
+    // --- reads that feed BatchDTO -------------------------------------------
+    //
+    // BatchDTO carries collegeName plus trainer and company counts. With
+    // open-in-view: false the session is closed by the time the controller maps
+    // the entity, so every one of those is a LazyInitializationException on a
+    // plain findBy. college is fetch-joined (a to-one, so pagination stays in
+    // SQL); the two counts are aggregated for a whole page in one query each,
+    // rather than touching the collections per row.
+    //
+    // The collections are deliberately NOT fetch-joined: Hibernate cannot
+    // paginate a collection fetch in SQL and would silently fall back to doing
+    // it in memory (HHH000104), reading the entire table to serve one page.
+
+    @Query(value = "select b from Batch b join fetch b.college where b.college.id = :collegeId",
+           countQuery = "select count(b) from Batch b where b.college.id = :collegeId")
+    Page<Batch> findByCollegeIdWithCollege(@Param("collegeId") Long collegeId, Pageable pageable);
+
+    @Query("select b from Batch b join fetch b.college where b.id = :id")
+    Optional<Batch> findByIdWithCollege(@Param("id") Long id);
+
+    /** {@code [batchId, trainerCount]} rows. Left join so a batch with none still appears. */
+    @Query("select b.id, count(t.id) from Batch b left join b.trainers t where b.id in :ids group by b.id")
+    List<Object[]> countTrainersByBatchIds(@Param("ids") Collection<Long> ids);
+
+    /** {@code [batchId, companyCount]} rows. */
+    @Query("select b.id, count(c.id) from Batch b left join b.companies c where b.id in :ids group by b.id")
+    List<Object[]> countCompaniesByBatchIds(@Param("ids") Collection<Long> ids);
 }
