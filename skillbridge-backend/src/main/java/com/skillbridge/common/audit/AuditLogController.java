@@ -3,6 +3,7 @@ package com.skillbridge.common.audit;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.security.SecurityUtils;
 import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -45,7 +46,7 @@ public class AuditLogController {
     ) {
         // This table grows faster than any other; an unbounded page size is a
         // trivial way to make the server read millions of rows.
-        PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE));
+        PageRequest pageable = Pagination.of(page, size);
         AuthenticatedUser caller = SecurityUtils.currentUser();
 
         // Tenant scope is decided first and the action filter applied within it.
@@ -64,12 +65,6 @@ public class AuditLogController {
                     : auditLogRepository.findByCollegeIdOrderByOccurredAtDesc(collegeId, pageable);
         }
 
-        return ResponseEntity.ok(PagedResponse.<AuditLogDTO>builder()
-                .items(rows.getContent().stream().map(AuditLogDTO::from).toList())
-                .page(rows.getNumber())
-                .size(rows.getSize())
-                .totalElements(rows.getTotalElements())
-                .totalPages(rows.getTotalPages())
-                .build());
+        return ResponseEntity.ok(PagedResponse.from(rows, AuditLogDTO::from));
     }
 }

@@ -46,6 +46,16 @@ spring:
   rabbitmq:
     addresses: ${AMQP_URL}
 
+  data:
+    web:
+      pageable:
+        # No controller uses Spring's Pageable resolver today -- they read page
+        # and size as request params and go through common.dto.Pagination, which
+        # applies the same ceiling. This is here so a controller that does start
+        # using Pageable is capped from the first line rather than the second.
+        max-page-size: 100
+        default-page-size: 20
+
   jpa:
     # validate, never update. Hibernate must not be allowed to alter the schema.
     #

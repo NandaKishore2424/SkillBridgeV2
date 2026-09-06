@@ -1,6 +1,7 @@
 package com.skillbridge.student.controller;
 
 import com.skillbridge.student.dto.*;
+import com.skillbridge.student.dto.SkillDTO;
 import com.skillbridge.student.entity.Skill;
 import com.skillbridge.student.service.StudentService;
 import lombok.RequiredArgsConstructor;
@@ -119,12 +120,12 @@ public class StudentController {
     }
 
     @GetMapping("/skills")
-    public ResponseEntity<List<Skill>> getAllSkills() {
-        return ResponseEntity.ok(studentService.getAllSkills());
+    public ResponseEntity<List<SkillDTO>> getAllSkills() {
+        return ResponseEntity.ok(studentService.getAllSkills().stream().map(SkillDTO::from).toList());
     }
 
     @GetMapping("/skills/search")
-    public ResponseEntity<List<Skill>> searchSkills(@RequestParam String q) {
-        return ResponseEntity.ok(studentService.searchSkills(q));
+    public ResponseEntity<List<SkillDTO>> searchSkills(@RequestParam String q) {
+        return ResponseEntity.ok(studentService.searchSkills(q).stream().map(SkillDTO::from).toList());
     }
 }

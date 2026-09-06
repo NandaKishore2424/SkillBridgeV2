@@ -1,5 +1,6 @@
 package com.skillbridge.college.controller;
 
+import com.skillbridge.college.dto.CollegeDTO;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.college.repository.CollegeRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,12 +30,12 @@ public class PublicCollegeController {
      * Get all active colleges (public endpoint for registration)
      */
     @GetMapping("/active")
-    public ResponseEntity<List<College>> getActiveColleges() {
+    public ResponseEntity<List<CollegeDTO>> getActiveColleges() {
         log.info("Fetching active colleges (public endpoint)");
         List<College> activeColleges = collegeRepository.findAll().stream()
             .filter(college -> "ACTIVE".equals(college.getStatus()))
             .collect(Collectors.toList());
-        return ResponseEntity.ok(activeColleges);
+        return ResponseEntity.ok(activeColleges.stream().map(CollegeDTO::from).toList());
     }
 }
 

@@ -1,13 +1,13 @@
 package com.skillbridge.trainer.controller;
 
 import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.trainer.dto.CreateTrainerRequest;
 import com.skillbridge.trainer.dto.TrainerDTO;
 import com.skillbridge.trainer.service.TrainerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -40,14 +40,8 @@ public class TrainerAdminController {
     ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
-        Page<TrainerDTO> trainers = trainerService.getTrainersByCollege(user.getCollegeId(), PageRequest.of(page, size));
-        return ResponseEntity.ok(PagedResponse.<TrainerDTO>builder()
-                .items(trainers.getContent())
-                .page(trainers.getNumber())
-                .size(trainers.getSize())
-                .totalElements(trainers.getTotalElements())
-                .totalPages(trainers.getTotalPages())
-                .build());
+        Page<TrainerDTO> trainers = trainerService.getTrainersByCollege(user.getCollegeId(), Pagination.of(page, size));
+        return ResponseEntity.ok(PagedResponse.from(trainers));
     }
 
     @PostMapping

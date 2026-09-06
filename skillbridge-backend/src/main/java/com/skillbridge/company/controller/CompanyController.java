@@ -10,13 +10,13 @@ import com.skillbridge.batch.service.BatchAssignmentService;
 import com.skillbridge.common.dto.IdGrouping;
 import com.skillbridge.common.exception.ResourceNotFoundException;
 import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
 import com.skillbridge.company.repository.CompanyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -67,9 +67,9 @@ public class CompanyController {
 
         Page<Company> companies;
         if (userCollegeId == null) {
-            companies = companyRepository.findAllWithCollege(PageRequest.of(page, size));
+            companies = companyRepository.findAllWithCollege(Pagination.of(page, size));
         } else {
-            companies = companyRepository.findByCollegeIdWithCollege(userCollegeId, PageRequest.of(page, size));
+            companies = companyRepository.findByCollegeIdWithCollege(userCollegeId, Pagination.of(page, size));
         }
 
         List<Long> companyIds = companies.getContent().stream().map(Company::getId).toList();
@@ -85,13 +85,7 @@ public class CompanyController {
                 })
                 .toList();
 
-        return ResponseEntity.ok(PagedResponse.<CompanyDTO>builder()
-                .items(items)
-                .page(companies.getNumber())
-                .size(companies.getSize())
-                .totalElements(companies.getTotalElements())
-                .totalPages(companies.getTotalPages())
-                .build());
+        return ResponseEntity.ok(PagedResponse.from(companies, this::convertToDTO));
     }
 
     @GetMapping("/{id}")

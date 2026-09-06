@@ -1,5 +1,6 @@
 package com.skillbridge.college.controller;
 
+import com.skillbridge.college.dto.CollegeDTO;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
@@ -27,44 +28,44 @@ public class CollegeController {
 
     @GetMapping
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
-    public ResponseEntity<List<College>> getAllColleges() {
+    public ResponseEntity<List<CollegeDTO>> getAllColleges() {
         log.info("Fetching all colleges");
         List<College> colleges = collegeRepository.findAll();
-        return ResponseEntity.ok(colleges);
+        return ResponseEntity.ok(colleges.stream().map(CollegeDTO::from).toList());
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
-    public ResponseEntity<College> getCollegeById(@PathVariable Long id) {
+    public ResponseEntity<CollegeDTO> getCollegeById(@PathVariable Long id) {
         log.info("Fetching college with id: {}", id);
         Optional<College> college = collegeRepository.findById(id);
-        return college.map(ResponseEntity::ok)
+        return college.map(CollegeDTO::from).map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
-    public ResponseEntity<College> createCollege(@RequestBody College college) {
+    public ResponseEntity<CollegeDTO> createCollege(@RequestBody College college) {
         log.info("Creating college: {}", college.getName());
         College savedCollege = collegeRepository.save(college);
-        return ResponseEntity.ok(savedCollege);
+        return ResponseEntity.ok(CollegeDTO.from(savedCollege));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
-    public ResponseEntity<College> updateCollege(@PathVariable Long id, @RequestBody College college) {
+    public ResponseEntity<CollegeDTO> updateCollege(@PathVariable Long id, @RequestBody College college) {
         log.info("Updating college with id: {}", id);
         if (!collegeRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
         college.setId(id);
         College updatedCollege = collegeRepository.save(college);
-        return ResponseEntity.ok(updatedCollege);
+        return ResponseEntity.ok(CollegeDTO.from(updatedCollege));
     }
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
-    public ResponseEntity<College> updateCollegeStatus(
+    public ResponseEntity<CollegeDTO> updateCollegeStatus(
             @PathVariable Long id,
             @RequestBody StatusUpdateRequest request
     ) {
@@ -76,7 +77,7 @@ public class CollegeController {
         College college = collegeOpt.get();
         college.setStatus(request.status);
         College updatedCollege = collegeRepository.save(college);
-        return ResponseEntity.ok(updatedCollege);
+        return ResponseEntity.ok(CollegeDTO.from(updatedCollege));
     }
 
     @GetMapping("/{collegeId}/admins")

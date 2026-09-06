@@ -1,12 +1,12 @@
 package com.skillbridge.student.controller;
 
 import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.student.dto.StudentDTO;
 import com.skillbridge.student.service.StudentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -38,14 +38,8 @@ public class StudentAdminController {
     ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
-        Page<StudentDTO> students = studentService.getStudentsByCollege(user.getCollegeId(), PageRequest.of(page, size));
-        return ResponseEntity.ok(PagedResponse.<StudentDTO>builder()
-                .items(students.getContent())
-                .page(students.getNumber())
-                .size(students.getSize())
-                .totalElements(students.getTotalElements())
-                .totalPages(students.getTotalPages())
-                .build());
+        Page<StudentDTO> students = studentService.getStudentsByCollege(user.getCollegeId(), Pagination.of(page, size));
+        return ResponseEntity.ok(PagedResponse.from(students));
     }
 
     @GetMapping("/{id}")

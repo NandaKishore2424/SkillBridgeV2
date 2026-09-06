@@ -10,6 +10,7 @@ import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
 import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
 import com.skillbridge.company.repository.CompanyRepository;
@@ -19,7 +20,6 @@ import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -78,24 +78,17 @@ public class BatchController {
             return ResponseEntity.badRequest().build();
         }
 
-        Page<Batch> batches = batchRepository.findByCollegeIdWithCollege(collegeId, PageRequest.of(page, size));
+        Page<Batch> batches = batchRepository.findByCollegeIdWithCollege(collegeId, Pagination.of(page, size));
         List<Long> ids = batches.getContent().stream().map(Batch::getId).toList();
         Map<Long, Long> trainerCounts = countsByBatchId(batchRepository.countTrainersByBatchIds(ids));
         Map<Long, Long> companyCounts = countsByBatchId(batchRepository.countCompaniesByBatchIds(ids));
         Map<Long, Long> studentCounts = countsByBatchId(batchRepository.countEnrollmentsByBatchIds(ids));
-        List<BatchDTO> batchDTOs = batches.getContent().stream()
-                .map(b -> convertToDTO(b,
-                        trainerCounts.getOrDefault(b.getId(), 0L),
-                        companyCounts.getOrDefault(b.getId(), 0L),
-                        studentCounts.getOrDefault(b.getId(), 0L)))
-                .collect(java.util.stream.Collectors.toList());
-        return ResponseEntity.ok(PagedResponse.<BatchDTO>builder()
-            .items(batchDTOs)
-            .page(batches.getNumber())
-            .size(batches.getSize())
-            .totalElements(batches.getTotalElements())
-            .totalPages(batches.getTotalPages())
-            .build());
+        // Maps through the page rather than the already-built list, so the paging
+        // metadata and the content cannot come from different page objects.
+        return ResponseEntity.ok(PagedResponse.from(batches, b -> convertToDTO(b,
+                trainerCounts.getOrDefault(b.getId(), 0L),
+                companyCounts.getOrDefault(b.getId(), 0L),
+                studentCounts.getOrDefault(b.getId(), 0L))));
     }
 
     @GetMapping("/{id}")
