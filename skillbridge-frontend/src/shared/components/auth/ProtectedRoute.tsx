@@ -10,7 +10,6 @@
 
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/shared/hooks/useAuth'
-import { PageWrapper } from '@/shared/components/layout'
 
 interface ProtectedRouteProps {
   children: React.ReactNode

@@ -5,7 +5,7 @@
  */
 
 import apiClient from './client'
-import type { Batch, BatchStatus } from '@/shared/types'
+import type { Batch } from '@/shared/types'
 
 // ==================== Student Dashboard ====================
 

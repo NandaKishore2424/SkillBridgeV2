@@ -36,7 +36,7 @@ import {
 import { TableSkeleton } from '@/shared/components/ui/loading-skeleton'
 import { getCompanies, type Company } from '@/api/college-admin'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
-import { Plus, Search, Briefcase, MoreVertical, Edit, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Search, Briefcase, MoreVertical, Edit, AlertCircle } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,

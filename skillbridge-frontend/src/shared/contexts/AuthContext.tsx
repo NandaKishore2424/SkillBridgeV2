@@ -7,14 +7,14 @@
  * Features:
  * - User state management
  * - Token storage (access token in memory + localStorage, refresh token via HttpOnly cookie)
- * - Login/logout/register functions
+ * - Login/logout functions
  * - Token refresh logic
  * - Automatic token refresh on 401 errors
  */
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { AuthContextValue, AuthState, LoginCredentials, RegisterData } from '@/shared/types/auth'
+import type { AuthContextValue, AuthState, LoginCredentials } from '@/shared/types/auth'
 import type { User, UserRole } from '@/shared/types'
 import * as authAPI from '@/api/auth'
 import apiClient from '@/api/client'
@@ -315,38 +315,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [navigate])
 
-  /**
-   * Register function (for students/trainers)
-   */
-  const register = useCallback(async (data: RegisterData) => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }))
-
-    try {
-      // Prepare registration payload
-      const registerPayload: authAPI.RegisterRequest = {
-        email: data.email,
-        password: data.password,
-        role: data.role,
-        collegeId: data.collegeId,
-      }
-
-      const response = await authAPI.register(registerPayload)
-      await handleAuthSuccess(response)
-
-      // Redirect to login (user should login after registration)
-      navigate('/login', { state: { message: 'Registration successful! Please login.' } })
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message || error.message || 'Registration failed. Please try again.'
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: errorMessage,
-        isAuthenticated: false,
-      }))
-      throw error
-    }
-  }, [navigate])
+  // Registration removed 2026-09-06: the product is invite-only. Accounts are
+  // provisioned by a college admin through bulk upload and activated through
+  // /auth/first-login, and POST /auth/register was never implemented on the
+  // backend -- the page had been posting into the void. See HANDOVER Q1.
 
   /**
    * Logout function
@@ -433,7 +405,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isLoading: state.isLoading,
     error: state.error,
     login,
-    register,
     logout,
     refreshAccessToken,
     clearError,

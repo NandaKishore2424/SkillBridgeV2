@@ -9,22 +9,6 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  collegeId: number;
-  role: 'STUDENT' | 'TRAINER';
-  // Student-specific fields
-  fullName?: string;
-  rollNumber?: string;
-  degree?: string;
-  branch?: string;
-  year?: number;
-  // Trainer-specific fields
-  department?: string;
-  specialization?: string;
-  bio?: string;
-}
 
 export interface AuthResponse {
   accessToken: string;
@@ -59,10 +43,6 @@ export const login = async (credentials: LoginRequest): Promise<AuthResponse> =>
 /**
  * Register new user
  */
-export const register = async (data: RegisterRequest): Promise<AuthResponse> => {
-  const response = await apiClient.post<AuthResponse>('/auth/register', data);
-  return response.data;
-};
 
 /**
  * Refresh access token

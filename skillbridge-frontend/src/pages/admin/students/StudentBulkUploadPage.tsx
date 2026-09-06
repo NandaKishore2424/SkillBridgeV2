@@ -49,8 +49,12 @@ export function StudentBulkUploadPage() {
     const { data: history, isLoading: isHistoryLoading } = useQuery({
         queryKey: ['admin', 'students', 'upload-history'],
         queryFn: getStudentUploadHistory,
-        refetchInterval: (data) =>
-            data?.some((record) => record.status === 'PROCESSING') ? 5000 : false,
+        // TanStack Query v5 hands refetchInterval the Query, not the data --
+        // `data.some(...)` was calling an array method on a Query object, so the
+        // poll never started and an in-progress upload appeared frozen until a
+        // manual reload.
+        refetchInterval: (query) =>
+            query.state.data?.some((record) => record.status === 'PROCESSING') ? 5000 : false,
     })
 
     // Upload Mutation

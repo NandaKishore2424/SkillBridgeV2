@@ -7,6 +7,11 @@
 import apiClient from './client'
 import type { College } from '@/shared/types'
 
+// Re-exported: pages import College from this module alongside the API
+// functions that use it, and TS2459 forbids re-exporting an imported name
+// implicitly.
+export type { College } from '@/shared/types'
+
 export interface CreateCollegeRequest {
   name: string
   code: string

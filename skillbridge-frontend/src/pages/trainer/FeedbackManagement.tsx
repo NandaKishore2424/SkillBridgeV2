@@ -24,14 +24,14 @@ const feedbackSchema = z.object({
   comments: z.string().min(5, "Comments must be at least 5 characters"),
 });
 
-type FeedbackFormValues = z.infer<typeof feedbackSchema>;
+type FeedbackFormValues = z.output<typeof feedbackSchema>;
 
 const FeedbackManagement = () => {
   const queryClient = useQueryClient();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const { showSuccess, showError } = useToastNotifications();
 
-  const { data: batches, isLoading: isLoadingBatches } = useQuery({
+  const { data: batches } = useQuery({
     queryKey: ['trainer-batches'],
     queryFn: getTrainerBatches,
   });
@@ -67,7 +67,12 @@ const FeedbackManagement = () => {
     },
   });
 
-  const form = useForm<FeedbackFormValues>({
+  // z.coerce.number() makes the schema's INPUT type `unknown` (whatever the DOM
+  // hands over) while its OUTPUT type is `number`. useForm<Output> declared both
+  // sides as the output, so the resolver -- which maps input to output -- did not
+  // typecheck. Naming the three generics explicitly is the supported form:
+  //   useForm<Input, Context, Output>
+  const form = useForm<z.input<typeof feedbackSchema>, unknown, FeedbackFormValues>({
     resolver: zodResolver(feedbackSchema),
     defaultValues: {
       rating: 5,
@@ -183,12 +188,12 @@ const FeedbackManagement = () => {
                               <Button
                                 key={star}
                                 type="button"
-                                variant={form.watch('rating') >= star ? "default" : "outline"}
+                                variant={Number(form.watch('rating')) >= star ? "default" : "outline"}
                                 size="icon"
                                 className="w-10 h-10"
                                 onClick={() => form.setValue('rating', star)}
                               >
-                                <Star className={`w-5 h-5 ${form.watch('rating') >= star ? "fill-current" : ""}`} />
+                                <Star className={`w-5 h-5 ${Number(form.watch('rating')) >= star ? "fill-current" : ""}`} />
                               </Button>
                             ))}
                           </div>

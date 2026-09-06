@@ -11,7 +11,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -31,9 +30,9 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>
 
 export function Login() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const { login, isLoading, error, isAuthenticated, clearError } = useAuth()
+  // navigate/location were used by the removed "Register" link and by a
+  // post-login redirect that AuthContext now owns.
+  const { login, isLoading, error, clearError } = useAuth()
   const [localError, setLocalError] = useState<string | null>(null)
 
   // Clear errors when component mounts
@@ -139,14 +138,6 @@ export function Login() {
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Signing in...' : 'Sign In'}
                 </Button>
-
-                {/* Register Link */}
-                <div className="text-center text-sm text-muted-foreground">
-                  Don't have an account?{' '}
-                  <Link to="/register" className="text-primary hover:underline">
-                    Register as Student or Trainer
-                  </Link>
-                </div>
               </form>
             </CardContent>
           </Card>

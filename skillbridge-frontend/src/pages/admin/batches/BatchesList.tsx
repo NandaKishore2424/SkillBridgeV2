@@ -53,7 +53,6 @@ import {
   BookOpen,
   MoreVertical,
   Edit,
-  Loader2,
   AlertCircle,
   Users,
   Briefcase,

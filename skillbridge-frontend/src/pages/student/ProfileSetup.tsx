@@ -74,7 +74,7 @@ const profileSchema = z.object({
         .or(z.literal('')),
 })
 
-type ProfileFormData = z.infer<typeof profileSchema>
+type ProfileFormData = z.output<typeof profileSchema>
 
 const STEPS = [
     {
@@ -108,7 +108,12 @@ export function ProfileSetup() {
         formState: { errors },
         trigger,
         watch,
-    } = useForm<ProfileFormData>({
+    // z.coerce.number() makes the schema's INPUT type `unknown` (whatever the DOM
+    // hands over) while its OUTPUT type is `number`. useForm<Output> declared both
+    // sides as the output, so the resolver -- which maps input to output -- did not
+    // typecheck. Naming the three generics explicitly is the supported form:
+    //   useForm<Input, Context, Output>
+    } = useForm<z.input<typeof profileSchema>, unknown, ProfileFormData>({
         resolver: zodResolver(profileSchema),
         mode: 'onChange',
     })

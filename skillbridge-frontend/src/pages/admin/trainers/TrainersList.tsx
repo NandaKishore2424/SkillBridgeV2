@@ -48,7 +48,6 @@ import {
   MoreVertical,
   Edit,
   Power,
-  Loader2,
   AlertCircle,
   Upload,
 } from 'lucide-react'

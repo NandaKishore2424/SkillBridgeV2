@@ -30,6 +30,8 @@ export interface College {
   email?: string;
   phone?: string;
   status: 'ACTIVE' | 'INACTIVE';
+  /** Sent by the backend; the college detail page renders it. */
+  address?: string
 }
 
 // Batch types

@@ -44,8 +44,10 @@ import { Link } from 'react-router-dom'
 const createCompanySchema = z.object({
   name: z.string().min(1, 'Company name is required').max(255, 'Name is too long'),
   domain: z.string().max(255, 'Domain is too long').optional().or(z.literal('')),
+  // Zod 4 replaced `required_error` with `error`; the old key is not a valid
+  // param and made the z.enum overload fail to resolve.
   hiringType: z.enum(['FULL_TIME', 'INTERNSHIP', 'BOTH'], {
-    required_error: 'Please select a hiring type',
+    error: 'Please select a hiring type',
   }),
   collegeId: z.number().optional(),
   hiringProcess: z.string().max(1000, 'Hiring process description is too long').optional().or(z.literal('')),

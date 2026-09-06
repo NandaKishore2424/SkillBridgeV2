@@ -2,7 +2,7 @@
  * Authentication-related TypeScript types
  */
 
-import type { User, UserRole } from './index'
+import type { User } from './index'
 
 /**
  * Authentication state
@@ -27,23 +27,6 @@ export interface LoginCredentials {
 /**
  * Registration data for students/trainers
  */
-export interface RegisterData {
-  email: string
-  password: string
-  confirmPassword: string
-  role: 'STUDENT' | 'TRAINER'
-  collegeId: number
-  // Student-specific fields
-  fullName?: string
-  rollNumber?: string
-  degree?: string
-  branch?: string
-  year?: number
-  // Trainer-specific fields
-  department?: string
-  specialization?: string
-  bio?: string
-}
 
 /**
  * Auth response from API
@@ -76,7 +59,6 @@ export interface AuthContextValue {
 
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>
-  register: (data: RegisterData) => Promise<void>
   logout: () => Promise<void>
   refreshAccessToken: () => Promise<void>
   clearError: () => void

@@ -27,13 +27,11 @@ import { StatCardSkeleton, ListSkeleton } from '@/shared/components/ui/loading-s
 import {
   getTrainerDashboardStats,
   getTrainerBatches,
-  type TrainerBatch,
 } from '@/api/trainer'
 import {
   BookOpen,
   Users,
   Clock,
-  Loader2,
   AlertCircle,
   ArrowRight,
   GraduationCap,

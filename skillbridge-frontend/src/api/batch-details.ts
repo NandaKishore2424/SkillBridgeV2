@@ -5,8 +5,7 @@
  */
 
 import apiClient from './client'
-import type { Batch, BatchStatus } from '@/shared/types'
-import type { BatchWithDetails, BatchEnrollment, Trainer, Company } from './college-admin'
+import type { BatchWithDetails, Trainer, Company } from './college-admin'
 
 // ==================== Batch Details ====================
 
@@ -14,6 +13,8 @@ export interface BatchDetails extends BatchWithDetails {
   trainers: Trainer[]
   companies: Company[]
   syllabus?: Syllabus
+  /** Enrolled student count, from BatchDTO. Drives the "Enrollments (n)" tab. */
+  studentCount?: number
 }
 
 export interface Syllabus {

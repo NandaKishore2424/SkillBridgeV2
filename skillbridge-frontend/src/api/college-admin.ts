@@ -6,7 +6,12 @@
  */
 
 import apiClient from './client'
-import type { Batch, BatchStatus, College, Student } from '@/shared/types'
+import type { Batch, BatchStatus, Student } from '@/shared/types'
+
+// Re-exported: pages import BatchStatus from this module alongside the API
+// functions that use it, and TS2459 forbids re-exporting an imported name
+// implicitly.
+export type { BatchStatus } from '@/shared/types'
 
 export interface PagedResponse<T> {
   items: T[]

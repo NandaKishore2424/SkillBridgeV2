@@ -26,13 +26,11 @@ import {
 import { StatCardSkeleton } from '@/shared/components/ui/loading-skeleton'
 import { getDashboardStats } from '@/api/college-admin'
 import {
-  Building2,
   Users,
   GraduationCap,
   Briefcase,
   Plus,
   ArrowRight,
-  Loader2,
   AlertCircle,
   BookOpen,
   TrendingUp,

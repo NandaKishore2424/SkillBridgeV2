@@ -68,7 +68,12 @@ export function Landing() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild size="lg" className="text-lg px-8">
-                <Link to="/register">
+                {/*
+                  Invite-only: accounts are provisioned by a college admin via
+                  bulk upload, so there is nothing for a visitor to sign up to.
+                  Both CTAs go to login. See HANDOVER Open Question #1.
+                */}
+                <Link to="/login">
                   Get Started
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
@@ -143,11 +148,12 @@ export function Landing() {
           <div className="max-w-4xl mx-auto text-center bg-primary/5 rounded-lg p-12">
             <h2 className="text-3xl font-bold mb-4">Ready to Get Started?</h2>
             <p className="text-xl text-muted-foreground mb-8">
-              Join SkillBridge today and take control of your training journey.
+              Ask your college administrator for an account, then sign in to take
+              control of your training journey.
             </p>
             <Button asChild size="lg" className="text-lg px-8">
-              <Link to="/register">
-                Create Account
+              <Link to="/login">
+                Sign In
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>

@@ -22,8 +22,10 @@ interface AuthenticatedLayoutProps {
 export function AuthenticatedLayout({ children, showFooter = true }: AuthenticatedLayoutProps) {
   const { user, logout } = useAuth()
 
-  // Format user name from email or use provided name
-  const userName = user?.name || user?.email?.split('@')[0] || 'User'
+  // `User` carries no display name -- names live on the student/trainer profile,
+  // not on the account. Reading user.name was always undefined and fell through
+  // to the email local part, which is what actually renders.
+  const userName = user?.email?.split('@')[0] || 'User'
 
   return (
     <Layout

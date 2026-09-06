@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AuthenticatedLayout } from '@/shared/components/layout'
 import { PageWrapper } from '@/shared/components/layout'
@@ -43,8 +43,6 @@ import {
   getCollegeBatches,
   getCollegeTrainers,
   getCollegeAdmins,
-  createCollegeAdmin,
-  type CreateCollegeAdminRequest,
 } from '@/api/admin'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import {
@@ -61,9 +59,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  Loader2,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { CreateCollegeAdminModal } from './CreateCollegeAdminModal'
 
 export function CollegeDetail() {
@@ -72,7 +68,7 @@ export function CollegeDetail() {
   const collegeId = id ? parseInt(id) : 0
   const [activeTab, setActiveTab] = useState('overview')
   const [showCreateAdminModal, setShowCreateAdminModal] = useState(false)
-  const { showSuccess, showError } = useToastNotifications()
+  const { showSuccess } = useToastNotifications()
 
   // Fetch college details
   const {

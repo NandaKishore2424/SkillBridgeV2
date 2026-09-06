@@ -36,8 +36,6 @@ import {
   getAllAvailableBatches,
   getStudentBatches,
   applyToBatch,
-  type RecommendedBatch,
-  type StudentBatch,
 } from '@/api/student'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import {

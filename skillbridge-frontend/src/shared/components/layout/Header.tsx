@@ -20,7 +20,6 @@ import {
 } from '@/shared/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar'
 import { Badge } from '@/shared/components/ui/badge'
-import { cn } from '@/lib/utils'
 
 interface HeaderProps {
   /** Whether sidebar is open (for mobile) */
@@ -172,9 +171,7 @@ export function Header({
               <Button variant="ghost" asChild>
                 <Link to="/login">Login</Link>
               </Button>
-              <Button asChild>
-                <Link to="/register">Register</Link>
-              </Button>
+              {/* Register removed: the product is invite-only. */}
             </div>
           )}
         </div>

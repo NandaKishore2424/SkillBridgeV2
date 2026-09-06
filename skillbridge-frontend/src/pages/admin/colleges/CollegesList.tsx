@@ -40,7 +40,7 @@ import {
   updateCollegeStatus,
   type College,
 } from '@/api/admin'
-import { Plus, Search, Building2, MoreVertical, Edit, Power, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Search, Building2, MoreVertical, Edit, Power, AlertCircle } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,

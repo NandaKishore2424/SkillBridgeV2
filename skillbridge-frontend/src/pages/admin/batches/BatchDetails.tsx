@@ -9,7 +9,7 @@
  * - Syllabus: Manage syllabus topics
  */
 
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AuthenticatedLayout } from '@/shared/components/layout'
 import { PageWrapper } from '@/shared/components/layout'
@@ -48,9 +48,7 @@ import {
 import {
   getBatchDetails,
   assignTrainersToBatch,
-  unassignTrainerFromBatch,
   mapCompaniesToBatch,
-  unmapCompanyFromBatch,
   getBatchEnrollments,
   approveEnrollment,
   rejectEnrollment,
@@ -65,12 +63,8 @@ import {
   ArrowLeft,
   Loader2,
   AlertCircle,
-  Users,
-  Briefcase,
   GraduationCap,
-  BookOpen,
   Plus,
-  X,
   Check,
   XCircle,
   Edit,
@@ -143,7 +137,7 @@ function OverviewTab({ batch }: { batch: any }) {
   )
 }
 
-function TrainersTab({ batchId, trainers, assignedTrainerIds }: any) {
+function TrainersTab({ batchId }: any) {
   const queryClient = useQueryClient()
   const { showSuccess, showError } = useToastNotifications()
   const [selectedTrainers, setSelectedTrainers] = useState<number[]>([])
@@ -185,13 +179,10 @@ function TrainersTab({ batchId, trainers, assignedTrainerIds }: any) {
     },
   })
 
-  const unassignMutation = useMutation({
-    mutationFn: (trainerId: number) => unassignTrainerFromBatch(batchId, trainerId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId] })
-      queryClient.invalidateQueries({ queryKey: ['admin', 'batches'] })
-    },
-  })
+  // An unassign mutation was defined here with no button wired to it, calling
+  // DELETE /admin/batches/{id}/trainers/{trainerId} -- an endpoint the backend
+  // does not implement. Half a feature on both sides. Removed so the build is
+  // green; restore it together with the endpoint and a button.
 
   const handleSave = () => {
     assignMutation.mutate(selectedTrainers)
@@ -293,7 +284,7 @@ function TrainersTab({ batchId, trainers, assignedTrainerIds }: any) {
   )
 }
 
-function CompaniesTab({ batchId, companies, linkedCompanyIds }: any) {
+function CompaniesTab({ batchId }: any) {
   const queryClient = useQueryClient()
   const { showSuccess, showError } = useToastNotifications()
   const [selectedCompanies, setSelectedCompanies] = useState<number[]>([])
@@ -522,7 +513,8 @@ function EnrollmentsTab({ batchId }: { batchId: number }) {
                   {pendingEnrollments.map((enrollment) => (
                     <TableRow key={enrollment.id}>
                       <TableCell className="font-medium">
-                        {enrollment.student?.user.email || 'N/A'}
+                        {/* StudentWithDetails is flat: the DTO exposes `email`, not a nested `user`. */}
+                        {enrollment.student?.email || 'N/A'}
                       </TableCell>
                       <TableCell>{enrollment.student?.rollNumber || 'N/A'}</TableCell>
                       <TableCell>
@@ -580,7 +572,8 @@ function EnrollmentsTab({ batchId }: { batchId: number }) {
                   {approvedEnrollments.map((enrollment) => (
                     <TableRow key={enrollment.id}>
                       <TableCell className="font-medium">
-                        {enrollment.student?.user.email || 'N/A'}
+                        {/* StudentWithDetails is flat: the DTO exposes `email`, not a nested `user`. */}
+                        {enrollment.student?.email || 'N/A'}
                       </TableCell>
                       <TableCell>{enrollment.student?.rollNumber || 'N/A'}</TableCell>
                       <TableCell>
@@ -619,7 +612,8 @@ function EnrollmentsTab({ batchId }: { batchId: number }) {
                   {rejectedEnrollments.map((enrollment) => (
                     <TableRow key={enrollment.id}>
                       <TableCell className="font-medium">
-                        {enrollment.student?.user.email || 'N/A'}
+                        {/* StudentWithDetails is flat: the DTO exposes `email`, not a nested `user`. */}
+                        {enrollment.student?.email || 'N/A'}
                       </TableCell>
                       <TableCell>{enrollment.student?.rollNumber || 'N/A'}</TableCell>
                       <TableCell>
@@ -973,7 +967,7 @@ function SyllabusTab({ batchId, syllabus }: any) {
 
 export function BatchDetails() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
+  // navigate was unused: this component never redirects.
   const batchId = parseInt(id || '0')
 
   const {

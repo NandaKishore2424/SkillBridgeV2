@@ -8,7 +8,6 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { Landing } from './pages/Landing'
 import { Login } from './pages/auth/Login'
 import { FirstLogin } from './pages/auth/FirstLogin'
-import { Register } from './pages/auth/Register'
 import { ProtectedRoute } from './shared/components/auth'
 
 // System Admin pages
@@ -56,7 +55,6 @@ function App() {
         anything else.
       */}
       <Route path="/first-login" element={<FirstLogin />} />
-      <Route path="/register" element={<Register />} />
 
       {/* Protected Routes - System Admin */}
       <Route
