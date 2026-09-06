@@ -51,3 +51,6 @@ dist/
 
 # Local helper, not part of the project.
 set-db-password.sh
+
+# Plaintext temporary passwords awaiting distribution. Delete once sent.
+credentials-to-distribute.txt
