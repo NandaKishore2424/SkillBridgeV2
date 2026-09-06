@@ -8,6 +8,8 @@ import com.skillbridge.common.exception.BadRequestException;
 import com.skillbridge.common.exception.BusinessRuleException;
 import com.skillbridge.common.exception.ConflictException;
 import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.common.audit.AuditAction;
+import com.skillbridge.common.audit.AuditLogService;
 import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.enrollment.domain.EnrollmentState;
 import com.skillbridge.enrollment.domain.EnrollmentStatus;
@@ -57,6 +59,7 @@ public class EnrollmentManagementService {
     private final TrainerRepository trainerRepository;
     private final UserRepository userRepository;
     private final ProgressService progressService;
+    private final AuditLogService auditLogService;
 
     /** All enrollments for a batch. */
     @Transactional(readOnly = true)
@@ -124,6 +127,8 @@ public class EnrollmentManagementService {
         enrollmentRepository.delete(enrollment);
 
         log.info("Removed student {} from batch {}", studentId, batchId);
+        auditLogService.record(AuditAction.STUDENT_UNENROLLED, "Enrollment", studentId,
+                AuditAction.OUTCOME_SUCCESS, "{\"batchId\":" + batchId + "}");
     }
 
     /** A trainer asks for a student to be added to or removed from a batch. */
@@ -212,6 +217,10 @@ public class EnrollmentManagementService {
         }
 
         EnrollmentRequest saved = requestRepository.save(request);
+        auditLogService.record(AuditAction.ENROLLMENT_APPROVED, "EnrollmentRequest", requestId,
+                AuditAction.OUTCOME_SUCCESS,
+                "{\"batchId\":" + saved.getBatch().getId()
+                        + ",\"studentId\":" + saved.getStudent().getId() + "}");
         log.info("Admin {} approved request {} ({})", adminUserId, requestId, request.getRequestType());
 
         return convertToRequestDTO(saved);
@@ -238,6 +247,8 @@ public class EnrollmentManagementService {
         progressService.initialiseProgress(studentId, batchId);
 
         log.info("Added student {} to batch {}", studentId, batchId);
+        auditLogService.record(AuditAction.STUDENT_ENROLLED, "Enrollment", studentId,
+                AuditAction.OUTCOME_SUCCESS, "{\"batchId\":" + batchId + "}");
     }
 
     private void applyRemove(EnrollmentRequest request) {
@@ -264,6 +275,10 @@ public class EnrollmentManagementService {
         request.transitionTo(EnrollmentStatus.REJECTED, admin, reason);
 
         EnrollmentRequest saved = requestRepository.save(request);
+        auditLogService.record(AuditAction.ENROLLMENT_REJECTED, "EnrollmentRequest", requestId,
+                AuditAction.OUTCOME_SUCCESS,
+                "{\"batchId\":" + saved.getBatch().getId()
+                        + ",\"studentId\":" + saved.getStudent().getId() + "}");
         log.info("Admin {} rejected request {}", adminUserId, requestId);
 
         return convertToRequestDTO(saved);

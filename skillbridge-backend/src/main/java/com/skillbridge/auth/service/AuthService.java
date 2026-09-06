@@ -22,6 +22,8 @@ import java.util.UUID;
 import com.skillbridge.common.exception.BusinessRuleException;
 import com.skillbridge.common.exception.InternalServerException;
 import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.common.audit.AuditAction;
+import com.skillbridge.common.audit.AuditLogService;
 import com.skillbridge.common.exception.UnauthorizedException;
 
 @Service
@@ -32,6 +34,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
+    private final AuditLogService auditLogService;
 
     private final long refreshTokenTtlSeconds;
 
@@ -40,12 +43,14 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             RefreshTokenRepository refreshTokenRepository,
             JwtService jwtService,
+            AuditLogService auditLogService,
             @Value("${jwt.refreshTokenTtlSeconds:1209600}") long refreshTokenTtlSeconds
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtService = jwtService;
+        this.auditLogService = auditLogService;
         this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
     }
 
@@ -57,18 +62,32 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> {
                     log.warn("Login failed: User not found with email: {}", request.getEmail());
+                    // Recorded with a null actorUserId: there is no account, and
+                    // repeated misses against invented addresses are themselves
+                    // the signal worth seeing.
+                    auditLogService.recordAnonymous(AuditAction.LOGIN_FAILURE, request.getEmail(),
+                            AuditAction.OUTCOME_FAILURE, "{\"reason\":\"NO_SUCH_USER\"}");
                     return new UnauthorizedException("Invalid email or password");
                 });
 
         // Check if user is active
         if (!user.getIsActive()) {
             log.warn("Login failed: User account is inactive for email: {}", request.getEmail());
+            // The account is known here, so the row is attributed to it and to
+            // its college -- a college admin needs to see failed attempts
+            // against their own users, which an anonymous row would hide.
+            auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
+                    AuditAction.LOGIN_FAILURE, AuditAction.OUTCOME_DENIED,
+                    "{\"reason\":\"ACCOUNT_INACTIVE\"}");
             throw new UnauthorizedException("Account is inactive");
         }
 
         // Verify password
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             log.warn("Login failed: Invalid password for email: {}", request.getEmail());
+            auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
+                    AuditAction.LOGIN_FAILURE, AuditAction.OUTCOME_FAILURE,
+                    "{\"reason\":\"BAD_PASSWORD\"}");
             throw new UnauthorizedException("Invalid email or password");
         }
 
@@ -79,6 +98,9 @@ public class AuthService {
                 .orElse("SYSTEM_ADMIN");
 
         log.info("Login successful for user: {} with role: {}", user.getEmail(), primaryRole);
+        auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
+                AuditAction.LOGIN_SUCCESS, AuditAction.OUTCOME_SUCCESS,
+                "{\"role\":\"" + primaryRole + "\"}");
 
         String accessToken = jwtService.generateAccessToken(user, primaryRole);
         String refreshToken = issueRefreshToken(user);
@@ -164,12 +186,16 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            auditLogService.record(AuditAction.PASSWORD_CHANGED, "User", userId,
+                    AuditAction.OUTCOME_FAILURE, "{\"reason\":\"BAD_OLD_PASSWORD\"}");
             throw new UnauthorizedException("Invalid old password");
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setMustChangePassword(false);
         userRepository.save(user);
+        auditLogService.record(AuditAction.PASSWORD_CHANGED, "User", userId,
+                AuditAction.OUTCOME_SUCCESS);
     }
 
     @Transactional
@@ -178,6 +204,8 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(temporaryPassword, user.getPasswordHash())) {
+            auditLogService.recordAnonymous(AuditAction.FIRST_LOGIN_COMPLETED, email,
+                    AuditAction.OUTCOME_FAILURE, "{\"reason\":\"BAD_TEMPORARY_PASSWORD\"}");
             throw new UnauthorizedException("Invalid temporary password");
         }
 
@@ -190,6 +218,8 @@ public class AuthService {
         user.setAccountStatus("ACTIVE");
         user.setFirstLoginAt(java.time.LocalDateTime.now());
         userRepository.save(user);
+        auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
+                AuditAction.FIRST_LOGIN_COMPLETED, AuditAction.OUTCOME_SUCCESS, null);
 
         String primaryRole = user.getRoles().stream()
                 .findFirst()
