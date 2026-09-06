@@ -42,4 +42,16 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     @Query(value = "select s from Student s join fetch s.user where s.college.id = :collegeId",
            countQuery = "select count(s) from Student s where s.college.id = :collegeId")
     Page<Student> findByCollegeIdWithUser(@Param("collegeId") Long collegeId, Pageable pageable);
+
+    /** Single student by user id, with {@code user} joined. See {@link #findByCollegeIdWithUser}. */
+    @Query("select s from Student s join fetch s.user where s.user.id = :userId")
+    Optional<Student> findByUserIdWithUser(@Param("userId") Long userId);
+
+    /** Single student by primary key, with {@code user} joined. */
+    @Query("select s from Student s join fetch s.user where s.id = :id")
+    Optional<Student> findByIdWithUser(@Param("id") Long id);
+
+    /** Unpaginated college listing, with {@code user} joined. */
+    @Query("select s from Student s join fetch s.user where s.college.id = :collegeId")
+    List<Student> findByCollegeIdWithUser(@Param("collegeId") Long collegeId);
 }

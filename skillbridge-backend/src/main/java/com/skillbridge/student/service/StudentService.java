@@ -97,19 +97,19 @@ public class StudentService {
     }
 
     public StudentDTO getStudentProfile(Long userId) {
-        Student student = studentRepository.findByUser_Id(userId)
+        Student student = studentRepository.findByUserIdWithUser(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
         return mapToDTO(student);
     }
 
     public StudentDTO getStudentById(Long studentId) {
-        Student student = studentRepository.findById(studentId)
+        Student student = studentRepository.findByIdWithUser(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found"));
         return mapToDTO(student);
     }
 
     public List<StudentDTO> getAllStudentsByCollege(Long collegeId) {
-        return studentRepository.findByCollegeId(collegeId).stream()
+        return studentRepository.findByCollegeIdWithUser(collegeId).stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }

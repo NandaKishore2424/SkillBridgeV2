@@ -85,19 +85,19 @@ public class TrainerService {
     }
 
     public TrainerDTO getTrainerProfile(Long userId) {
-        Trainer trainer = trainerRepository.findByUser_Id(userId)
+        Trainer trainer = trainerRepository.findByUserIdWithUser(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trainer profile not found"));
         return mapToDTO(trainer);
     }
 
     public TrainerDTO getTrainerById(Long trainerId) {
-        Trainer trainer = trainerRepository.findById(trainerId)
+        Trainer trainer = trainerRepository.findByIdWithUser(trainerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trainer not found"));
         return mapToDTO(trainer);
     }
 
     public List<TrainerDTO> getAllTrainersByCollege(Long collegeId) {
-        return trainerRepository.findByCollegeId(collegeId).stream()
+        return trainerRepository.findByCollegeIdWithUser(collegeId).stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }

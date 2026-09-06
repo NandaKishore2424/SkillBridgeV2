@@ -38,4 +38,16 @@ public interface TrainerRepository extends JpaRepository<Trainer, Long> {
     @Query(value = "select t from Trainer t join fetch t.user where t.college.id = :collegeId",
            countQuery = "select count(t) from Trainer t where t.college.id = :collegeId")
     Page<Trainer> findByCollegeIdWithUser(@Param("collegeId") Long collegeId, Pageable pageable);
+
+    /** Single trainer by user id, with {@code user} joined. See {@link #findByCollegeIdWithUser}. */
+    @Query("select t from Trainer t join fetch t.user where t.user.id = :userId")
+    Optional<Trainer> findByUserIdWithUser(@Param("userId") Long userId);
+
+    /** Single trainer by primary key, with {@code user} joined. */
+    @Query("select t from Trainer t join fetch t.user where t.id = :id")
+    Optional<Trainer> findByIdWithUser(@Param("id") Long id);
+
+    /** Unpaginated college listing, with {@code user} joined. */
+    @Query("select t from Trainer t join fetch t.user where t.college.id = :collegeId")
+    List<Trainer> findByCollegeIdWithUser(@Param("collegeId") Long collegeId);
 }
