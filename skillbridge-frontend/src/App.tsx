@@ -7,6 +7,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Landing } from './pages/Landing'
 import { Login } from './pages/auth/Login'
+import { FirstLogin } from './pages/auth/FirstLogin'
 import { Register } from './pages/auth/Register'
 import { ProtectedRoute } from './shared/components/auth'
 
@@ -48,6 +49,13 @@ function App() {
       {/* Public Routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      {/*
+        Public on purpose: the caller proves themselves with the temporary
+        password in the request body. Requiring a session here would be
+        circular, since an account in this state cannot use its session for
+        anything else.
+      */}
+      <Route path="/first-login" element={<FirstLogin />} />
       <Route path="/register" element={<Register />} />
 
       {/* Protected Routes - System Admin */}

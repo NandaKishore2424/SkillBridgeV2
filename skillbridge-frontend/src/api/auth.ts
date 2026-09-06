@@ -38,7 +38,14 @@ export interface AuthResponse {
     isActive: boolean;
     accountStatus?: string;
     profileCompleted?: boolean;
+    mustChangePassword?: boolean;
   };
+}
+
+export interface FirstLoginRequest {
+  email: string;
+  temporaryPassword: string;
+  newPassword: string;
 }
 
 /**
@@ -95,3 +102,13 @@ export const getCurrentUser = async (): Promise<any> => {
   return response.data;
 };
 
+/**
+ * Exchange a temporary password for a real one.
+ *
+ * <p>Returns a fresh token pair, so the caller is signed in afterwards and does
+ * not have to log in a second time.
+ */
+export const firstLogin = async (data: FirstLoginRequest): Promise<AuthResponse> => {
+  const response = await apiClient.post<AuthResponse>('/auth/first-login', data);
+  return response.data;
+};

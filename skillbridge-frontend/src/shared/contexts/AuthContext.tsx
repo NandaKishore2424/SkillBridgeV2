@@ -217,6 +217,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isActive: response.user.isActive !== false,
         accountStatus: response.user.accountStatus,
         profileCompleted: response.user.profileCompleted,
+        mustChangePassword: response.user.mustChangePassword,
       }
     } else if (isJWT(response.accessToken)) {
       // Fallback: try to extract from JWT token if it's a JWT
@@ -263,6 +264,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Redirect based on role
       if (user) {
         let redirectPath = '/'
+
+        // An account still on its temporary password can reach nothing but the
+        // password-change endpoints -- the backend answers everything else with
+        // 403 PASSWORD_CHANGE_REQUIRED. Sending it to a role dashboard produces
+        // a page of "Failed to load" panels and no way out, which is exactly
+        // what happened before this check existed.
+        if (user.mustChangePassword) {
+          navigate('/first-login', { replace: true, state: { email: user.email } })
+          return
+        }
+
         switch (user.role) {
           case 'SYSTEM_ADMIN':
             redirectPath = '/admin/dashboard'

@@ -13,6 +13,13 @@ export interface User {
   isActive: boolean;
   accountStatus?: string;
   profileCompleted?: boolean;
+  /**
+   * True while the account still holds the temporary password it was created
+   * with. The backend rejects every request from such an account except the
+   * password-change endpoints, so the UI must route to /first-login rather
+   * than into the app.
+   */
+  mustChangePassword?: boolean;
 }
 
 // College types
