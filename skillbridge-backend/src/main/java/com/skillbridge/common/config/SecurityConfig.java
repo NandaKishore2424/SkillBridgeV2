@@ -82,6 +82,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/colleges/active").permitAll() // Public endpoint for registration
                 .requestMatchers("/actuator/**").permitAll()
+                // The contract itself is public; the interactive UI is gated by
+                // SWAGGER_ENABLED and simply is not mapped when that is false.
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/api/v1/admin/**").authenticated()
                 .anyRequest().authenticated()
             );

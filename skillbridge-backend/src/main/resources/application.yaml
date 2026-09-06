@@ -89,3 +89,13 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+# OpenAPI. The JSON document stays on so the drift check and client generation
+# can read it; the interactive UI is opt-in because it is a complete map of the
+# attack surface. Set SWAGGER_ENABLED=true locally to browse it.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+    path: /swagger-ui.html

@@ -1,0 +1,61 @@
+name: CI
+
+# Three checks, in the order they are cheapest to run. The drift check comes
+# first: it needs no build at all and catches the class of bug that produced
+# twenty phantom endpoints, so there is no reason to spend five minutes on Maven
+# before finding out the frontend calls something that does not exist.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api-drift:
+    name: API contract drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Frontend calls must resolve to backend endpoints
+        run: ./scripts/check-api-drift.sh
+
+  backend:
+    name: Backend build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: maven
+      - name: Test
+        working-directory: skillbridge-backend
+        # No DATABASE_URL here, so SkillbridgeBackendApplicationTests skips
+        # rather than failing. That is deliberate: it is a real integration test
+        # against a real Postgres with pgvector, and faking one with H2 would
+        # produce a green tick that proves nothing. Phase 11 replaces the gate
+        # with Testcontainers, at which point it runs here too.
+        run: ./mvnw -B test
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: skillbridge-frontend/package-lock.json
+      - name: Install
+        working-directory: skillbridge-frontend
+        run: npm ci
+      - name: Build
+        working-directory: skillbridge-frontend
+        # `npm run build` is `tsc -b && vite build`. Use it rather than `tsc
+        # --noEmit`: the two disagree, because tsc -b honours the project
+        # references in tsconfig.json and --noEmit silently checks almost
+        # nothing here. A previous session reported "typecheck clean" from
+        # --noEmit while the build had 117 errors.
+        run: npm run build
