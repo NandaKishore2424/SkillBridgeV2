@@ -30,6 +30,7 @@ import com.skillbridge.common.exception.InternalServerException;
 import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.common.dto.IdGrouping;
+import com.skillbridge.trainer.dto.UpdateTrainerAdminRequest;
 import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
@@ -161,13 +162,39 @@ public class TrainerService {
 
     @Transactional
     public void updateTrainerStatus(Long trainerId, boolean isActive) {
-        Trainer trainer = trainerRepository.findById(trainerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Trainer not found"));
+        Trainer trainer = trainerRepository.findByIdWithUser(trainerId)
+                .filter(t -> TenantGuard.isVisible(t.getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Trainer", trainerId));
 
         User user = trainer.getUser();
         user.setIsActive(isActive);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+    }
+
+    /**
+     * Admin edit of a trainer, keyed by trainer id and tenant-guarded.
+     *
+     * <p>{@link #updateTrainerProfile} is the trainer's own edit of their own
+     * record, keyed by user id. Keeping them separate means an admin endpoint
+     * can never be reached with a user id and vice versa.
+     */
+    @Transactional
+    public TrainerDTO updateTrainerAsAdmin(Long trainerId, UpdateTrainerAdminRequest request) {
+        Trainer trainer = trainerRepository.findByIdWithUser(trainerId)
+                .filter(t -> TenantGuard.isVisible(t.getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Trainer", trainerId));
+
+        if (request.getFullName() != null) trainer.setFullName(request.getFullName());
+        if (request.getPhone() != null) trainer.setPhone(request.getPhone());
+        if (request.getDepartment() != null) trainer.setDepartment(request.getDepartment());
+        if (request.getSpecialization() != null) trainer.setSpecialization(request.getSpecialization());
+        if (request.getBio() != null) trainer.setBio(request.getBio());
+        if (request.getLinkedinUrl() != null) trainer.setLinkedinUrl(request.getLinkedinUrl());
+        if (request.getYearsOfExperience() != null) trainer.setYearsOfExperience(request.getYearsOfExperience());
+        trainer.setUpdatedAt(LocalDateTime.now());
+
+        return mapToDTO(trainerRepository.save(trainer));
     }
 
     private TrainerDTO mapToDTO(Trainer trainer) {

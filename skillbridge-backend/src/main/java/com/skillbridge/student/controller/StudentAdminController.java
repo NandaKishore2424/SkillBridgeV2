@@ -12,6 +12,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import java.util.Map;
+import jakarta.validation.Valid;
+import com.skillbridge.common.exception.BadRequestException;
+import com.skillbridge.student.dto.UpdateStudentAdminRequest;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.security.SecurityUtils;
 
@@ -47,5 +51,34 @@ public class StudentAdminController {
     public ResponseEntity<StudentDTO> getStudentById(@PathVariable Long id) {
         StudentDTO student = studentService.getStudentById(id);
         return ResponseEntity.ok(student);
+    }
+
+    /**
+     * Admin edit of a student's academic details.
+     * PUT /api/v1/admin/students/{id}
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<StudentDTO> updateStudent(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateStudentAdminRequest request) {
+        return ResponseEntity.ok(studentService.updateStudentAsAdmin(id, request));
+    }
+
+    /**
+     * Activate or deactivate a student's account.
+     * PATCH /api/v1/admin/students/{id}/status
+     */
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<Void> updateStudentStatus(
+            @PathVariable Long id,
+            @RequestBody Map<String, Boolean> request) {
+        Boolean isActive = request.get("isActive");
+        if (isActive == null) {
+            throw new BadRequestException("isActive is required");
+        }
+        studentService.updateStudentStatus(id, isActive);
+        return ResponseEntity.noContent().build();
     }
 }

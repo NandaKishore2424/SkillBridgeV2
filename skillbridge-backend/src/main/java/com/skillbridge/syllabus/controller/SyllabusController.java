@@ -35,11 +35,32 @@ public class SyllabusController {
      * GET /api/v1/batches/{batchId}/syllabus
      */
     @GetMapping("/batches/{batchId}/syllabus")
-    @PreAuthorize("hasAnyRole('TRAINER', 'ADMIN')")
+    // Was hasAnyRole('TRAINER', 'ADMIN'). There is no ADMIN role in this system
+    // -- the four are SYSTEM_ADMIN, COLLEGE_ADMIN, TRAINER and STUDENT -- so the
+    // second clause matched nobody and a college admin got 403 reading the
+    // curriculum of a batch they had created. Same defect Session 2 fixed in
+    // AdminEnrollmentController.
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<List<SyllabusModuleDTO>> getSyllabus(@PathVariable Long batchId) {
         log.info("API: Get syllabus for batch {}", batchId);
         List<SyllabusModuleDTO> syllabus = syllabusService.getCurriculumByBatchId(batchId);
         return ResponseEntity.ok(syllabus);
+    }
+
+    /**
+     * Copy an entire curriculum from another batch.
+     * POST /api/v1/batches/{batchId}/syllabus/copy-from/{sourceBatchId}
+     *
+     * <p>The "Copy from Batch" button on the syllabus screen has called this
+     * since the screen was built; the endpoint did not exist.
+     */
+    @PostMapping("/batches/{batchId}/syllabus/copy-from/{sourceBatchId}")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
+    public ResponseEntity<List<SyllabusModuleDTO>> copySyllabus(
+            @PathVariable Long batchId,
+            @PathVariable Long sourceBatchId) {
+        log.info("API: Copy curriculum from batch {} to batch {}", sourceBatchId, batchId);
+        return ResponseEntity.ok(syllabusService.copyCurriculum(batchId, sourceBatchId));
     }
 
     // ===================================================================
@@ -51,7 +72,7 @@ public class SyllabusController {
      * POST /api/v1/batches/{batchId}/syllabus/modules
      */
     @PostMapping("/batches/{batchId}/syllabus/modules")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<SyllabusModuleDTO> createModule(
             @PathVariable Long batchId,
             @Valid @RequestBody CreateModuleRequest request) {
@@ -65,7 +86,7 @@ public class SyllabusController {
      * PUT /api/v1/syllabus/modules/{moduleId}
      */
     @PutMapping("/syllabus/modules/{moduleId}")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<SyllabusModuleDTO> updateModule(
             @PathVariable Long moduleId,
             @Valid @RequestBody UpdateModuleRequest request) {
@@ -79,7 +100,7 @@ public class SyllabusController {
      * DELETE /api/v1/syllabus/modules/{moduleId}
      */
     @DeleteMapping("/syllabus/modules/{moduleId}")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<Void> deleteModule(@PathVariable Long moduleId) {
         log.info("API: Delete module {}", moduleId);
         syllabusService.deleteModule(moduleId);
@@ -95,7 +116,7 @@ public class SyllabusController {
      * POST /api/v1/syllabus/modules/{moduleId}/submodules
      */
     @PostMapping("/syllabus/modules/{moduleId}/submodules")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<SyllabusSubmoduleDTO> createSubmodule(
             @PathVariable Long moduleId,
             @Valid @RequestBody CreateSubmoduleRequest request) {
@@ -109,7 +130,7 @@ public class SyllabusController {
      * PUT /api/v1/syllabus/submodules/{submoduleId}
      */
     @PutMapping("/syllabus/submodules/{submoduleId}")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<SyllabusSubmoduleDTO> updateSubmodule(
             @PathVariable Long submoduleId,
             @Valid @RequestBody UpdateSubmoduleRequest request) {
@@ -123,7 +144,7 @@ public class SyllabusController {
      * DELETE /api/v1/syllabus/submodules/{submoduleId}
      */
     @DeleteMapping("/syllabus/submodules/{submoduleId}")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<Void> deleteSubmodule(@PathVariable Long submoduleId) {
         log.info("API: Delete sub-module {}", submoduleId);
         syllabusService.deleteSubmodule(submoduleId);
@@ -139,7 +160,7 @@ public class SyllabusController {
      * POST /api/v1/syllabus/submodules/{submoduleId}/topics
      */
     @PostMapping("/syllabus/submodules/{submoduleId}/topics")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<SyllabusTopicDTO> addTopic(
             @PathVariable Long submoduleId,
             @Valid @RequestBody CreateTopicRequest request) {
@@ -153,7 +174,7 @@ public class SyllabusController {
      * PUT /api/v1/syllabus/topics/{topicId}
      */
     @PutMapping("/syllabus/topics/{topicId}")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<SyllabusTopicDTO> updateTopic(
             @PathVariable Long topicId,
             @Valid @RequestBody UpdateTopicRequest request) {
@@ -167,7 +188,7 @@ public class SyllabusController {
      * DELETE /api/v1/syllabus/topics/{topicId}
      */
     @DeleteMapping("/syllabus/topics/{topicId}")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<Void> deleteTopic(@PathVariable Long topicId) {
         log.info("API: Delete topic {}", topicId);
         syllabusService.deleteTopic(topicId);
@@ -179,7 +200,7 @@ public class SyllabusController {
      * POST /api/v1/syllabus/topics/{topicId}/toggle-completion
      */
     @PostMapping("/syllabus/topics/{topicId}/toggle-completion")
-    @PreAuthorize("hasRole('TRAINER')")
+    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
     public ResponseEntity<SyllabusTopicDTO> toggleTopicCompletion(@PathVariable Long topicId) {
         log.info("API: Toggle completion for topic {}", topicId);
         SyllabusTopicDTO topic = syllabusService.toggleTopicCompletion(topicId);

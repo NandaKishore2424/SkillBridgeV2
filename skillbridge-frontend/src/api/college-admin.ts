@@ -278,17 +278,20 @@ export const getBatchEnrollments = async (batchId: number): Promise<BatchEnrollm
   return response.data
 }
 
-export const approveEnrollment = async (
-  batchId: number,
-  enrollmentId: number
-): Promise<void> => {
-  await apiClient.patch(`/admin/batches/${batchId}/enrollments/${enrollmentId}/approve`)
+/**
+ * Approve or reject a pending enrollment REQUEST.
+ *
+ * These called PATCH /admin/batches/{batchId}/enrollments/{id}/approve, which
+ * the backend has never exposed. The real endpoints are addressed by request id
+ * alone -- a request already knows its batch, so passing one was never needed --
+ * and are POST, not PATCH. The batchId parameter is gone rather than ignored,
+ * so a caller cannot pass one and believe it matters.
+ */
+export const approveEnrollment = async (requestId: number): Promise<void> => {
+  await apiClient.post(`/admin/enrollment-requests/${requestId}/approve`)
 }
 
-export const rejectEnrollment = async (
-  batchId: number,
-  enrollmentId: number
-): Promise<void> => {
-  await apiClient.patch(`/admin/batches/${batchId}/enrollments/${enrollmentId}/reject`)
+export const rejectEnrollment = async (requestId: number, reason?: string): Promise<void> => {
+  await apiClient.post(`/admin/enrollment-requests/${requestId}/reject`, reason ? { reason } : {})
 }
 

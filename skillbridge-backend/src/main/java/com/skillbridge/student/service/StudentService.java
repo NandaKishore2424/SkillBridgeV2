@@ -31,6 +31,7 @@ import com.skillbridge.common.exception.InternalServerException;
 import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.common.dto.IdGrouping;
+import com.skillbridge.student.dto.UpdateStudentAdminRequest;
 import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
@@ -394,6 +395,67 @@ public class StudentService {
     }
 
     // Helper methods
+    /**
+     * Admin edit of a student's academic details.
+     *
+     * <p>Distinct from {@link #updateStudentProfile}, which a student calls for
+     * their own record and which is keyed by user id. This is keyed by student
+     * id and is for a college admin correcting a record they imported -- a
+     * mistyped roll number after a bulk upload being the usual case.
+     *
+     * <p>Deliberately narrow: name, contact details and the account itself are
+     * not editable here. Nothing else in the product lets an admin change
+     * someone's identity, and this endpoint should not be the exception.
+     */
+    @Transactional
+    public StudentDTO updateStudentAsAdmin(Long studentId, UpdateStudentAdminRequest request) {
+        Student student = studentRepository.findByIdWithUser(studentId)
+                .filter(st -> TenantGuard.isVisible(st.getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
+
+        if (request.getRollNumber() != null && !request.getRollNumber().equals(student.getRollNumber())) {
+            // uk_students_roll_college would reject this at the database, but a
+            // 409 with a sentence beats a constraint-violation stack trace.
+            if (studentRepository.existsByRollNumberAndCollegeId(
+                    request.getRollNumber(), student.getCollege().getId())) {
+                throw new ConflictException("ROLL_NUMBER_TAKEN",
+                        "Another student in this college already has roll number " + request.getRollNumber());
+            }
+            student.setRollNumber(request.getRollNumber());
+        }
+        if (request.getDegree() != null) {
+            student.setDegree(request.getDegree());
+        }
+        if (request.getBranch() != null) {
+            student.setBranch(request.getBranch());
+        }
+        if (request.getYear() != null) {
+            student.setYear(request.getYear());
+        }
+        student.setUpdatedAt(LocalDateTime.now());
+
+        return mapToDTO(studentRepository.save(student));
+    }
+
+    /**
+     * Activate or deactivate a student's account.
+     *
+     * <p>The flag lives on {@code users}, not {@code students} -- deactivating
+     * is about signing in, not about the academic record. An inactive account is
+     * refused at login by AuthService.
+     */
+    @Transactional
+    public void updateStudentStatus(Long studentId, boolean isActive) {
+        Student student = studentRepository.findByIdWithUser(studentId)
+                .filter(st -> TenantGuard.isVisible(st.getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
+
+        User user = student.getUser();
+        user.setIsActive(isActive);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+    }
+
     /** Single-student mapping. Issues two extra queries; see {@link #mapPage}. */
     private StudentDTO mapToDTO(Student student) {
         List<StudentSkillDTO> skills = studentSkillRepository.findByStudentId(student.getId()).stream()

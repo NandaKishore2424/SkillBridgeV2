@@ -56,7 +56,8 @@ for dirpath, _, files in os.walk(backend_root):
 # Matches api.get('/x'), apiClient.post(`/x/${id}`), axios.delete("..."), etc.
 CALL = re.compile(
     r'\b(?:api|apiClient|axios|client)\s*\.\s*(get|post|put|patch|delete)\s*'
-    r'(?:<[^>]*>\s*)?\(\s*[`\'"]([^`\'"]+)[`\'"]',
+    # generics may nest -- PagedResponse<Batch> -- so match balanced-ish, not [^>]*
+    r'(?:<(?:[^<>]|<[^<>]*>)*>\s*)?\(\s*[`\'"]([^`\'"]+)[`\'"]',
     re.I)
 
 frontend = {}

@@ -12,48 +12,14 @@ import type { BatchWithDetails, Trainer, Company } from './college-admin'
 export interface BatchDetails extends BatchWithDetails {
   trainers: Trainer[]
   companies: Company[]
-  syllabus?: Syllabus
-  /** Enrolled student count, from BatchDTO. Drives the "Enrollments (n)" tab. */
+  /**
+   * Enrolled student count, from BatchDTO. Drives the "Enrollments (n)" tab.
+   *
+   * The old `syllabus?: Syllabus` field went with the flat-syllabus API: BatchDTO
+   * has never carried a syllabus, and the curriculum is fetched separately as a
+   * module tree.
+   */
   studentCount?: number
-}
-
-export interface Syllabus {
-  id: number
-  batchId: number
-  title: string
-  description?: string
-  topics: SyllabusTopic[]
-}
-
-export interface SyllabusTopic {
-  id: number
-  syllabusId: number
-  title: string
-  description?: string
-  difficulty?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
-  estimatedHours?: number
-  order: number
-}
-
-export interface CreateSyllabusRequest {
-  title: string
-  description?: string
-}
-
-export interface CreateSyllabusTopicRequest {
-  title: string
-  description?: string
-  difficulty?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
-  estimatedHours?: number
-  order: number
-}
-
-export interface UpdateSyllabusTopicRequest {
-  title?: string
-  description?: string
-  difficulty?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
-  estimatedHours?: number
-  order?: number
 }
 
 export const getBatchDetails = async (id: number): Promise<BatchDetails> => {
@@ -113,48 +79,10 @@ export const unmapCompanyFromBatch = async (
 
 // ==================== Syllabus Management ====================
 
-export const createSyllabus = async (
-  batchId: number,
-  data: CreateSyllabusRequest
-): Promise<Syllabus> => {
-  const response = await apiClient.post<Syllabus>(`/admin/batches/${batchId}/syllabus`, data)
-  return response.data
-}
 
-export const updateSyllabus = async (
-  batchId: number,
-  data: Partial<CreateSyllabusRequest>
-): Promise<Syllabus> => {
-  const response = await apiClient.put<Syllabus>(`/admin/batches/${batchId}/syllabus`, data)
-  return response.data
-}
 
-export const addSyllabusTopic = async (
-  batchId: number,
-  data: CreateSyllabusTopicRequest
-): Promise<SyllabusTopic> => {
-  const response = await apiClient.post<SyllabusTopic>(
-    `/admin/batches/${batchId}/syllabus/topics`,
-    data
-  )
-  return response.data
-}
 
-export const updateSyllabusTopic = async (
-  batchId: number,
-  topicId: number,
-  data: UpdateSyllabusTopicRequest
-): Promise<SyllabusTopic> => {
-  const response = await apiClient.put<SyllabusTopic>(
-    `/admin/batches/${batchId}/syllabus/topics/${topicId}`,
-    data
-  )
-  return response.data
-}
 
-export const deleteSyllabusTopic = async (batchId: number, topicId: number): Promise<void> => {
-  await apiClient.delete(`/admin/batches/${batchId}/syllabus/topics/${topicId}`)
-}
 
 // Re-export enrollment functions
 export {
@@ -162,4 +90,3 @@ export {
   approveEnrollment,
   rejectEnrollment,
 } from './college-admin'
-

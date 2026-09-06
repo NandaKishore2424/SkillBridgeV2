@@ -6,7 +6,9 @@ import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
 import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.batch.repository.BatchRepository;
+import com.skillbridge.batch.service.BatchAssignmentService;
 import com.skillbridge.common.dto.IdGrouping;
+import com.skillbridge.common.exception.ResourceNotFoundException;
 import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
@@ -37,6 +39,7 @@ public class CompanyController {
     private final CompanyRepository companyRepository;
     private final CollegeRepository collegeRepository;
     private final BatchRepository batchRepository;
+    private final BatchAssignmentService batchAssignmentService;
     private final CollegeAdminRepository collegeAdminRepository;
 
     @GetMapping
@@ -184,5 +187,56 @@ public class CompanyController {
         public Long collegeId; // Optional: for SYSTEM_ADMIN to specify which college
         public String hiringProcess; // Not in DB schema yet, ignore for now
         public String notes; // Not in DB schema yet, ignore for now
+    }
+
+    /**
+     * Edit a company.
+     * PUT /api/v1/admin/companies/{id}
+     *
+     * <p>{@code collegeId} is not editable: moving a company between colleges
+     * would silently move every batch link with it, and no screen asks for that.
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
+    public ResponseEntity<CompanyDTO> updateCompany(
+            @PathVariable Long id,
+            @RequestBody CreateCompanyRequest request) {
+        Company company = companyRepository.findByIdWithCollege(id)
+                .filter(c -> c.getCollege() != null && TenantGuard.isVisible(c.getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Company", id));
+
+        if (request.name != null && !request.name.isBlank()) company.setName(request.name);
+        if (request.domain != null) company.setDomain(request.domain);
+        if (request.hiringType != null && !request.hiringType.isBlank()) {
+            company.setHiringType(request.hiringType);
+        }
+        company.setUpdatedAt(java.time.LocalDateTime.now());
+        companyRepository.save(company);
+
+        // Re-read rather than mapping save()'s return value. With no surrounding
+        // transaction, saving a detached entity goes through merge(), which hands
+        // back a *different* managed instance whose lazy `college` is a fresh
+        // uninitialised proxy -- so convertToDTO's getCollege().getName() threw
+        // LazyInitializationException even though the instance we loaded had it
+        // fetch-joined.
+        return ResponseEntity.ok(convertToDTO(companyRepository.findByIdWithCollege(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("Company", id))));
+    }
+
+    /** Link this company to a batch, from the company's side. */
+    @PostMapping("/{id}/batches/{batchId}")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
+    public ResponseEntity<?> linkToBatch(@PathVariable Long id, @PathVariable Long batchId) {
+        int count = batchAssignmentService.assignCompany(batchId, id);
+        return ResponseEntity.ok(Map.of("success", true, "companyId", id,
+                "batchId", batchId, "companyCount", count));
+    }
+
+    @DeleteMapping("/{id}/batches/{batchId}")
+    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
+    public ResponseEntity<?> unlinkFromBatch(@PathVariable Long id, @PathVariable Long batchId) {
+        int count = batchAssignmentService.unassignCompany(batchId, id);
+        return ResponseEntity.ok(Map.of("success", true, "companyId", id,
+                "batchId", batchId, "companyCount", count));
     }
 }

@@ -18,7 +18,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import com.skillbridge.common.exception.BusinessRuleException;
+import com.skillbridge.common.exception.ConflictException;
 import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.common.tenant.TenantGuard;
 
 /**
  * Service for managing batch curriculum (modules, sub-modules, and topics)
@@ -43,6 +45,7 @@ public class SyllabusService {
     @Transactional(readOnly = true)
     public List<SyllabusModuleDTO> getCurriculumByBatchId(Long batchId) {
         log.info("Fetching curriculum for batch {}", batchId);
+        requireBatch(batchId);
 
         List<SyllabusModule> modules = moduleRepository.findByBatchIdWithSubmodulesAndTopics(batchId);
 
@@ -61,8 +64,7 @@ public class SyllabusService {
     public SyllabusModuleDTO createModule(Long batchId, CreateModuleRequest request) {
         log.info("Creating module '{}' for batch {}", request.getName(), batchId);
 
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
+        Batch batch = requireBatch(batchId);
 
         // Check if display order already exists
         if (moduleRepository.existsByBatchIdAndDisplayOrder(batchId, request.getDisplayOrder())) {
@@ -71,6 +73,7 @@ public class SyllabusService {
 
         SyllabusModule module = SyllabusModule.builder()
                 .batch(batch)
+                .collegeId(batch.getCollege().getId())
                 .name(request.getName())
                 .description(request.getDescription())
                 .displayOrder(request.getDisplayOrder())
@@ -99,8 +102,7 @@ public class SyllabusService {
     public SyllabusModuleDTO updateModule(Long moduleId, UpdateModuleRequest request) {
         log.info("Updating module {}", moduleId);
 
-        SyllabusModule module = moduleRepository.findById(moduleId)
-                .orElseThrow(() -> new ResourceNotFoundException("Module not found with id: " + moduleId));
+        SyllabusModule module = requireModule(moduleId);
 
         if (request.getName() != null) {
             module.setName(request.getName());
@@ -154,8 +156,7 @@ public class SyllabusService {
     public SyllabusSubmoduleDTO createSubmodule(Long moduleId, CreateSubmoduleRequest request) {
         log.info("Creating sub-module '{}' for module {}", request.getName(), moduleId);
 
-        SyllabusModule module = moduleRepository.findById(moduleId)
-                .orElseThrow(() -> new ResourceNotFoundException("Module not found with id: " + moduleId));
+        SyllabusModule module = requireModule(moduleId);
 
         // Check if display order already exists
         if (submoduleRepository.existsByModuleIdAndDisplayOrder(moduleId, request.getDisplayOrder())) {
@@ -176,8 +177,7 @@ public class SyllabusService {
     public SyllabusSubmoduleDTO updateSubmodule(Long submoduleId, UpdateSubmoduleRequest request) {
         log.info("Updating sub-module {}", submoduleId);
 
-        SyllabusSubmodule submodule = submoduleRepository.findById(submoduleId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sub-module not found with id: " + submoduleId));
+        SyllabusSubmodule submodule = requireSubmodule(submoduleId);
 
         if (request.getName() != null) {
             submodule.setName(request.getName());
@@ -234,8 +234,7 @@ public class SyllabusService {
     public SyllabusTopicDTO addTopicToSubmodule(Long submoduleId, CreateTopicRequest request) {
         log.info("Adding topic '{}' to sub-module {}", request.getName(), submoduleId);
 
-        SyllabusSubmodule submodule = submoduleRepository.findById(submoduleId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sub-module not found with id: " + submoduleId));
+        SyllabusSubmodule submodule = requireSubmodule(submoduleId);
 
         SyllabusTopic topic = SyllabusTopic.builder()
                 .submodule(submodule)
@@ -257,8 +256,7 @@ public class SyllabusService {
     public SyllabusTopicDTO updateTopic(Long topicId, UpdateTopicRequest request) {
         log.info("Updating topic {}", topicId);
 
-        SyllabusTopic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new ResourceNotFoundException("Topic not found with id: " + topicId));
+        SyllabusTopic topic = requireTopic(topicId);
 
         if (request.getName() != null) {
             topic.setName(request.getName());
@@ -296,8 +294,7 @@ public class SyllabusService {
     public SyllabusTopicDTO toggleTopicCompletion(Long topicId) {
         log.info("Toggling completion for topic {}", topicId);
 
-        SyllabusTopic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new ResourceNotFoundException("Topic not found with id: " + topicId));
+        SyllabusTopic topic = requireTopic(topicId);
 
         topic.toggleCompletion();
         SyllabusTopic updatedTopic = topicRepository.save(topic);
@@ -407,5 +404,119 @@ public class SyllabusService {
                 .isCompleted(topic.getIsCompleted())
                 .completedAt(topic.getCompletedAt())
                 .build();
+    }
+
+
+    /**
+     * Copies an entire curriculum tree from one batch to another.
+     *
+     * <p>Both batches are tenant-checked, so this cannot be used to lift another
+     * college's curriculum -- which is the obvious abuse of a "copy from batch"
+     * feature and the reason the source id is validated as carefully as the
+     * target.
+     *
+     * <p>Refuses a non-empty target rather than merging. Merging raises questions
+     * this feature does not answer -- what happens to display orders, whether a
+     * same-named module is the same module -- and silently interleaving two
+     * curricula is far worse than declining.
+     *
+     * <p>Topic completion flags are deliberately not copied: they describe what
+     * the source batch's trainer has taught, which says nothing about the new
+     * batch. Dates are copied, since they are usually adjusted afterwards
+     * anyway and having them present is more useful than nulls.
+     */
+    @Transactional
+    public List<SyllabusModuleDTO> copyCurriculum(Long targetBatchId, Long sourceBatchId) {
+        if (targetBatchId.equals(sourceBatchId)) {
+            throw new BusinessRuleException("Cannot copy a batch's curriculum onto itself");
+        }
+
+        Batch target = requireBatch(targetBatchId);
+        requireBatch(sourceBatchId);
+
+        if (!moduleRepository.findByBatchIdOrderByDisplayOrder(targetBatchId).isEmpty()) {
+            throw new ConflictException("CURRICULUM_NOT_EMPTY",
+                    "This batch already has a curriculum. Remove it before copying another.");
+        }
+
+        List<SyllabusModule> source = moduleRepository.findByBatchIdWithSubmodulesAndTopics(sourceBatchId);
+        if (source.isEmpty()) {
+            throw new BusinessRuleException("The source batch has no curriculum to copy");
+        }
+
+        for (SyllabusModule sourceModule : source) {
+            SyllabusModule module = moduleRepository.save(SyllabusModule.builder()
+                    .batch(target)
+                    .collegeId(target.getCollege().getId())
+                    .name(sourceModule.getName())
+                    .description(sourceModule.getDescription())
+                    .displayOrder(sourceModule.getDisplayOrder())
+                    .startDate(sourceModule.getStartDate())
+                    .endDate(sourceModule.getEndDate())
+                    .build());
+
+            for (SyllabusSubmodule sourceSub : sourceModule.getSubmodules()) {
+                SyllabusSubmodule submodule = submoduleRepository.save(SyllabusSubmodule.builder()
+                        .module(module)
+                        .name(sourceSub.getName())
+                        .description(sourceSub.getDescription())
+                        .displayOrder(sourceSub.getDisplayOrder())
+                        .startDate(sourceSub.getStartDate())
+                        .endDate(sourceSub.getEndDate())
+                        .build());
+
+                for (SyllabusTopic sourceTopic : sourceSub.getTopics()) {
+                    topicRepository.save(SyllabusTopic.builder()
+                            .submodule(submodule)
+                            .name(sourceTopic.getName())
+                            .description(sourceTopic.getDescription())
+                            .displayOrder(sourceTopic.getDisplayOrder())
+                            // isCompleted / completedAt intentionally left at their
+                            // defaults -- see the javadoc.
+                            .build());
+                }
+            }
+        }
+
+        log.info("Copied curriculum from batch {} to batch {}", sourceBatchId, targetBatchId);
+        return getCurriculumByBatchId(targetBatchId);
+    }
+
+    // ===================================================================
+    // Tenant-guarded lookups
+    // ===================================================================
+    //
+    // Every method here takes an id straight from the URL and this service had
+    // no tenancy check of any kind, so a trainer at one college could read and
+    // edit another college's curriculum by guessing ids. The Hibernate
+    // collegeFilter does not help: it applies to queries, not to findById.
+    //
+    // Ownership failure and a genuine miss both raise the same 404, so ids
+    // cannot be enumerated. The college is reached through the batch, which is
+    // the only place it is stored on this tree.
+
+    private Batch requireBatch(Long batchId) {
+        return batchRepository.findById(batchId)
+                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Batch", batchId));
+    }
+
+    private SyllabusModule requireModule(Long moduleId) {
+        return moduleRepository.findById(moduleId)
+                .filter(m -> TenantGuard.isVisible(m.getBatch().getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Module", moduleId));
+    }
+
+    private SyllabusSubmodule requireSubmodule(Long submoduleId) {
+        return submoduleRepository.findById(submoduleId)
+                .filter(sm -> TenantGuard.isVisible(sm.getModule().getBatch().getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Sub-module", submoduleId));
+    }
+
+    private SyllabusTopic requireTopic(Long topicId) {
+        return topicRepository.findById(topicId)
+                .filter(t -> TenantGuard.isVisible(
+                        t.getSubmodule().getModule().getBatch().getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Topic", topicId));
     }
 }

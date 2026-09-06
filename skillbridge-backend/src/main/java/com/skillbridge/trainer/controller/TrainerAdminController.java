@@ -13,6 +13,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+import com.skillbridge.trainer.dto.UpdateTrainerAdminRequest;
+import com.skillbridge.batch.service.BatchAssignmentService;
 
 import java.util.Map;
 import com.skillbridge.auth.security.AuthenticatedUser;
@@ -25,6 +28,7 @@ import com.skillbridge.auth.security.SecurityUtils;
 @CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class TrainerAdminController {
     private final TrainerService trainerService;
+    private final BatchAssignmentService batchAssignmentService;
 
     @GetMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
@@ -68,5 +72,44 @@ public class TrainerAdminController {
             @RequestBody Map<String, Boolean> request) {
         trainerService.updateTrainerStatus(id, request.get("isActive"));
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Admin edit of a trainer's professional details.
+     * PUT /api/v1/admin/trainers/{id}
+     *
+     * <p>Keyed by trainer id, unlike updateTrainerProfile which a trainer calls
+     * for their own record by user id.
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<TrainerDTO> updateTrainer(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateTrainerAdminRequest request) {
+        return ResponseEntity.ok(trainerService.updateTrainerAsAdmin(id, request));
+    }
+
+    /**
+     * Assign this trainer to a batch, from the trainer's side.
+     *
+     * <p>The same {@code batch_trainers} row as
+     * {@code POST /admin/batches/{id}/trainers}; the UI offers both directions
+     * and only the batch side existed. Delegates so the tenant checks and the
+     * join-table handling live in one place.
+     */
+    @PostMapping("/{id}/batches/{batchId}")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<?> assignToBatch(@PathVariable Long id, @PathVariable Long batchId) {
+        int count = batchAssignmentService.assignTrainer(batchId, id);
+        return ResponseEntity.ok(Map.of("success", true, "trainerId", id,
+                "batchId", batchId, "trainerCount", count));
+    }
+
+    @DeleteMapping("/{id}/batches/{batchId}")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<?> unassignFromBatch(@PathVariable Long id, @PathVariable Long batchId) {
+        int count = batchAssignmentService.unassignTrainer(batchId, id);
+        return ResponseEntity.ok(Map.of("success", true, "trainerId", id,
+                "batchId", batchId, "trainerCount", count));
     }
 }

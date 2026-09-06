@@ -10,6 +10,7 @@
  */
 
 import { useParams } from 'react-router-dom'
+import SyllabusTab from '@/components/batch-management/SyllabusTab'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AuthenticatedLayout } from '@/shared/components/layout'
 import { PageWrapper } from '@/shared/components/layout'
@@ -36,14 +37,7 @@ import {
   TableHeader,
   TableRow,
   Checkbox,
-  Input,
   Label,
-  Textarea,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from '@/shared/components/ui'
 import {
   getBatchDetails,
@@ -52,10 +46,6 @@ import {
   getBatchEnrollments,
   approveEnrollment,
   rejectEnrollment,
-  createSyllabus,
-  addSyllabusTopic,
-  updateSyllabusTopic,
-  deleteSyllabusTopic,
 } from '@/api/batch-details'
 import { getAssignedTrainers as getBatchTrainers, getAssignedCompanies as getBatchCompanies } from '@/api/batch-details'
 import { getTrainers, getCompanies } from '@/api/college-admin'
@@ -64,17 +54,11 @@ import {
   Loader2,
   AlertCircle,
   GraduationCap,
-  Plus,
   Check,
   XCircle,
-  Edit,
-  Trash2,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 
 const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'outline'> = {
   UPCOMING: 'outline',
@@ -434,7 +418,9 @@ function EnrollmentsTab({ batchId }: { batchId: number }) {
   })
 
   const approveMutation = useMutation({
-    mutationFn: (enrollmentId: number) => approveEnrollment(batchId, enrollmentId),
+    // These address the enrollment REQUEST, not the enrollment, and the request
+    // already knows its batch -- see api/college-admin.ts.
+    mutationFn: (requestId: number) => approveEnrollment(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId, 'enrollments'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId] })
@@ -446,7 +432,7 @@ function EnrollmentsTab({ batchId }: { batchId: number }) {
   })
 
   const rejectMutation = useMutation({
-    mutationFn: (enrollmentId: number) => rejectEnrollment(batchId, enrollmentId),
+    mutationFn: (requestId: number) => rejectEnrollment(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId, 'enrollments'] })
       showSuccess('Enrollment rejected')
@@ -643,327 +629,6 @@ function EnrollmentsTab({ batchId }: { batchId: number }) {
   )
 }
 
-const topicSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
-  difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
-  estimatedHours: z.string().optional().refine(
-    (val) => !val || (!isNaN(Number(val)) && Number(val) > 0),
-    'Must be a positive number'
-  ),
-  order: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, 'Must be a positive number'),
-})
-
-function SyllabusTab({ batchId, syllabus }: any) {
-  const queryClient = useQueryClient()
-  const { showSuccess, showError } = useToastNotifications()
-  const [isAddingTopic, setIsAddingTopic] = useState(false)
-  const [editingTopicId, setEditingTopicId] = useState<number | null>(null)
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    setValue,
-    watch,
-  } = useForm<z.infer<typeof topicSchema>>({
-    resolver: zodResolver(topicSchema),
-    defaultValues: {
-      title: '',
-      description: '',
-      difficulty: undefined,
-      estimatedHours: '',
-      order: '1',
-    },
-  })
-
-  const createSyllabusMutation = useMutation({
-    mutationFn: (data: { title: string; description?: string }) =>
-      createSyllabus(batchId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId] })
-      showSuccess('Syllabus created successfully!')
-    },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to create syllabus')
-    },
-  })
-
-  const addTopicMutation = useMutation({
-    mutationFn: (data: any) => addSyllabusTopic(batchId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId] })
-      reset()
-      setIsAddingTopic(false)
-      showSuccess('Topic added successfully!')
-    },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to add topic')
-    },
-  })
-
-  const updateTopicMutation = useMutation({
-    mutationFn: ({ topicId, data }: { topicId: number; data: any }) =>
-      updateSyllabusTopic(batchId, topicId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId] })
-      setEditingTopicId(null)
-      reset()
-      showSuccess('Topic updated successfully!')
-    },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to update topic')
-    },
-  })
-
-  const deleteTopicMutation = useMutation({
-    mutationFn: (topicId: number) => deleteSyllabusTopic(batchId, topicId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId] })
-      showSuccess('Topic deleted successfully!')
-    },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to delete topic')
-    },
-  })
-
-  const onSubmitTopic = (data: z.infer<typeof topicSchema>) => {
-    const payload = {
-      title: data.title,
-      description: data.description || undefined,
-      difficulty: data.difficulty,
-      estimatedHours: data.estimatedHours ? parseInt(data.estimatedHours) : undefined,
-      order: parseInt(data.order),
-    }
-
-    if (editingTopicId) {
-      updateTopicMutation.mutate({ topicId: editingTopicId, data: payload })
-    } else {
-      addTopicMutation.mutate(payload)
-    }
-  }
-
-  const handleEdit = (topic: any) => {
-    setEditingTopicId(topic.id)
-    setValue('title', topic.title)
-    setValue('description', topic.description || '')
-    setValue('difficulty', topic.difficulty)
-    setValue('estimatedHours', topic.estimatedHours?.toString() || '')
-    setValue('order', topic.order.toString())
-    setIsAddingTopic(true)
-  }
-
-  const handleCancel = () => {
-    setIsAddingTopic(false)
-    setEditingTopicId(null)
-    reset()
-  }
-
-  const handleDelete = (topicId: number) => {
-    if (confirm('Delete this topic?')) {
-      deleteTopicMutation.mutate(topicId)
-    }
-  }
-
-  if (!syllabus) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Create Syllabus</CardTitle>
-          <CardDescription>Create a syllabus for this batch</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={handleSubmit((data) => {
-              createSyllabusMutation.mutate({
-                title: data.title,
-                description: data.description || undefined,
-              })
-            })}
-            className="space-y-4"
-          >
-            <div className="space-y-2">
-              <Label htmlFor="syllabus-title">Syllabus Title</Label>
-              <Input
-                id="syllabus-title"
-                {...register('title')}
-                placeholder="Full Stack Development Syllabus"
-              />
-              {errors.title && (
-                <p className="text-sm text-destructive">{errors.title.message}</p>
-              )}
-            </div>
-            <Button type="submit" disabled={createSyllabusMutation.isPending}>
-              {createSyllabusMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                'Create Syllabus'
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>{syllabus.title}</CardTitle>
-          {syllabus.description && (
-            <CardDescription>{syllabus.description}</CardDescription>
-          )}
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {!isAddingTopic && (
-              <Button onClick={() => setIsAddingTopic(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Topic
-              </Button>
-            )}
-
-            {isAddingTopic && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    {editingTopicId ? 'Edit Topic' : 'Add New Topic'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSubmit(onSubmitTopic)} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="topic-title">Title *</Label>
-                      <Input id="topic-title" {...register('title')} />
-                      {errors.title && (
-                        <p className="text-sm text-destructive">{errors.title.message}</p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="topic-description">Description</Label>
-                      <Textarea id="topic-description" {...register('description')} rows={3} />
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="topic-difficulty">Difficulty</Label>
-                        <Select
-                          onValueChange={(value) => setValue('difficulty', value as any)}
-                          value={watch('difficulty')}
-                        >
-                          <SelectTrigger id="topic-difficulty">
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="BEGINNER">Beginner</SelectItem>
-                            <SelectItem value="INTERMEDIATE">Intermediate</SelectItem>
-                            <SelectItem value="ADVANCED">Advanced</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="topic-hours">Estimated Hours</Label>
-                        <Input
-                          id="topic-hours"
-                          type="number"
-                          {...register('estimatedHours')}
-                          min="1"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="topic-order">Order *</Label>
-                        <Input id="topic-order" type="number" {...register('order')} min="1" />
-                        {errors.order && (
-                          <p className="text-sm text-destructive">{errors.order.message}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button type="submit" disabled={addTopicMutation.isPending}>
-                        {addTopicMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          'Save Topic'
-                        )}
-                      </Button>
-                      <Button type="button" variant="outline" onClick={handleCancel}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-            )}
-
-            {syllabus.topics && syllabus.topics.length > 0 ? (
-              <div className="space-y-2">
-                {[...syllabus.topics]
-                  .sort((a, b) => a.order - b.order)
-                  .map((topic: any) => (
-                    <Card key={topic.id}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline">#{topic.order}</Badge>
-                              <h4 className="font-semibold">{topic.title}</h4>
-                              {topic.difficulty && (
-                                <Badge variant="secondary" className="ml-2">
-                                  {topic.difficulty}
-                                </Badge>
-                              )}
-                              {topic.estimatedHours && (
-                                <span className="text-sm text-muted-foreground">
-                                  {topic.estimatedHours}h
-                                </span>
-                              )}
-                            </div>
-                            {topic.description && (
-                              <p className="text-sm text-muted-foreground mt-2">
-                                {topic.description}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleEdit(topic)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDelete(topic.id)}
-                              disabled={deleteTopicMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No topics added yet. Click "Add Topic" to get started.
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
 
 export function BatchDetails() {
   const { id } = useParams<{ id: string }>()
@@ -1077,7 +742,15 @@ export function BatchDetails() {
               </TabsContent>
 
               <TabsContent value="syllabus">
-                <SyllabusTab batchId={batchId} syllabus={batch.syllabus} />
+                {/*
+                  Was a local SyllabusTab built on the legacy flat-syllabus API --
+                  five endpoints the backend never implemented, so every action in
+                  it failed. This is the same module-tree component the trainer
+                  batch page uses, which talks to the curriculum endpoints that
+                  actually exist. College admins can now reach it because the
+                  syllabus controller no longer guards on a nonexistent ADMIN role.
+                */}
+                <SyllabusTab batchId={batchId} />
               </TabsContent>
             </Tabs>
           </div>

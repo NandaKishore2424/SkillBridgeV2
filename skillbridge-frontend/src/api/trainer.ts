@@ -89,14 +89,18 @@ export interface UpdateProgressRequest {
   feedback?: string
 }
 
+/**
+ * Grade one topic for one student.
+ *
+ * Was PATCH /trainer/batches/{batchId}/students/{studentId}/progress, which the
+ * backend never exposed. Phase 04 shipped grading addressed by topic instead:
+ * PUT /trainer/topics/{topicId}/progress with the student in the body. The
+ * batch is implied by the topic.
+ */
 export const updateStudentProgress = async (
-  batchId: number,
-  studentId: number,
+  topicId: number,
   data: UpdateProgressRequest
 ): Promise<void> => {
-  await apiClient.patch(
-    `/trainer/batches/${batchId}/students/${studentId}/progress`,
-    data
-  )
+  await apiClient.put(`/trainer/topics/${topicId}/progress`, data)
 }
 

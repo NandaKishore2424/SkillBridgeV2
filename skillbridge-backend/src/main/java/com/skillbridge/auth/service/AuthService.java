@@ -22,6 +22,15 @@ import java.util.UUID;
 import com.skillbridge.common.exception.BusinessRuleException;
 import com.skillbridge.common.exception.InternalServerException;
 import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.auth.dto.CurrentUserDTO;
+import com.skillbridge.auth.entity.Role;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.college.entity.College;
+import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.student.entity.Student;
+import com.skillbridge.student.repository.StudentRepository;
+import com.skillbridge.trainer.entity.Trainer;
+import com.skillbridge.trainer.repository.TrainerRepository;
 import com.skillbridge.common.audit.AuditAction;
 import com.skillbridge.common.audit.AuditLogService;
 import com.skillbridge.common.exception.UnauthorizedException;
@@ -35,6 +44,9 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
     private final AuditLogService auditLogService;
+    private final StudentRepository studentRepository;
+    private final TrainerRepository trainerRepository;
+    private final CollegeRepository collegeRepository;
 
     private final long refreshTokenTtlSeconds;
 
@@ -44,6 +56,9 @@ public class AuthService {
             RefreshTokenRepository refreshTokenRepository,
             JwtService jwtService,
             AuditLogService auditLogService,
+            StudentRepository studentRepository,
+            TrainerRepository trainerRepository,
+            CollegeRepository collegeRepository,
             @Value("${jwt.refreshTokenTtlSeconds:1209600}") long refreshTokenTtlSeconds
     ) {
         this.userRepository = userRepository;
@@ -51,6 +66,9 @@ public class AuthService {
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtService = jwtService;
         this.auditLogService = auditLogService;
+        this.studentRepository = studentRepository;
+        this.trainerRepository = trainerRepository;
+        this.collegeRepository = collegeRepository;
         this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
     }
 
@@ -177,6 +195,60 @@ public class AuthService {
                 .refreshToken(newRefreshToken)
                 .expiresIn(3600L)
                 .user(userDto)
+                .build();
+    }
+
+    /**
+     * Describes the authenticated caller.
+     *
+     * <p>The profile lookup is chosen by role rather than attempted three times:
+     * a student has no trainer row and vice versa, so speculative queries would
+     * be two guaranteed misses per call on the most frequently hit endpoint in
+     * any SPA.
+     *
+     * <p>Admins have neither profile, so {@code fullName} and {@code profileId}
+     * are null for them. That is the honest answer -- the account genuinely has
+     * no display name -- and is why the UI falls back to the email local part.
+     */
+    @Transactional(readOnly = true)
+    public CurrentUserDTO describeCurrentUser(AuthenticatedUser caller) {
+        User user = userRepository.findById(caller.getId())
+                .orElseThrow(() -> ResourceNotFoundException.of("User", caller.getId()));
+
+        String primaryRole = user.getRoles().stream()
+                .findFirst().map(Role::getName).orElse(null);
+
+        String fullName = null;
+        Long profileId = null;
+        if ("STUDENT".equals(primaryRole)) {
+            Student student = studentRepository.findByUser_Id(user.getId()).orElse(null);
+            if (student != null) {
+                fullName = student.getFullName();
+                profileId = student.getId();
+            }
+        } else if ("TRAINER".equals(primaryRole)) {
+            Trainer trainer = trainerRepository.findByUser_Id(user.getId()).orElse(null);
+            if (trainer != null) {
+                fullName = trainer.getFullName();
+                profileId = trainer.getId();
+            }
+        }
+
+        String collegeName = user.getCollegeId() == null ? null
+                : collegeRepository.findById(user.getCollegeId()).map(College::getName).orElse(null);
+
+        return CurrentUserDTO.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .roles(user.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet()))
+                .primaryRole(primaryRole)
+                .collegeId(user.getCollegeId())
+                .collegeName(collegeName)
+                .fullName(fullName)
+                .profileId(profileId)
+                .profileCompleted(Boolean.TRUE.equals(user.getProfileCompleted()))
+                .mustChangePassword(Boolean.TRUE.equals(user.getMustChangePassword()))
+                .accountStatus(user.getAccountStatus())
                 .build();
     }
 

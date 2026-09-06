@@ -6,6 +6,7 @@ import com.skillbridge.auth.dto.RefreshTokenRequest;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.auth.dto.CurrentUserDTO;
 import com.skillbridge.auth.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +75,20 @@ public class AuthController {
      * this is one of only two ways an account holding a temporary password can
      * get itself into a usable state.
      */
+    /**
+     * The authenticated caller.
+     * GET /api/v1/auth/me
+     *
+     * <p>How a single-page app rehydrates after a refresh: the token in storage
+     * says who you are cryptographically, but not what your name is or whether
+     * your profile is complete. The frontend has called this since it was
+     * written.
+     */
+    @GetMapping("/me")
+    public ResponseEntity<CurrentUserDTO> me() {
+        return ResponseEntity.ok(authService.describeCurrentUser(SecurityUtils.currentUser()));
+    }
+
     @PostMapping("/change-password")
     public ResponseEntity<Void> changePassword(@RequestBody java.util.Map<String, String> request) {
         AuthenticatedUser user = SecurityUtils.currentUser();

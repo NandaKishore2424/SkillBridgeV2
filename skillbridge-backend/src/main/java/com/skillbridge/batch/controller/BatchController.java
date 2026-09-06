@@ -4,6 +4,7 @@ import com.skillbridge.auth.entity.User;
 import com.skillbridge.batch.dto.BatchDTO;
 import com.skillbridge.batch.entity.Batch;
 import com.skillbridge.batch.repository.BatchRepository;
+import com.skillbridge.batch.service.BatchAssignmentService;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
@@ -46,6 +47,7 @@ public class BatchController {
 
     private final BatchRepository batchRepository;
     private final CollegeRepository collegeRepository;
+    private final BatchAssignmentService batchAssignmentService;
     private final CollegeAdminRepository collegeAdminRepository;
     private final TrainerRepository trainerRepository;
     private final CompanyRepository companyRepository;
@@ -296,37 +298,28 @@ public class BatchController {
     public ResponseEntity<?> assignTrainers(
             @PathVariable Long id,
             @RequestBody AssignTrainersRequest request) {
-        log.info("Assigning trainers to batch {}: {}", id, request.trainerIds);
+        int count = batchAssignmentService.replaceTrainers(id, request.trainerIds);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Trainers assigned successfully",
+                "batchId", id,
+                "trainerCount", count));
+    }
 
-        try {
-            Optional<Batch> batchOpt = batchRepository.findById(id);
-            if (batchOpt.isEmpty()) {
-                return ResponseEntity.notFound().build();
-            }
-
-            Batch batch = batchOpt.get();
-            batch.getTrainers().clear(); // Clear existing trainers
-
-            // Add new trainers
-            for (Long trainerId : request.trainerIds) {
-                trainerRepository.findById(trainerId).ifPresent(trainer -> {
-                    batch.getTrainers().add(trainer);
-                });
-            }
-
-            Batch updatedBatch = batchRepository.save(batch);
-            log.info("Successfully assigned {} trainers to batch {}", updatedBatch.getTrainers().size(), id);
-            // Return simple Map to avoid Jackson serialization errors with lazy-loaded
-            // entities
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Trainers assigned successfully",
-                    "batchId", id,
-                    "trainerCount", updatedBatch.getTrainers().size()));
-        } catch (Exception e) {
-            log.error("Error assigning trainers to batch {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(500).body(Map.of("error", "An unexpected error occurred"));
-        }
+    /**
+     * Detach one trainer, leaving the rest in place.
+     *
+     * <p>The assign endpoint above replaces the whole set, which is what its
+     * multi-select screen means but is the wrong tool for removing a single
+     * person. The UI has had an unassign call since it was written; the endpoint
+     * did not exist.
+     */
+    @DeleteMapping("/{id}/trainers/{trainerId}")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<?> unassignTrainer(@PathVariable Long id, @PathVariable Long trainerId) {
+        int count = batchAssignmentService.unassignTrainer(id, trainerId);
+        return ResponseEntity.ok(Map.of(
+                "success", true, "batchId", id, "trainerCount", count));
     }
 
     @PostMapping("/{id}/companies")
@@ -334,37 +327,20 @@ public class BatchController {
     public ResponseEntity<?> assignCompanies(
             @PathVariable Long id,
             @RequestBody AssignCompaniesRequest request) {
-        log.info("Assigning companies to batch {}: {}", id, request.companyIds);
+        int count = batchAssignmentService.replaceCompanies(id, request.companyIds);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Companies linked successfully",
+                "batchId", id,
+                "companyCount", count));
+    }
 
-        try {
-            Optional<Batch> batchOpt = batchRepository.findById(id);
-            if (batchOpt.isEmpty()) {
-                return ResponseEntity.notFound().build();
-            }
-
-            Batch batch = batchOpt.get();
-            batch.getCompanies().clear(); // Clear existing companies
-
-            // Add new companies
-            for (Long companyId : request.companyIds) {
-                companyRepository.findById(companyId).ifPresent(company -> {
-                    batch.getCompanies().add(company);
-                });
-            }
-
-            Batch updatedBatch = batchRepository.save(batch);
-            log.info("Successfully assigned {} companies to batch {}", updatedBatch.getCompanies().size(), id);
-
-            // Return simple Map to avoid Jackson serialization errors
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Companies assigned successfully",
-                    "batchId", id,
-                    "companyCount", updatedBatch.getCompanies().size()));
-        } catch (Exception e) {
-            log.error("Error assigning companies to batch {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(500).body(Map.of("error", "An unexpected error occurred"));
-        }
+    @DeleteMapping("/{id}/companies/{companyId}")
+    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    public ResponseEntity<?> unassignCompany(@PathVariable Long id, @PathVariable Long companyId) {
+        int count = batchAssignmentService.unassignCompany(id, companyId);
+        return ResponseEntity.ok(Map.of(
+                "success", true, "batchId", id, "companyCount", count));
     }
 
     /** Turns {@code [batchId, count]} rows from a grouped count query into a lookup. */
