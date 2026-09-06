@@ -3,6 +3,7 @@ package com.skillbridge.bulkupload.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillbridge.auth.entity.Role;
 import com.skillbridge.auth.entity.User;
+import com.skillbridge.auth.security.TemporaryPasswordGenerator;
 import com.skillbridge.auth.repository.RoleRepository;
 import com.skillbridge.auth.repository.UserRepository;
 import com.skillbridge.bulkupload.dto.StudentUploadDTO;
@@ -170,7 +171,7 @@ public class BulkUploadJobService {
             throw new IllegalArgumentException("Roll number already exists: " + dto.getRollNumber());
         }
 
-        String temporaryPassword = dto.getEmail();
+        String temporaryPassword = TemporaryPasswordGenerator.generate();
 
         User user = User.builder()
                 .email(dto.getEmail())
@@ -219,7 +220,7 @@ public class BulkUploadJobService {
             throw new IllegalArgumentException("Email already exists: " + dto.getEmail());
         }
 
-        String temporaryPassword = dto.getEmail();
+        String temporaryPassword = TemporaryPasswordGenerator.generate();
 
         User user = User.builder()
                 .email(dto.getEmail())

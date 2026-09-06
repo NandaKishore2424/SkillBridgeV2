@@ -3,6 +3,7 @@ package com.skillbridge.bulkupload.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillbridge.auth.entity.Role;
 import com.skillbridge.auth.entity.User;
+import com.skillbridge.auth.security.TemporaryPasswordGenerator;
 import com.skillbridge.auth.repository.RoleRepository;
 import com.skillbridge.auth.repository.UserRepository;
 import com.skillbridge.bulkupload.dto.BulkUploadResponse;
@@ -24,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -239,7 +241,7 @@ public class BulkUploadService {
 
         // Create User
         // Password is email for now
-        String temporaryPassword = dto.getEmail();
+        String temporaryPassword = TemporaryPasswordGenerator.generate();
 
         User user = User.builder()
                 .email(dto.getEmail())
@@ -383,7 +385,7 @@ public class BulkUploadService {
             throw new IllegalArgumentException("Email already exists: " + dto.getEmail());
         }
 
-        String temporaryPassword = dto.getEmail();
+        String temporaryPassword = TemporaryPasswordGenerator.generate();
 
         User user = User.builder()
                 .email(dto.getEmail())
@@ -429,30 +431,40 @@ public class BulkUploadService {
         return bulkUploadRepository.findByCollegeIdOrderByCreatedAtDesc(collegeId);
     }
 
+    /**
+     * Reissues the invitation for an account that has not completed first login.
+     *
+     * <p>This used to send the user's own email address as the password, because
+     * that is what provisioning set it to. Provisioning now generates a random
+     * one, so resending had to change with it: the old code would have mailed a
+     * password that does not work. A new temporary password is generated and
+     * persisted here, which also invalidates the previous one -- correct
+     * behaviour for a reissue, and the reason the account is re-flagged
+     * {@code mustChangePassword}.
+     *
+     * <p>Guarded on {@code PENDING_SETUP} so this cannot be used to reset the
+     * password of an account already in use.
+     */
+    @Transactional
     public void resendInvitation(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // This is simplified. In prod, generate a new random password or reset token.
-        // For this flow, we are sending current email as password or we should reset
-        // password.
-        // Let's assume we reset password to email again or send a link.
-        // But the requirement said "student can login once and reset their password".
-        // The user effectively knows the pattern (email = password).
-        // So just re-sending the same email (or slightly different) is enough.
-
-        // However, if the user CHANGED the password, we shouldn't send the old logic.
-        // We should check if accountStatus is "PENDING_SETUP".
-
-        if ("PENDING_SETUP".equals(user.getAccountStatus())) {
-            try {
-                emailService.sendWelcomeEmail(user, user.getEmail());
-            } catch (Exception e) {
-                log.error("Failed to resend welcome email", e);
-                throw new InternalServerException("Failed to send email");
-            }
-        } else {
+        if (!"PENDING_SETUP".equals(user.getAccountStatus())) {
             throw new ConflictException("User is already active or not in pending state");
+        }
+
+        String temporaryPassword = TemporaryPasswordGenerator.generate();
+        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+        user.setMustChangePassword(true);
+        user.setInvitationSentAt(java.time.LocalDateTime.now());
+        userRepository.save(user);
+
+        try {
+            emailService.sendWelcomeEmail(user, temporaryPassword);
+        } catch (Exception e) {
+            log.error("Failed to resend welcome email", e);
+            throw new InternalServerException("Failed to send email");
         }
     }
 }

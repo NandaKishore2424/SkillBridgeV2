@@ -1,5 +1,6 @@
 package com.skillbridge.common.config;
 
+import com.skillbridge.auth.filter.PasswordChangeRequiredFilter;
 import com.skillbridge.auth.filter.TokenAuthenticationFilter;
 import com.skillbridge.common.tenant.TenantFilter;
 import com.skillbridge.common.throttle.RateLimitingFilter;
@@ -24,15 +25,18 @@ import java.util.List;
 public class SecurityConfig {
 
     private final TokenAuthenticationFilter tokenAuthenticationFilter;
+    private final PasswordChangeRequiredFilter passwordChangeRequiredFilter;
     private final TenantFilter tenantFilter;
     private final RateLimitingFilter rateLimitingFilter;
 
     public SecurityConfig(
             TokenAuthenticationFilter tokenAuthenticationFilter,
+            PasswordChangeRequiredFilter passwordChangeRequiredFilter,
             TenantFilter tenantFilter,
             RateLimitingFilter rateLimitingFilter
     ) {
         this.tokenAuthenticationFilter = tokenAuthenticationFilter;
+        this.passwordChangeRequiredFilter = passwordChangeRequiredFilter;
         this.tenantFilter = tenantFilter;
         this.rateLimitingFilter = rateLimitingFilter;
     }
@@ -47,7 +51,8 @@ public class SecurityConfig {
             )
             .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterAfter(tenantFilter, TokenAuthenticationFilter.class)
+            .addFilterAfter(passwordChangeRequiredFilter, TokenAuthenticationFilter.class)
+            .addFilterAfter(tenantFilter, PasswordChangeRequiredFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/colleges/active").permitAll() // Public endpoint for registration
