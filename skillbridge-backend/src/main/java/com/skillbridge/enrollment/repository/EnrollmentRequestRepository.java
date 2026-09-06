@@ -30,6 +30,28 @@ public interface EnrollmentRequestRepository extends JpaRepository<EnrollmentReq
      *
      * <p>Trainer is a LEFT join because a student application has none.
      */
+    /**
+     * Pending requests for one college.
+     *
+     * <p>This replaces {@code findAllPending()}, which had no college predicate
+     * at all and returned every college's pending requests to whichever admin
+     * asked. That was invisible because the Hibernate {@code collegeFilter} was
+     * believed to scope it — it does not; see {@link TenantFilterAspect}. The
+     * predicate is explicit here so the query is correct whether or not any
+     * filter is enabled.
+     */
+    @Query("""
+           SELECT r FROM EnrollmentRequest r
+           JOIN FETCH r.batch
+           JOIN FETCH r.student
+           LEFT JOIN FETCH r.trainer
+           WHERE r.status = com.skillbridge.enrollment.domain.EnrollmentStatus.PENDING
+             AND r.collegeId = :collegeId
+           ORDER BY r.createdAt DESC
+           """)
+    List<EnrollmentRequest> findPendingForCollege(@Param("collegeId") Long collegeId);
+
+    /** Every pending request, across all colleges. SYSTEM_ADMIN only. */
     @Query("""
            SELECT r FROM EnrollmentRequest r
            JOIN FETCH r.batch

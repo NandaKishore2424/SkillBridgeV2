@@ -7,6 +7,8 @@ import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.common.exception.BadRequestException;
 import com.skillbridge.common.exception.BusinessRuleException;
 import com.skillbridge.common.exception.ConflictException;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 import com.skillbridge.common.exception.ResourceNotFoundException;
 import com.skillbridge.common.audit.AuditAction;
 import com.skillbridge.common.audit.AuditLogService;
@@ -182,9 +184,24 @@ public class EnrollmentManagementService {
         return convertToRequestDTO(saved);
     }
 
+    /**
+     * Pending requests the caller may act on.
+     *
+     * <p>Scoped explicitly rather than relying on the Hibernate filter: this
+     * used to call {@code findAllPending()}, which has no college predicate, so
+     * a college admin was served every college's pending requests — student
+     * names, roll numbers and batch names included. It went unnoticed because
+     * {@code collegeFilter} was assumed to be scoping it, and that filter has
+     * never actually applied.
+     */
     @Transactional(readOnly = true)
     public List<EnrollmentRequestDTO> getPendingRequests() {
-        return requestRepository.findAllPending().stream()
+        AuthenticatedUser caller = SecurityUtils.currentUser();
+        List<EnrollmentRequest> rows = caller.isSystemAdmin()
+                ? requestRepository.findAllPending()
+                : requestRepository.findPendingForCollege(SecurityUtils.requireCollegeId());
+
+        return rows.stream()
                 .map(this::convertToRequestDTO)
                 .collect(Collectors.toList());
     }

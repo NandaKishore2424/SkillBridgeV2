@@ -7,14 +7,22 @@ import com.skillbridge.common.exception.ResourceNotFoundException;
 /**
  * Asserts that a resource belongs to the caller's college.
  *
- * <p><b>Why this is needed at all, given {@code TenantFilter} exists.</b>
- * {@link TenantFilter} enables the Hibernate {@code collegeFilter} for every
- * request, and that correctly scopes <em>queries</em> — which is why every list
- * endpoint returned only the caller's own rows. But a Hibernate filter is not
- * applied to a load by primary key: {@code findById} goes to
- * {@code Session.find()}, which checks the persistence context and the second
- * level cache before it ever builds a filtered query. So every by-id endpoint
- * was unscoped.
+ * <p><b>Why this is needed even though a Hibernate filter exists.</b>
+ * {@link TenantFilterAspect} enables {@code collegeFilter}, which scopes
+ * <em>queries</em>. A filter is not applied to a load by primary key:
+ * {@code findById} goes to {@code Session.find()}, which checks the persistence
+ * context and the second-level cache before it ever builds a filtered query. So
+ * every by-id endpoint is unscoped no matter how healthy the filter is, and
+ * needs an explicit check.
+ *
+ * <p><b>An earlier version of this note claimed the filter "correctly scopes
+ * queries — which is why every list endpoint returned only the caller's own
+ * rows". That was wrong.</b> The filter was enabled from a servlet filter and,
+ * with {@code open-in-view: false}, applied to nothing at all; list endpoints
+ * returned only the caller's rows because they name their college in the query,
+ * not because of any filter. The mechanism is fixed and tested now
+ * ({@code TenantFilterAspectTest}), but the lesson stands: this class is the
+ * primary control on by-id paths, not a redundant one.
  *
  * <p>That was not theoretical. A second college's administrator could read the
  * first college's students, trainers, batches, companies and enrollment lists
