@@ -126,14 +126,14 @@ export function Login() {
                 </div>
 
                 {/* Forgot Password Link */}
-                <div className="flex justify-end">
-                  <Link
-                    to="/forgot-password"
-                    className="text-sm text-primary hover:underline"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
+                {/*
+                  "Forgot password?" removed 2026-09-06. There is no reset flow:
+                  AuthController exposes login, refresh, change-password,
+                  first-login and logout, and nothing else. EmailService has a
+                  sendPasswordResetEmail method that no endpoint calls. Offering
+                  the link sent users to a dead route. Restore it when Phase 01's
+                  reset flow is actually built.
+                */}
 
                 {/* Submit Button */}
                 <Button type="submit" className="w-full" disabled={isLoading}>

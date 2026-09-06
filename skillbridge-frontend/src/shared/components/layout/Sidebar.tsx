@@ -60,11 +60,6 @@ const sidebarConfig: SidebarConfig = {
       href: '/admin/companies',
       icon: Briefcase,
     },
-    {
-      title: 'Settings',
-      href: '/admin/settings',
-      icon: Settings,
-    },
   ],
   COLLEGE_ADMIN: [
     {
@@ -122,24 +117,9 @@ const sidebarConfig: SidebarConfig = {
       icon: LayoutDashboard,
     },
     {
-      title: 'My Batches',
-      href: '/student/batches',
-      icon: BookOpen,
-    },
-    {
-      title: 'My Progress',
-      href: '/student/progress',
-      icon: LayoutDashboard,
-    },
-    {
       title: 'Feedback',
       href: '/student/feedback',
       icon: MessageSquare,
-    },
-    {
-      title: 'Placements',
-      href: '/student/placements',
-      icon: Briefcase,
     },
   ],
 }

@@ -150,12 +150,13 @@ export function Header({
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/profile" className="flex items-center gap-2 cursor-pointer">
-                    <User className="h-4 w-4" />
-                    <span>Profile</span>
-                  </Link>
-                </DropdownMenuItem>
+                {/*
+                  Profile removed 2026-09-06: /profile has never had a route, so
+                  this fell through to the catch-all and silently re-rendered
+                  whatever page you were on. Students have a real profile screen
+                  at /student/profile-setup; there is no equivalent for the other
+                  roles yet, which is why this is dropped rather than repointed.
+                */}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={onLogout}

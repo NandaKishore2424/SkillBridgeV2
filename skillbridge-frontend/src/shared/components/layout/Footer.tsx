@@ -18,20 +18,12 @@ export function Footer() {
               © {currentYear} SkillBridge. All rights reserved.
             </p>
           </div>
-          <div className="flex items-center gap-6">
-            <Link
-              to="/privacy"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Privacy Policy
-            </Link>
-            <Link
-              to="/terms"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Terms of Service
-            </Link>
-          </div>
+          {/*
+            Privacy and Terms links removed 2026-09-06 -- neither page exists,
+            so both were dead routes. Legal pages are worth having before this is
+            shown to real colleges; a link to a page that silently does nothing
+            is not.
+          */}
         </div>
       </div>
     </footer>
