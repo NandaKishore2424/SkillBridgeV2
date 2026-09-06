@@ -12,6 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.common.api.DeprecatedEndpoint;
 
 @RestController
 @RequestMapping("/api/v1/trainers")
@@ -30,8 +31,22 @@ public class TrainerController {
         return ResponseEntity.ok(trainer);
     }
 
+    /**
+     * A trainer by id.
+     *
+     * <p>STUDENT removed from the guard for the same reason as
+     * {@code GET /students/{id}}: TrainerDTO carries the email address, and a
+     * tenant check alone does not stop id-walking within a college. Students
+     * see the trainers on their own batches through the batch endpoints, which
+     * are scoped to batches they are enrolled in.
+     */
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN') or hasRole('TRAINER') or hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'TRAINER')")
+    @DeprecatedEndpoint(
+            since = "2026-09-06",
+            sunset = "2026-12-31",
+            replacement = "/api/v1/admin/trainers/{id}",
+            reason = "Duplicate of the admin endpoint.")
     public ResponseEntity<TrainerDTO> getTrainerById(@PathVariable Long id) {
         TrainerDTO trainer = trainerService.getTrainerById(id);
         return ResponseEntity.ok(trainer);

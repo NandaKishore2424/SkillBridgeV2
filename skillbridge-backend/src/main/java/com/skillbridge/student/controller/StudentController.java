@@ -1,6 +1,7 @@
 package com.skillbridge.student.controller;
 
 import com.skillbridge.student.dto.*;
+import com.skillbridge.common.api.DeprecatedEndpoint;
 import com.skillbridge.student.dto.SkillDTO;
 import com.skillbridge.student.entity.Skill;
 import com.skillbridge.student.service.StudentService;
@@ -35,8 +36,25 @@ public class StudentController {
         return ResponseEntity.ok(student);
     }
 
+    /**
+     * A student by id.
+     *
+     * <p><b>STUDENT was removed from the guard on 2026-09-06.</b> The tenant
+     * check passes for any student in the same college, so with STUDENT allowed
+     * every student could read every classmate's full name, email address and
+     * roll number by walking ids. Verified against live data before the change.
+     * A student reads their own record through {@code GET /students/me}.
+     *
+     * <p>Duplicated by {@code GET /admin/students/{id}}, which has the same body
+     * and the correct guard, so this one is on its way out.
+     */
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN') or hasRole('TRAINER') or hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'TRAINER')")
+    @DeprecatedEndpoint(
+            since = "2026-09-06",
+            sunset = "2026-12-31",
+            replacement = "/api/v1/admin/students/{id}",
+            reason = "Duplicate of the admin endpoint; this one shipped with a role guard that let any student read any classmate.")
     public ResponseEntity<StudentDTO> getStudentById(@PathVariable Long id) {
         StudentDTO student = studentService.getStudentById(id);
         return ResponseEntity.ok(student);
