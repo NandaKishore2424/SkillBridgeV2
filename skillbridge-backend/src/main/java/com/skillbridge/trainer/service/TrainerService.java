@@ -103,7 +103,7 @@ public class TrainerService {
     }
 
     public Page<TrainerDTO> getTrainersByCollege(Long collegeId, Pageable pageable) {
-        return trainerRepository.findByCollegeId(collegeId, pageable)
+        return trainerRepository.findByCollegeIdWithUser(collegeId, pageable)
                 .map(this::mapToDTO);
     }
 

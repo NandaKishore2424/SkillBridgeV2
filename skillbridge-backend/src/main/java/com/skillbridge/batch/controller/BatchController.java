@@ -73,9 +73,14 @@ public class BatchController {
             return ResponseEntity.badRequest().build();
         }
 
-        Page<Batch> batches = batchRepository.findByCollegeId(collegeId, PageRequest.of(page, size));
+        Page<Batch> batches = batchRepository.findByCollegeIdWithCollege(collegeId, PageRequest.of(page, size));
+        List<Long> ids = batches.getContent().stream().map(Batch::getId).toList();
+        Map<Long, Long> trainerCounts = countsByBatchId(batchRepository.countTrainersByBatchIds(ids));
+        Map<Long, Long> companyCounts = countsByBatchId(batchRepository.countCompaniesByBatchIds(ids));
         List<BatchDTO> batchDTOs = batches.getContent().stream()
-                .map(this::convertToDTO)
+                .map(b -> convertToDTO(b,
+                        trainerCounts.getOrDefault(b.getId(), 0L),
+                        companyCounts.getOrDefault(b.getId(), 0L)))
                 .collect(java.util.stream.Collectors.toList());
         return ResponseEntity.ok(PagedResponse.<BatchDTO>builder()
             .items(batchDTOs)
@@ -90,7 +95,7 @@ public class BatchController {
     @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'TRAINER')")
     public ResponseEntity<BatchDTO> getBatchById(@PathVariable Long id) {
         log.info("Fetching batch with id: {}", id);
-        Optional<Batch> batch = batchRepository.findById(id);
+        Optional<Batch> batch = batchRepository.findByIdWithCollege(id);
         return batch.map(b -> ResponseEntity.ok(convertToDTO(b)))
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -354,8 +359,35 @@ public class BatchController {
         }
     }
 
-    // Helper method to convert Batch entity to DTO
+    /** Turns {@code [batchId, count]} rows from a grouped count query into a lookup. */
+    private static Map<Long, Long> countsByBatchId(List<Object[]> rows) {
+        return rows.stream().collect(java.util.stream.Collectors.toMap(
+                r -> (Long) r[0], r -> (Long) r[1]));
+    }
+
+    /**
+     * Single-batch mapping, for the write paths where there is no page to
+     * aggregate over.
+     *
+     * <p>Re-reads through {@code findByIdWithCollege} rather than mapping the
+     * entity it was handed: after {@code save} the {@code college} may still be
+     * an uninitialised proxy, and with {@code open-in-view: false} reading its
+     * name would throw once the session closed.
+     */
     private BatchDTO convertToDTO(Batch batch) {
+        Batch loaded = batchRepository.findByIdWithCollege(batch.getId()).orElse(batch);
+        List<Long> ids = List.of(loaded.getId());
+        return convertToDTO(loaded,
+                countsByBatchId(batchRepository.countTrainersByBatchIds(ids)).getOrDefault(loaded.getId(), 0L),
+                countsByBatchId(batchRepository.countCompaniesByBatchIds(ids)).getOrDefault(loaded.getId(), 0L));
+    }
+
+    /**
+     * The real mapper. Touches nothing lazy: {@code college} must already be
+     * fetch-joined and both counts are supplied by the caller, so this cannot
+     * throw {@code LazyInitializationException} however it is reached.
+     */
+    private BatchDTO convertToDTO(Batch batch, long trainerCount, long companyCount) {
         return BatchDTO.builder()
                 .id(batch.getId())
                 .collegeId(batch.getCollege().getId())
@@ -367,8 +399,8 @@ public class BatchController {
                 .endDate(batch.getEndDate())
                 .createdAt(batch.getCreatedAt())
                 .updatedAt(batch.getUpdatedAt())
-                .trainerCount(batch.getTrainers() != null ? batch.getTrainers().size() : 0)
-                .companyCount(batch.getCompanies() != null ? batch.getCompanies().size() : 0)
+                .trainerCount((int) trainerCount)
+                .companyCount((int) companyCount)
                 .studentCount(0) // TODO: Add enrollments relationship
                 .build();
     }

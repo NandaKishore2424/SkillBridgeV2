@@ -4,6 +4,8 @@ import com.skillbridge.student.entity.Student;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
@@ -27,4 +29,17 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     boolean existsByUser_Id(Long userId);
 
     long countByCollegeId(Long collegeId);
+
+    /**
+     * Page of students with {@code user} eagerly joined.
+     *
+     * <p>StudentDTO exposes {@code email} and {@code isActive}, both of which
+     * live on {@code User}. That association is lazy, and with
+     * {@code open-in-view: false} the mapper runs after the session closes, so
+     * a plain {@code findByCollegeId} throws {@code LazyInitializationException}
+     * on the first row. A to-one fetch join keeps pagination in SQL.
+     */
+    @Query(value = "select s from Student s join fetch s.user where s.college.id = :collegeId",
+           countQuery = "select count(s) from Student s where s.college.id = :collegeId")
+    Page<Student> findByCollegeIdWithUser(@Param("collegeId") Long collegeId, Pageable pageable);
 }

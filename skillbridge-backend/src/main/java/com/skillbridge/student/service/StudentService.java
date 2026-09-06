@@ -115,7 +115,7 @@ public class StudentService {
     }
 
     public Page<StudentDTO> getStudentsByCollege(Long collegeId, Pageable pageable) {
-        return studentRepository.findByCollegeId(collegeId, pageable)
+        return studentRepository.findByCollegeIdWithUser(collegeId, pageable)
                 .map(this::mapToDTO);
     }
 
