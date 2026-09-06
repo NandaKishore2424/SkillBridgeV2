@@ -48,3 +48,6 @@ dist/
 # committed instead, so the skills can be re-fetched on any machine.
 .claude/
 .agents/
+
+# Local helper, not part of the project.
+set-db-password.sh
