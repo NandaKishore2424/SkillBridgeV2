@@ -22,11 +22,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.skillbridge.common.exception.ConflictException;
 import com.skillbridge.common.exception.InternalServerException;
 import com.skillbridge.common.tenant.TenantGuard;
+import com.skillbridge.batch.repository.BatchRepository;
+import com.skillbridge.common.dto.IdGrouping;
 import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
@@ -34,6 +37,7 @@ import com.skillbridge.common.exception.ResourceNotFoundException;
 @Slf4j
 public class TrainerService {
     private final TrainerRepository trainerRepository;
+    private final BatchRepository batchRepository;
     private final UserRepository userRepository;
     private final CollegeRepository collegeRepository;
     private final RoleRepository roleRepository;
@@ -100,14 +104,34 @@ public class TrainerService {
     }
 
     public List<TrainerDTO> getAllTrainersByCollege(Long collegeId) {
-        return trainerRepository.findByCollegeIdWithUser(collegeId).stream()
-                .map(this::mapToDTO)
-                .collect(Collectors.toList());
+        return mapPage(trainerRepository.findByCollegeIdWithUser(collegeId));
     }
 
     public Page<TrainerDTO> getTrainersByCollege(Long collegeId, Pageable pageable) {
-        return trainerRepository.findByCollegeIdWithUser(collegeId, pageable)
-                .map(this::mapToDTO);
+        Page<Trainer> page = trainerRepository.findByCollegeIdWithUser(collegeId, pageable);
+        return new org.springframework.data.domain.PageImpl<>(
+                mapPage(page.getContent()), pageable, page.getTotalElements());
+    }
+
+    /**
+     * Maps a page of trainers, resolving assigned batches in one grouped query.
+     *
+     * <p>The list page renders a batch count per trainer. Fetching that per row
+     * would be an N+1; this is the same shape used for students.
+     */
+    private List<TrainerDTO> mapPage(List<Trainer> trainers) {
+        if (trainers.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = trainers.stream().map(Trainer::getId).toList();
+        Map<Long, List<Long>> batchesByTrainer =
+                IdGrouping.byOwner(batchRepository.findBatchIdsByTrainerIds(ids));
+
+        return trainers.stream().map(trainer -> {
+            TrainerDTO dto = mapToDTO(trainer);
+            dto.setAssignedBatchIds(IdGrouping.forOwner(batchesByTrainer, trainer.getId()));
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     @Transactional

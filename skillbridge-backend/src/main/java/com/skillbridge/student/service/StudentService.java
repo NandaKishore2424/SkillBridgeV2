@@ -29,6 +29,8 @@ import com.skillbridge.common.exception.ConflictException;
 import com.skillbridge.common.exception.ForbiddenException;
 import com.skillbridge.common.exception.InternalServerException;
 import com.skillbridge.common.tenant.TenantGuard;
+import com.skillbridge.batch.repository.BatchRepository;
+import com.skillbridge.common.dto.IdGrouping;
 import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
@@ -41,6 +43,7 @@ public class StudentService {
     private final SkillRepository skillRepository;
     private final StudentSkillRepository studentSkillRepository;
     private final StudentProjectRepository studentProjectRepository;
+    private final BatchRepository batchRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final AIEventPublisher aiEventPublisher; // injected for async AI notifications
@@ -162,10 +165,17 @@ public class StudentService {
                         sp -> sp.getStudent().getId(),
                         Collectors.mapping(this::mapProjectToDTO, Collectors.toList())));
 
+        Map<Long, List<Long>> batchesByStudent =
+                IdGrouping.byOwner(batchRepository.findBatchIdsByStudentIds(ids));
+
         return students.stream()
-                .map(student -> mapToDTO(student,
-                        skillsByStudent.getOrDefault(student.getId(), List.of()),
-                        projectsByStudent.getOrDefault(student.getId(), List.of())))
+                .map(student -> {
+                    StudentDTO dto = mapToDTO(student,
+                            skillsByStudent.getOrDefault(student.getId(), List.of()),
+                            projectsByStudent.getOrDefault(student.getId(), List.of()));
+                    dto.setEnrolledBatchIds(IdGrouping.forOwner(batchesByStudent, student.getId()));
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 

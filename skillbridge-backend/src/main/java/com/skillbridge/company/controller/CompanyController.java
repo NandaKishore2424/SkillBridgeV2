@@ -5,6 +5,8 @@ import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
 import com.skillbridge.common.tenant.TenantGuard;
+import com.skillbridge.batch.repository.BatchRepository;
+import com.skillbridge.common.dto.IdGrouping;
 import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
@@ -20,6 +22,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.security.SecurityUtils;
@@ -33,6 +36,7 @@ public class CompanyController {
 
     private final CompanyRepository companyRepository;
     private final CollegeRepository collegeRepository;
+    private final BatchRepository batchRepository;
     private final CollegeAdminRepository collegeAdminRepository;
 
     @GetMapping
@@ -63,8 +67,17 @@ public class CompanyController {
             companies = companyRepository.findByCollegeIdWithCollege(userCollegeId, PageRequest.of(page, size));
         }
 
+        List<Long> companyIds = companies.getContent().stream().map(Company::getId).toList();
+        Map<Long, List<Long>> batchesByCompany = companyIds.isEmpty()
+                ? Map.of()
+                : IdGrouping.byOwner(batchRepository.findBatchIdsByCompanyIds(companyIds));
+
         List<CompanyDTO> items = companies.getContent().stream()
-                .map(this::convertToDTO)
+                .map(c -> {
+                    CompanyDTO dto = convertToDTO(c);
+                    dto.setLinkedBatchIds(IdGrouping.forOwner(batchesByCompany, c.getId()));
+                    return dto;
+                })
                 .toList();
 
         return ResponseEntity.ok(PagedResponse.<CompanyDTO>builder()

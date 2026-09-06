@@ -29,6 +29,16 @@ public class StudentDTO {
     private String bio;
     private List<StudentSkillDTO> skills;
     private List<StudentProjectDTO> projects;
+    /**
+     * Batches this student is enrolled in. The list page renders a count from it.
+     *
+     * <p>The React list page has read this field since it was written; the
+     * backend never sent it, so the column showed "None" for every row
+     * regardless of the data. Populated for list responses in one grouped
+     * query per page — never per row.
+     */
+    private List<Long> enrolledBatchIds;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

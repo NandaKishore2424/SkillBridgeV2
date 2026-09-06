@@ -122,4 +122,20 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
     /** As {@link #findByIdWithTrainers}, for companies and their college. */
     @Query("select distinct b from Batch b left join fetch b.companies c left join fetch c.college where b.id = :id")
     Optional<Batch> findByIdWithCompanies(@Param("id") Long id);
+
+    // --- reverse lookups: which batches does X belong to -------------------
+    //
+    // Each returns [ownerId, batchId] pairs for a whole page in one query. The
+    // list DTOs expose these as counts; resolving them per row would be the
+    // same N+1 that made GET /admin/students take ten seconds.
+
+    @Query("select t.id, b.id from Batch b join b.trainers t where t.id in :trainerIds")
+    List<Object[]> findBatchIdsByTrainerIds(@Param("trainerIds") Collection<Long> trainerIds);
+
+    @Query("select c.id, b.id from Batch b join b.companies c where c.id in :companyIds")
+    List<Object[]> findBatchIdsByCompanyIds(@Param("companyIds") Collection<Long> companyIds);
+
+    /** Enrollment is a separate table, not a join table on Batch. */
+    @Query("select e.student.id, e.batch.id from Enrollment e where e.student.id in :studentIds")
+    List<Object[]> findBatchIdsByStudentIds(@Param("studentIds") Collection<Long> studentIds);
 }
