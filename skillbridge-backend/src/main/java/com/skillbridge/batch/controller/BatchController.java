@@ -78,10 +78,12 @@ public class BatchController {
         List<Long> ids = batches.getContent().stream().map(Batch::getId).toList();
         Map<Long, Long> trainerCounts = countsByBatchId(batchRepository.countTrainersByBatchIds(ids));
         Map<Long, Long> companyCounts = countsByBatchId(batchRepository.countCompaniesByBatchIds(ids));
+        Map<Long, Long> studentCounts = countsByBatchId(batchRepository.countEnrollmentsByBatchIds(ids));
         List<BatchDTO> batchDTOs = batches.getContent().stream()
                 .map(b -> convertToDTO(b,
                         trainerCounts.getOrDefault(b.getId(), 0L),
-                        companyCounts.getOrDefault(b.getId(), 0L)))
+                        companyCounts.getOrDefault(b.getId(), 0L),
+                        studentCounts.getOrDefault(b.getId(), 0L)))
                 .collect(java.util.stream.Collectors.toList());
         return ResponseEntity.ok(PagedResponse.<BatchDTO>builder()
             .items(batchDTOs)
@@ -385,7 +387,8 @@ public class BatchController {
         List<Long> ids = List.of(loaded.getId());
         return convertToDTO(loaded,
                 countsByBatchId(batchRepository.countTrainersByBatchIds(ids)).getOrDefault(loaded.getId(), 0L),
-                countsByBatchId(batchRepository.countCompaniesByBatchIds(ids)).getOrDefault(loaded.getId(), 0L));
+                countsByBatchId(batchRepository.countCompaniesByBatchIds(ids)).getOrDefault(loaded.getId(), 0L),
+                countsByBatchId(batchRepository.countEnrollmentsByBatchIds(ids)).getOrDefault(loaded.getId(), 0L));
     }
 
     /**
@@ -393,7 +396,7 @@ public class BatchController {
      * fetch-joined and both counts are supplied by the caller, so this cannot
      * throw {@code LazyInitializationException} however it is reached.
      */
-    private BatchDTO convertToDTO(Batch batch, long trainerCount, long companyCount) {
+    private BatchDTO convertToDTO(Batch batch, long trainerCount, long companyCount, long studentCount) {
         return BatchDTO.builder()
                 .id(batch.getId())
                 .collegeId(batch.getCollege().getId())
@@ -407,7 +410,9 @@ public class BatchController {
                 .updatedAt(batch.getUpdatedAt())
                 .trainerCount((int) trainerCount)
                 .companyCount((int) companyCount)
-                .studentCount(0) // TODO: Add enrollments relationship
+                // Was hardcoded 0 with a TODO. The batch detail page reads it for
+                // its "Enrollments (n)" tab label, so the placeholder was visible.
+                .studentCount((int) studentCount)
                 .build();
     }
 

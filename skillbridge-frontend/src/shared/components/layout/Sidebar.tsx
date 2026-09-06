@@ -23,7 +23,6 @@ import {
   UserCog,
   PlusCircle,
   Menu,
-  Settings,
   MessageSquare,
 } from 'lucide-react'
 

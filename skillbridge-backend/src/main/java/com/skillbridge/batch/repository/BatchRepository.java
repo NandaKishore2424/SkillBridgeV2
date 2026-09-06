@@ -138,4 +138,8 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
     /** Enrollment is a separate table, not a join table on Batch. */
     @Query("select e.student.id, e.batch.id from Enrollment e where e.student.id in :studentIds")
     List<Object[]> findBatchIdsByStudentIds(@Param("studentIds") Collection<Long> studentIds);
+
+    /** {@code [batchId, enrolledCount]} for a page of batches, in one query. */
+    @Query("select e.batch.id, count(e.id) from Enrollment e where e.batch.id in :batchIds group by e.batch.id")
+    List<Object[]> countEnrollmentsByBatchIds(@Param("batchIds") Collection<Long> batchIds);
 }

@@ -148,10 +148,16 @@ function TrainersTab({ batchId, trainers, assignedTrainerIds }: any) {
   const { showSuccess, showError } = useToastNotifications()
   const [selectedTrainers, setSelectedTrainers] = useState<number[]>([])
 
-  const { data: allTrainers, isLoading } = useQuery({
+  // Two bugs lived in these three lines. `queryFn: getTrainers` hands React
+  // Query's context object to getTrainers' `page` parameter, and the response is
+  // a PagedResponse envelope, not an array -- so `allTrainers.map(...)` below
+  // threw "map is not a function" and took the whole page down to a white
+  // screen. Both are now explicit.
+  const { data: trainersPage, isLoading } = useQuery({
     queryKey: ['admin', 'trainers'],
-    queryFn: getTrainers,
+    queryFn: () => getTrainers(0, 200),
   })
+  const allTrainers = trainersPage?.items ?? []
 
   // Fetch assigned trainers
   const { data: assignedTrainers } = useQuery({
@@ -231,7 +237,7 @@ function TrainersTab({ batchId, trainers, assignedTrainerIds }: any) {
             )}
 
             <div className="space-y-2">
-              {allTrainers?.map((trainer) => (
+              {allTrainers.map((trainer) => (
                 <div
                   key={trainer.id}
                   className="flex items-center space-x-2 p-3 border rounded-md hover:bg-muted/50"
@@ -292,10 +298,11 @@ function CompaniesTab({ batchId, companies, linkedCompanyIds }: any) {
   const { showSuccess, showError } = useToastNotifications()
   const [selectedCompanies, setSelectedCompanies] = useState<number[]>([])
 
-  const { data: allCompanies, isLoading } = useQuery({
+  const { data: companiesPage, isLoading } = useQuery({
     queryKey: ['admin', 'companies'],
-    queryFn: getCompanies,
+    queryFn: () => getCompanies(0, 200),
   })
+  const allCompanies = companiesPage?.items ?? []
 
   // Fetch assigned companies
   const { data: assignedCompanies } = useQuery({
@@ -368,7 +375,7 @@ function CompaniesTab({ batchId, companies, linkedCompanyIds }: any) {
             )}
 
             <div className="space-y-2">
-              {allCompanies?.map((company) => (
+              {allCompanies.map((company) => (
                 <div
                   key={company.id}
                   className="flex items-center space-x-2 p-3 border rounded-md hover:bg-muted/50"
@@ -1033,13 +1040,20 @@ export function BatchDetails() {
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="trainers">
-                  Trainers ({batch.trainers?.length || 0})
+                  {/*
+                    batch.trainers / batch.companies / batch.enrolledCount are not
+                    fields BatchDTO has ever sent, so every one of these labels read
+                    (0) regardless of the data -- while the tab body below correctly
+                    showed "Currently Assigned (1)". The DTO sends counts, not
+                    collections.
+                  */}
+                  Trainers ({batch.trainerCount ?? 0})
                 </TabsTrigger>
                 <TabsTrigger value="companies">
-                  Companies ({batch.companies?.length || 0})
+                  Companies ({batch.companyCount ?? 0})
                 </TabsTrigger>
                 <TabsTrigger value="enrollments">
-                  Enrollments ({batch.enrolledCount || 0})
+                  Enrollments ({batch.studentCount ?? 0})
                 </TabsTrigger>
                 <TabsTrigger value="syllabus">Syllabus</TabsTrigger>
               </TabsList>

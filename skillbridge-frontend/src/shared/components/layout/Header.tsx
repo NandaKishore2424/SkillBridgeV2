@@ -8,7 +8,7 @@
  */
 
 import { Link } from 'react-router-dom'
-import { Menu, X, LogOut, User } from 'lucide-react'
+import { Menu, X, LogOut } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
 import {
   DropdownMenu,
