@@ -4,6 +4,8 @@ import com.skillbridge.auth.dto.AuthResponse;
 import com.skillbridge.auth.dto.LoginRequest;
 import com.skillbridge.auth.dto.RefreshTokenRequest;
 import com.skillbridge.auth.entity.User;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.SecurityUtils;
 import com.skillbridge.auth.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -63,9 +65,18 @@ public class AuthController {
         }
     }
 
+    /**
+     * <p>Takes the principal through {@link SecurityUtils} rather than
+     * {@code @AuthenticationPrincipal User}. The security context holds an
+     * {@link AuthenticatedUser}, not the {@code User} entity, so Spring matched
+     * no argument and injected {@code null} — every call to this endpoint threw
+     * NullPointerException and returned 500. That mattered more than it looks:
+     * this is one of only two ways an account holding a temporary password can
+     * get itself into a usable state.
+     */
     @PostMapping("/change-password")
-    public ResponseEntity<Void> changePassword(@AuthenticationPrincipal User user,
-            @RequestBody java.util.Map<String, String> request) {
+    public ResponseEntity<Void> changePassword(@RequestBody java.util.Map<String, String> request) {
+        AuthenticatedUser user = SecurityUtils.currentUser();
         String oldPassword = request.get("oldPassword");
         String newPassword = request.get("newPassword");
         authService.changePassword(user.getId(), oldPassword, newPassword);

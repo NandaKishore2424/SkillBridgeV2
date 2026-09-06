@@ -1,6 +1,9 @@
 package com.skillbridge.bulkupload.controller;
 
 import com.skillbridge.auth.entity.User;
+import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.bulkupload.dto.BulkUploadHistoryDTO;
 import com.skillbridge.bulkupload.dto.BulkUploadResponse;
 import com.skillbridge.bulkupload.entity.BulkUpload;
 import com.skillbridge.bulkupload.service.BulkUploadService;
@@ -32,18 +35,10 @@ public class BulkUploadController {
     @PostMapping("/students/bulk-upload")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<BulkUploadResponse> uploadStudents(
-            @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal User user) {
+            @RequestParam("file") MultipartFile file) {
 
-        // Assuming user.getCollegeId() is available from the authenticated user object
-        // If not populated by Spring Security directly, might need to fetch it.
-        // User entity is usually partial in Principal.
-        // But for now assuming it's there or we can fetch it via UserService if needed.
-        // The User object from AuthenticationPrincipal should depend on your
-        // UserDetailsService.
-        // If it's your entity, it has collegeId.
-
-        Long collegeId = user.getCollegeId();
+        AuthenticatedUser user = SecurityUtils.currentUser();
+        Long collegeId = SecurityUtils.requireCollegeId();
         csvParserService.validateCsvFormat(file, "STUDENT");
 
         try {
@@ -63,10 +58,10 @@ public class BulkUploadController {
     @PostMapping("/trainers/bulk-upload")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<BulkUploadResponse> uploadTrainers(
-            @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal User user) {
+            @RequestParam("file") MultipartFile file) {
 
-        Long collegeId = user.getCollegeId();
+        AuthenticatedUser user = SecurityUtils.currentUser();
+        Long collegeId = SecurityUtils.requireCollegeId();
         csvParserService.validateCsvFormat(file, "TRAINER");
 
         try {
@@ -111,14 +106,16 @@ public class BulkUploadController {
 
     @GetMapping("/students/bulk-upload/history")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<BulkUpload>> getUploadHistory(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(bulkUploadService.getHistory(user.getCollegeId()));
+    public ResponseEntity<List<BulkUploadHistoryDTO>> getUploadHistory() {
+        return ResponseEntity.ok(bulkUploadService.getHistory(SecurityUtils.requireCollegeId(), "STUDENT")
+                .stream().map(BulkUploadHistoryDTO::from).toList());
     }
 
     @GetMapping("/trainers/bulk-upload/history")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<BulkUpload>> getTrainerUploadHistory(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(bulkUploadService.getHistory(user.getCollegeId()));
+    public ResponseEntity<List<BulkUploadHistoryDTO>> getTrainerUploadHistory() {
+        return ResponseEntity.ok(bulkUploadService.getHistory(SecurityUtils.requireCollegeId(), "TRAINER")
+                .stream().map(BulkUploadHistoryDTO::from).toList());
     }
 
     @PostMapping("/students/{id}/resend-invitation")

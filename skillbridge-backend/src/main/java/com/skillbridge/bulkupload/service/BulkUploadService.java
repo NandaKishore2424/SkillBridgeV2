@@ -432,6 +432,21 @@ public class BulkUploadService {
     }
 
     /**
+     * History for one kind of upload.
+     *
+     * <p>Both history endpoints called {@link #getHistory(Long)} and so returned
+     * identical, unfiltered lists — asking for student upload history handed
+     * back trainer uploads. The filtering finder had existed on the repository
+     * the whole time and was simply never called.
+     *
+     * @param entityType {@code STUDENT} or {@code TRAINER}, matching
+     *                   {@code BulkUpload.entityType}
+     */
+    public List<BulkUpload> getHistory(Long collegeId, String entityType) {
+        return bulkUploadRepository.findByCollegeIdAndEntityTypeOrderByCreatedAtDesc(collegeId, entityType);
+    }
+
+    /**
      * Reissues the invitation for an account that has not completed first login.
      *
      * <p>This used to send the user's own email address as the password, because
