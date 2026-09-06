@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import com.skillbridge.common.exception.ConflictException;
 import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
@@ -90,9 +91,11 @@ public class TrainerService {
         return mapToDTO(trainer);
     }
 
+    /** Serves both {@code GET /admin/trainers/{id}} and {@code GET /trainers/{id}}. */
     public TrainerDTO getTrainerById(Long trainerId) {
         Trainer trainer = trainerRepository.findByIdWithUser(trainerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Trainer not found"));
+                .filter(t -> TenantGuard.isVisible(t.getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Trainer", trainerId));
         return mapToDTO(trainer);
     }
 

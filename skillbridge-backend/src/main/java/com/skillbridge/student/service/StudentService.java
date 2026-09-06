@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import com.skillbridge.common.exception.ConflictException;
 import com.skillbridge.common.exception.ForbiddenException;
 import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.common.exception.ResourceNotFoundException;
 
 @Service
@@ -102,9 +103,17 @@ public class StudentService {
         return mapToDTO(student);
     }
 
+    /**
+     * Serves both {@code GET /admin/students/{id}} and {@code GET /students/{id}}.
+     *
+     * <p>The tenant check lives here rather than in either controller precisely
+     * because there are two of them: a check at one call site is a check the
+     * other one is missing.
+     */
     public StudentDTO getStudentById(Long studentId) {
         Student student = studentRepository.findByIdWithUser(studentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Student not found"));
+                .filter(st -> TenantGuard.isVisible(st.getCollege().getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
         return mapToDTO(student);
     }
 

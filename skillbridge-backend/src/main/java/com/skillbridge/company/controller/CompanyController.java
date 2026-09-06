@@ -4,6 +4,7 @@ import com.skillbridge.college.entity.College;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
@@ -83,6 +84,7 @@ public class CompanyController {
         // association outside any transaction, which open-in-view used to paper
         // over; the DTO makes the boundary explicit instead.
         return companyRepository.findByIdWithCollege(id)
+                .filter(c -> c.getCollege() != null && TenantGuard.isVisible(c.getCollege().getId()))
                 .map(c -> ResponseEntity.ok(convertToDTO(c)))
                 .orElse(ResponseEntity.notFound().build());
     }

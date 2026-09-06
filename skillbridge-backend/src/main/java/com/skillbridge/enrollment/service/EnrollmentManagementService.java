@@ -8,6 +8,7 @@ import com.skillbridge.common.exception.BadRequestException;
 import com.skillbridge.common.exception.BusinessRuleException;
 import com.skillbridge.common.exception.ConflictException;
 import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.enrollment.domain.EnrollmentState;
 import com.skillbridge.enrollment.domain.EnrollmentStatus;
 import com.skillbridge.enrollment.domain.RequestSource;
@@ -326,18 +327,29 @@ public class EnrollmentManagementService {
                 .build();
     }
 
+    // The tenant checks below are why these helpers exist as helpers. Every
+    // admin enrollment endpoint takes an id straight from the URL, and
+    // findById is not covered by the Hibernate collegeFilter -- a filter
+    // applies to queries, not to a load by primary key. Checking here means a
+    // new endpoint that reuses these is scoped by construction; a check in each
+    // controller would be a check the next endpoint forgets. Ownership failure
+    // and a genuine miss both raise the same 404, deliberately.
+
     private Batch requireBatch(Long batchId) {
         return batchRepository.findById(batchId)
+                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("Batch", batchId));
     }
 
     private Student requireStudent(Long studentId) {
         return studentRepository.findById(studentId)
+                .filter(st -> TenantGuard.isVisible(st.getCollege().getId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
     }
 
     private EnrollmentRequest requireRequest(Long requestId) {
         return requestRepository.findById(requestId)
+                .filter(r -> TenantGuard.isVisible(r.getCollegeId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("Request", requestId));
     }
 

@@ -7,6 +7,7 @@ import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
@@ -95,7 +96,10 @@ public class BatchController {
     @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'TRAINER')")
     public ResponseEntity<BatchDTO> getBatchById(@PathVariable Long id) {
         log.info("Fetching batch with id: {}", id);
-        Optional<Batch> batch = batchRepository.findByIdWithCollege(id);
+        // Filtered, not checked after the fact: a batch in another college and a
+        // batch that does not exist must be indistinguishable from out here.
+        Optional<Batch> batch = batchRepository.findByIdWithCollege(id)
+                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()));
         return batch.map(b -> ResponseEntity.ok(convertToDTO(b)))
                 .orElse(ResponseEntity.notFound().build());
     }
