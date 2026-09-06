@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.skillbridge.common.exception.ConflictException;
@@ -118,14 +119,54 @@ public class StudentService {
     }
 
     public List<StudentDTO> getAllStudentsByCollege(Long collegeId) {
-        return studentRepository.findByCollegeIdWithUser(collegeId).stream()
-                .map(this::mapToDTO)
-                .collect(Collectors.toList());
+        List<Student> students = studentRepository.findByCollegeIdWithUser(collegeId);
+        return mapPage(students);
     }
 
     public Page<StudentDTO> getStudentsByCollege(Long collegeId, Pageable pageable) {
-        return studentRepository.findByCollegeIdWithUser(collegeId, pageable)
-                .map(this::mapToDTO);
+        Page<Student> page = studentRepository.findByCollegeIdWithUser(collegeId, pageable);
+        List<StudentDTO> mapped = mapPage(page.getContent());
+        return new org.springframework.data.domain.PageImpl<>(mapped, pageable, page.getTotalElements());
+    }
+
+    /**
+     * Maps a whole page of students in three queries rather than 2N+1.
+     *
+     * <p>{@link #mapToDTO} fetches a student's skills and projects with a query
+     * each. That is fine for one student and quadratic-feeling for a page of
+     * them: fifteen students meant thirty extra round trips, and against a
+     * database in another region {@code GET /admin/students} took nearly ten
+     * seconds — long enough that the page read as hung rather than slow.
+     *
+     * <p>Here both collections are fetched once for every student on the page
+     * and grouped in memory.
+     */
+    private List<StudentDTO> mapPage(List<Student> students) {
+        if (students.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = students.stream().map(Student::getId).toList();
+
+        Map<Long, List<StudentSkillDTO>> skillsByStudent = studentSkillRepository.findByStudentIdIn(ids)
+                .stream().collect(Collectors.groupingBy(
+                        ss -> ss.getStudent().getId(),
+                        Collectors.mapping(ss -> StudentSkillDTO.builder()
+                                .skillId(ss.getSkill().getId())
+                                .skillName(ss.getSkill().getName())
+                                .skillCategory(ss.getSkill().getCategory())
+                                .proficiencyLevel(ss.getProficiencyLevel())
+                                .build(), Collectors.toList())));
+
+        Map<Long, List<StudentProjectDTO>> projectsByStudent = studentProjectRepository.findByStudentIdIn(ids)
+                .stream().collect(Collectors.groupingBy(
+                        sp -> sp.getStudent().getId(),
+                        Collectors.mapping(this::mapProjectToDTO, Collectors.toList())));
+
+        return students.stream()
+                .map(student -> mapToDTO(student,
+                        skillsByStudent.getOrDefault(student.getId(), List.of()),
+                        projectsByStudent.getOrDefault(student.getId(), List.of())))
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -343,6 +384,7 @@ public class StudentService {
     }
 
     // Helper methods
+    /** Single-student mapping. Issues two extra queries; see {@link #mapPage}. */
     private StudentDTO mapToDTO(Student student) {
         List<StudentSkillDTO> skills = studentSkillRepository.findByStudentId(student.getId()).stream()
                 .map(ss -> StudentSkillDTO.builder()
@@ -358,6 +400,12 @@ public class StudentService {
                 .map(this::mapProjectToDTO)
                 .collect(Collectors.toList());
 
+        return mapToDTO(student, skills, projects);
+    }
+
+    private StudentDTO mapToDTO(Student student,
+                                List<StudentSkillDTO> skills,
+                                List<StudentProjectDTO> projects) {
         return StudentDTO.builder()
                 .id(student.getId())
                 .userId(student.getUser().getId())

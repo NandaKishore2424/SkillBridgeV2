@@ -46,7 +46,10 @@ dist/
 # Machine-local Claude Code state: per-developer permissions with absolute
 # paths, and skill symlinks pointing into .agents/. skills-lock.json is
 # committed instead, so the skills can be re-fetched on any machine.
-.claude/
+# launch.json is the exception -- it describes how to start this project's dev
+# server and is the same for everyone.
+.claude/*
+!.claude/launch.json
 .agents/
 
 # Local helper, not part of the project.

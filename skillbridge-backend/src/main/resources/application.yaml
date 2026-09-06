@@ -23,6 +23,26 @@ spring:
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}
 
+    # Hikari defaults assume a connection stays open until Hikari retires it.
+    # Supabase sits behind a pooler that closes idle server connections on its
+    # own schedule, so a pool left on defaults hands out sockets the server has
+    # already dropped. The symptom is a 500 on the first request after an idle
+    # period -- "An I/O error occurred while sending to the backend" -- which
+    # then succeeds on retry and so reads as a flake rather than a bug.
+    hikari:
+      # Ping idle connections so a dead one is discovered and replaced by the
+      # pool rather than by a user's request. This is the setting that actually
+      # fixes the symptom above.
+      keepalive-time: 120000      # 2m
+      # Retire connections well inside the pooler's idle window rather than
+      # Hikari's 30-minute default.
+      max-lifetime: 900000        # 15m
+      idle-timeout: 300000        # 5m
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 30000   # 30s
+      validation-timeout: 5000    # 5s
+
   rabbitmq:
     addresses: ${AMQP_URL}
 

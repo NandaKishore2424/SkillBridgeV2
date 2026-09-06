@@ -1,6 +1,7 @@
 package com.skillbridge.auth.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -66,8 +67,25 @@ public class User {
     @Builder.Default
     private Boolean profileCompleted = false;
 
+    /**
+     * Eager on purpose: authentication needs the roles on every request, and a
+     * lazy collection here would mean a fetch join on every auth path or a
+     * LazyInitializationException on the ones that forgot.
+     *
+     * <p>{@code @BatchSize} is what makes that affordable. Without it Hibernate
+     * issues one {@code user_roles} select <em>per user</em>, so loading a page
+     * of 15 students cost 15 extra round trips — measured at 19 statements and
+     * 3.4s for {@code GET /admin/students}, against a database whose own
+     * execution time for the same work is under a millisecond. With it, the
+     * roles for a whole page load in a single {@code where user_id in (...)}.
+     *
+     * <p>The deeper fix is LAZY plus explicit fetch joins on the two or three
+     * paths that genuinely need roles. This is the change that does not risk
+     * authentication.
+     */
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
+    @BatchSize(size = 100)
     @Builder.Default
     private Set<Role> roles = new HashSet<>();
 
