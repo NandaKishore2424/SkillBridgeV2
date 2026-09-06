@@ -28,23 +28,29 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<jjwt.version>0.12.6</jjwt.version>
 	</properties>
 	<dependencies>
+		<!--
+			JJWT. The version is declared once here and inherited by all three
+			artifacts: api is compile-scope, impl and jackson are runtime-only so
+			that application code cannot accidentally bind to internals.
+		-->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-api</artifactId>
-			<version>0.11.5</version>
+			<version>${jjwt.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-impl</artifactId>
-			<version>0.11.5</version>
+			<version>${jjwt.version}</version>
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-jackson</artifactId>
-			<version>0.11.5</version>
+			<version>${jjwt.version}</version>
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
