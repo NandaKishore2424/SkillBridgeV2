@@ -19,6 +19,7 @@ import {
 import { ListSkeleton } from '@/shared/components/ui/loading-skeleton'
 import { getTrainerBatches } from '@/api/trainer'
 import { AlertCircle, Users } from 'lucide-react'
+import { itemsOf } from '@/api/paging';
 
 export function TrainerStudentsPage() {
     const {
@@ -27,7 +28,8 @@ export function TrainerStudentsPage() {
         error,
     } = useQuery({
         queryKey: ['trainer', 'batches'],
-        queryFn: getTrainerBatches,
+        queryFn: () => getTrainerBatches({ size: 100 }),
+        select: itemsOf,
     })
 
     // Calculate total students across all batches

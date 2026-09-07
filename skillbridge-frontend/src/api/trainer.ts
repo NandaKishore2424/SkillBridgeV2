@@ -6,6 +6,7 @@
 
 import apiClient from './client'
 import type { Batch } from '@/shared/types'
+import type { PagedResponse, PageParams } from './paging'
 
 // ==================== Trainer Dashboard ====================
 
@@ -45,13 +46,21 @@ export const getTrainerDashboardStats = async (): Promise<TrainerDashboardStats>
   return response.data
 }
 
-export const getTrainerBatches = async (): Promise<TrainerBatch[]> => {
-  const response = await apiClient.get<TrainerBatch[]>('/trainer/batches')
+/** The trainer's assigned batches. Paged -- they accumulate over time. */
+export const getTrainerBatches = async (
+  params: PageParams = {},
+): Promise<PagedResponse<TrainerBatch>> => {
+  const response = await apiClient.get<PagedResponse<TrainerBatch>>('/trainer/batches', { params })
   return response.data
 }
 
-export const getBatchStudents = async (batchId: number): Promise<TrainerStudent[]> => {
-  const response = await apiClient.get<TrainerStudent[]>(`/trainer/batches/${batchId}/students`)
+/** Students on one batch. Paged -- this is the list that grows with class size. */
+export const getBatchStudents = async (
+  batchId: number,
+  params: PageParams = {},
+): Promise<PagedResponse<TrainerStudent>> => {
+  const response = await apiClient.get<PagedResponse<TrainerStudent>>(
+    `/trainer/batches/${batchId}/students`, { params })
   return response.data
 }
 

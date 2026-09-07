@@ -11,6 +11,8 @@ import com.skillbridge.trainer.dto.TrainerBatchDTO;
 import com.skillbridge.trainer.dto.TrainerStudentDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,12 +56,13 @@ public class TrainerDashboardService {
                                 .build();
         }
 
-        public List<TrainerBatchDTO> getTrainerBatches(Long userId) {
+        public Page<TrainerBatchDTO> getTrainerBatches(Long userId, Pageable pageable) {
                 log.info("Getting batches for trainer userId: {}", userId);
 
-                List<TrainerBatch> trainerBatches = trainerBatchRepository.findByTrainerUserId(userId);
+                Page<TrainerBatch> trainerBatches =
+                                trainerBatchRepository.findByTrainerUser(userId, pageable);
 
-                return trainerBatches.stream()
+                return trainerBatches
                                 .map(tb -> {
                                         Batch batch = tb.getBatch();
                                         int enrolledCount = enrollmentRepository.countByBatchId(batch.getId());
@@ -77,11 +80,10 @@ public class TrainerDashboardService {
                                                         .enrolledCount(enrolledCount)
                                                         .syllabus(null) // TODO: add syllabus info when needed
                                                         .build();
-                                })
-                                .collect(Collectors.toList());
+                                });
         }
 
-        public List<TrainerStudentDTO> getBatchStudents(Long userId, Long batchId) {
+        public Page<TrainerStudentDTO> getBatchStudents(Long userId, Long batchId, Pageable pageable) {
                 log.info("Getting students for batch {} by trainer userId: {}", batchId, userId);
 
                 // Verify trainer has access to this batch
@@ -90,9 +92,7 @@ public class TrainerDashboardService {
                         throw new ForbiddenException("Trainer does not have access to this batch");
                 }
 
-                List<Enrollment> enrollments = enrollmentRepository.findByBatchId(batchId);
-
-                return enrollments.stream()
+                return enrollmentRepository.findByBatch(batchId, pageable)
                                 .map(enrollment -> {
                                         Student student = enrollment.getStudent();
                                         return TrainerStudentDTO.builder()
@@ -106,7 +106,6 @@ public class TrainerDashboardService {
                                                         .progressSummary(null) // TODO: add progress when tracking is
                                                                                // implemented
                                                         .build();
-                                })
-                                .collect(Collectors.toList());
+                                });
         }
 }

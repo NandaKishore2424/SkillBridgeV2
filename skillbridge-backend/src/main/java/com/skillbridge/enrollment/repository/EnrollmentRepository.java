@@ -20,6 +20,19 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     List<Enrollment> findByBatchId(Long batchId);
 
+    /**
+     * One batch's enrolled students, a page at a time.
+     *
+     * <p>Fetch-joins student and the student's user: the trainer-facing DTO
+     * reads the roll number, full name and email, and the email lives on
+     * {@code user}. The derived finder above takes two extra selects per row
+     * for the same data.
+     */
+    @Query(value = "select e from Enrollment e join fetch e.student s join fetch s.user "
+                 + "where e.batch.id = :batchId order by s.fullName",
+           countQuery = "select count(e) from Enrollment e where e.batch.id = :batchId")
+    Page<Enrollment> findByBatch(@Param("batchId") Long batchId, Pageable pageable);
+
     Optional<Enrollment> findByBatchIdAndStudentId(Long batchId, Long studentId);
 
     int countByBatchId(Long batchId);

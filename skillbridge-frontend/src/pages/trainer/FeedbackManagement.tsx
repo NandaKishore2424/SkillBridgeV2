@@ -34,12 +34,14 @@ const FeedbackManagement = () => {
 
   const { data: batches } = useQuery({
     queryKey: ['trainer-batches'],
-    queryFn: getTrainerBatches,
+    queryFn: () => getTrainerBatches({ size: 100 }),
+    select: itemsOf,
   });
 
   const { data: students, isLoading: isLoadingStudents } = useQuery({
     queryKey: ['batch-students', selectedBatchId],
-    queryFn: () => getBatchStudents(Number(selectedBatchId)),
+    queryFn: () => getBatchStudents(Number(selectedBatchId), { size: 100 }),
+    select: itemsOf,
     enabled: !!selectedBatchId,
   });
 

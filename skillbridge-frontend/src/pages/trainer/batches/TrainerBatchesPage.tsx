@@ -27,6 +27,7 @@ import {
     AlertCircle,
     ArrowRight,
 } from 'lucide-react'
+import { itemsOf } from '@/api/paging';
 
 const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'outline'> = {
     UPCOMING: 'outline',
@@ -43,7 +44,8 @@ export function TrainerBatchesPage() {
         error,
     } = useQuery({
         queryKey: ['trainer', 'batches'],
-        queryFn: getTrainerBatches,
+        queryFn: () => getTrainerBatches({ size: 100 }),
+        select: itemsOf,
     })
 
     return (

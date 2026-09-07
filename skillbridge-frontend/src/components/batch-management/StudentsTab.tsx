@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
 import { Users, Loader2, Mail } from 'lucide-react';
 import { getBatchStudents } from '@/api/trainer';
+import { itemsOf } from '@/api/paging';
 
 interface StudentsTabProps {
     batchId: number;
@@ -11,7 +12,8 @@ interface StudentsTabProps {
 export default function StudentsTab({ batchId }: StudentsTabProps) {
     const { data: students, isLoading } = useQuery({
         queryKey: ['batch-students', batchId],
-        queryFn: () => getBatchStudents(batchId),
+        queryFn: () => getBatchStudents(batchId, { size: 100 }),
+        select: itemsOf,
     });
 
     if (isLoading) {

@@ -36,6 +36,7 @@ import {
   ArrowRight,
   GraduationCap,
 } from 'lucide-react'
+import { itemsOf } from '@/api/paging';
 
 interface StatCardProps {
   title: string
@@ -93,7 +94,8 @@ export function TrainerDashboard() {
     error: batchesError,
   } = useQuery({
     queryKey: ['trainer', 'batches'],
-    queryFn: getTrainerBatches,
+    queryFn: () => getTrainerBatches({ size: 100 }),
+    select: itemsOf,
   })
 
   return (
