@@ -39,6 +39,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { itemsOf } from '@/api/paging'
 
 interface StatCardProps {
   title: string
@@ -155,7 +156,8 @@ export function SystemAdminDashboard() {
     error,
   } = useQuery({
     queryKey: ['admin', 'colleges'],
-    queryFn: getAllColleges,
+    queryFn: () => getAllColleges({ size: 100 }),
+    select: itemsOf,
   })
 
   // Calculate statistics

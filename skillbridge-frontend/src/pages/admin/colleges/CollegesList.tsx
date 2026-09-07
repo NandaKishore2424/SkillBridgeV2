@@ -47,6 +47,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui'
+import { itemsOf } from '@/api/paging'
 
 export function CollegesList() {
   const queryClient = useQueryClient()
@@ -71,7 +72,8 @@ export function CollegesList() {
     error,
   } = useQuery({
     queryKey: ['admin', 'colleges'],
-    queryFn: getAllColleges,
+    queryFn: () => getAllColleges({ size: 100 }),
+    select: itemsOf,
   })
 
   // Update college status mutation

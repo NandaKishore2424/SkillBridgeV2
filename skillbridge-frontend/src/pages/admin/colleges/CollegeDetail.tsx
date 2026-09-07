@@ -61,6 +61,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { CreateCollegeAdminModal } from './CreateCollegeAdminModal'
+import { itemsOf } from '@/api/paging'
 
 export function CollegeDetail() {
   const { id } = useParams<{ id: string }>()
@@ -88,7 +89,8 @@ export function CollegeDetail() {
     error: studentsError,
   } = useQuery({
     queryKey: ['admin', 'colleges', collegeId, 'students'],
-    queryFn: () => getCollegeStudents(collegeId),
+    queryFn: () => getCollegeStudents(collegeId, { size: 100 }),
+    select: itemsOf,
     enabled: !!collegeId && activeTab === 'students',
   })
 
@@ -99,7 +101,8 @@ export function CollegeDetail() {
     error: batchesError,
   } = useQuery({
     queryKey: ['admin', 'colleges', collegeId, 'batches'],
-    queryFn: () => getCollegeBatches(collegeId),
+    queryFn: () => getCollegeBatches(collegeId, { size: 100 }),
+    select: itemsOf,
     enabled: !!collegeId && activeTab === 'batches',
   })
 
@@ -110,7 +113,8 @@ export function CollegeDetail() {
     error: trainersError,
   } = useQuery({
     queryKey: ['admin', 'colleges', collegeId, 'trainers'],
-    queryFn: () => getCollegeTrainers(collegeId),
+    queryFn: () => getCollegeTrainers(collegeId, { size: 100 }),
+    select: itemsOf,
     enabled: !!collegeId && activeTab === 'trainers',
   })
 
@@ -122,7 +126,8 @@ export function CollegeDetail() {
     refetch: refetchAdmins,
   } = useQuery({
     queryKey: ['admin', 'colleges', collegeId, 'admins'],
-    queryFn: () => getCollegeAdmins(collegeId),
+    queryFn: () => getCollegeAdmins(collegeId, { size: 100 }),
+    select: itemsOf,
     enabled: !!collegeId && activeTab === 'admins',
   })
 

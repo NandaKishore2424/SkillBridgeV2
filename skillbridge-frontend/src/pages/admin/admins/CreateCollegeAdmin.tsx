@@ -41,6 +41,7 @@ import { getAllColleges } from '@/api/admin'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import { Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { itemsOf } from '@/api/paging'
 
 // Form schema
 const createAdminSchema = z.object({
@@ -74,8 +75,10 @@ export function CreateCollegeAdmin() {
     error: collegesError,
   } = useQuery({
     queryKey: ['admin', 'colleges'],
-    queryFn: getAllColleges,
-    select: (data) => data.filter((college) => college.status === 'ACTIVE'),
+    queryFn: () => getAllColleges({ size: 100 }),
+    // Composed rather than two `select`s: unwrap the page, then keep the
+    // existing ACTIVE filter.
+    select: (data) => itemsOf(data).filter((college) => college.status === 'ACTIVE'),
   })
 
   const {

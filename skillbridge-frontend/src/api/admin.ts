@@ -6,6 +6,7 @@
 
 import apiClient from './client'
 import type { College } from '@/shared/types'
+import type { PagedResponse, PageParams } from './paging'
 
 // Re-exported: pages import College from this module alongside the API
 // functions that use it, and TS2459 forbids re-exporting an imported name
@@ -37,8 +38,10 @@ export interface CreateCollegeAdminResponse {
 /**
  * Get all colleges (System Admin only)
  */
-export const getAllColleges = async (): Promise<College[]> => {
-  const response = await apiClient.get<College[]>('/admin/colleges')
+export const getAllColleges = async (
+  params: PageParams = {},
+): Promise<PagedResponse<College>> => {
+  const response = await apiClient.get<PagedResponse<College>>('/admin/colleges', { params })
   return response.data
 }
 
@@ -97,32 +100,48 @@ export const createCollegeAdmin = async (
 /**
  * Get students for a specific college
  */
-export const getCollegeStudents = async (collegeId: number): Promise<any[]> => {
-  const response = await apiClient.get<any[]>(`/admin/colleges/${collegeId}/students`)
+export const getCollegeStudents = async (
+  collegeId: number,
+  params: PageParams = {},
+): Promise<PagedResponse<any>> => {
+  const response = await apiClient.get<PagedResponse<any>>(
+    `/admin/colleges/${collegeId}/students`, { params })
   return response.data
 }
 
 /**
  * Get batches for a specific college
  */
-export const getCollegeBatches = async (collegeId: number): Promise<any[]> => {
-  const response = await apiClient.get<any[]>(`/admin/colleges/${collegeId}/batches`)
+export const getCollegeBatches = async (
+  collegeId: number,
+  params: PageParams = {},
+): Promise<PagedResponse<any>> => {
+  const response = await apiClient.get<PagedResponse<any>>(
+    `/admin/colleges/${collegeId}/batches`, { params })
   return response.data
 }
 
 /**
  * Get trainers for a specific college
  */
-export const getCollegeTrainers = async (collegeId: number): Promise<any[]> => {
-  const response = await apiClient.get<any[]>(`/admin/colleges/${collegeId}/trainers`)
+export const getCollegeTrainers = async (
+  collegeId: number,
+  params: PageParams = {},
+): Promise<PagedResponse<any>> => {
+  const response = await apiClient.get<PagedResponse<any>>(
+    `/admin/colleges/${collegeId}/trainers`, { params })
   return response.data
 }
 
 /**
  * Get admins for a specific college
  */
-export const getCollegeAdmins = async (collegeId: number): Promise<any[]> => {
-  const response = await apiClient.get<any[]>(`/admin/colleges/${collegeId}/admins`)
+export const getCollegeAdmins = async (
+  collegeId: number,
+  params: PageParams = {},
+): Promise<PagedResponse<any>> => {
+  const response = await apiClient.get<PagedResponse<any>>(
+    `/admin/colleges/${collegeId}/admins`, { params })
   return response.data
 }
 

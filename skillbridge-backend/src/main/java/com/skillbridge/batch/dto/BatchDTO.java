@@ -28,4 +28,37 @@ public class BatchDTO {
     private int trainerCount;
     private int companyCount;
     private int studentCount;
+
+    /**
+     * Maps a batch whose {@code college} is already fetch-joined.
+     *
+     * <p>Touches nothing lazy: the college must be loaded and all three counts
+     * are supplied by the caller, so this cannot throw
+     * {@code LazyInitializationException} however it is reached. The counts come
+     * from one grouped query per page rather than per row -- the collections
+     * are deliberately not fetch-joined, because Hibernate cannot paginate a
+     * collection fetch in SQL and would silently do it in memory.
+     *
+     * <p>Lives on the DTO rather than in a controller because two controllers
+     * now need it: the college admin's own batch list and the SYSTEM_ADMIN's
+     * per-college one.
+     */
+    public static BatchDTO from(com.skillbridge.batch.entity.Batch batch,
+                                long trainerCount, long companyCount, long studentCount) {
+        return BatchDTO.builder()
+                .id(batch.getId())
+                .collegeId(batch.getCollege().getId())
+                .collegeName(batch.getCollege().getName())
+                .name(batch.getName())
+                .description(batch.getDescription())
+                .status(batch.getStatus())
+                .startDate(batch.getStartDate())
+                .endDate(batch.getEndDate())
+                .createdAt(batch.getCreatedAt())
+                .updatedAt(batch.getUpdatedAt())
+                .trainerCount((int) trainerCount)
+                .companyCount((int) companyCount)
+                .studentCount((int) studentCount)
+                .build();
+    }
 }

@@ -1,15 +1,13 @@
 package com.skillbridge.college.controller;
 
 import com.skillbridge.college.dto.CollegeDTO;
-import com.skillbridge.college.entity.College;
 import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Public College Controller
@@ -27,15 +25,22 @@ public class PublicCollegeController {
     private final CollegeRepository collegeRepository;
 
     /**
-     * Get all active colleges (public endpoint for registration)
+     * Active colleges, for the registration form's picker.
+     *
+     * <p>This is unauthenticated, which makes it the one list on the platform
+     * anybody at all can ask for. It previously called {@code findAll()} and
+     * filtered the result in memory, so a single anonymous request read every
+     * college row into the heap and then discarded the inactive ones. The
+     * status predicate is now in SQL and the result is paged.
      */
     @GetMapping("/active")
-    public ResponseEntity<List<CollegeDTO>> getActiveColleges() {
+    public ResponseEntity<PagedResponse<CollegeDTO>> getActiveColleges(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         log.info("Fetching active colleges (public endpoint)");
-        List<College> activeColleges = collegeRepository.findAll().stream()
-            .filter(college -> "ACTIVE".equals(college.getStatus()))
-            .collect(Collectors.toList());
-        return ResponseEntity.ok(activeColleges.stream().map(CollegeDTO::from).toList());
+        return ResponseEntity.ok(PagedResponse.from(
+                collegeRepository.findByStatus("ACTIVE", Pagination.of(page, size)),
+                CollegeDTO::from));
     }
 }
 

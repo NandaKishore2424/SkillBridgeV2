@@ -363,28 +363,13 @@ public class BatchController {
     }
 
     /**
-     * The real mapper. Touches nothing lazy: {@code college} must already be
-     * fetch-joined and both counts are supplied by the caller, so this cannot
-     * throw {@code LazyInitializationException} however it is reached.
+     * The real mapper, now on {@link BatchDTO} so the SYSTEM_ADMIN's per-college
+     * batch list maps identically. {@code studentCount} was hardcoded 0 with a
+     * TODO before; the batch detail page reads it for its "Enrollments (n)" tab
+     * label, so the placeholder was visible.
      */
     private BatchDTO convertToDTO(Batch batch, long trainerCount, long companyCount, long studentCount) {
-        return BatchDTO.builder()
-                .id(batch.getId())
-                .collegeId(batch.getCollege().getId())
-                .collegeName(batch.getCollege().getName())
-                .name(batch.getName())
-                .description(batch.getDescription())
-                .status(batch.getStatus())
-                .startDate(batch.getStartDate())
-                .endDate(batch.getEndDate())
-                .createdAt(batch.getCreatedAt())
-                .updatedAt(batch.getUpdatedAt())
-                .trainerCount((int) trainerCount)
-                .companyCount((int) companyCount)
-                // Was hardcoded 0 with a TODO. The batch detail page reads it for
-                // its "Enrollments (n)" tab label, so the placeholder was visible.
-                .studentCount((int) studentCount)
-                .build();
+        return BatchDTO.from(batch, trainerCount, companyCount, studentCount);
     }
 
     // Helper method to convert Trainer entity to DTO

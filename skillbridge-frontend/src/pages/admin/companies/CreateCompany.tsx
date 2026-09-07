@@ -39,6 +39,7 @@ import { useAuth } from '@/shared/hooks/useAuth'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import { Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { itemsOf } from '@/api/paging'
 
 // Form schema
 const createCompanySchema = z.object({
@@ -66,7 +67,8 @@ export function CreateCompany() {
   // Fetch colleges for system admin
   const { data: colleges, isLoading: isLoadingColleges } = useQuery({
     queryKey: ['colleges'],
-    queryFn: getAllColleges,
+    queryFn: () => getAllColleges({ size: 100 }),
+    select: itemsOf,
     enabled: isSystemAdmin,
   })
 
