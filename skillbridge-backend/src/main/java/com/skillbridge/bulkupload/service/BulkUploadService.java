@@ -24,6 +24,8 @@ import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -427,23 +429,25 @@ public class BulkUploadService {
     }
 
 
-    public List<BulkUpload> getHistory(Long collegeId) {
-        return bulkUploadRepository.findByCollegeIdOrderByCreatedAtDesc(collegeId);
-    }
-
     /**
      * History for one kind of upload.
      *
-     * <p>Both history endpoints called {@link #getHistory(Long)} and so returned
-     * identical, unfiltered lists — asking for student upload history handed
-     * back trainer uploads. The filtering finder had existed on the repository
-     * the whole time and was simply never called.
+     * <p>Both history endpoints once called an unfiltered variant and so
+     * returned identical lists — asking for student upload history handed back
+     * trainer uploads. The filtering finder had existed on the repository the
+     * whole time and was simply never called. The unfiltered variant is gone
+     * so it cannot be reached for again.
+     *
+     * <p>Paged: {@code bulk_uploads} is append-only, one row per upload
+     * forever, so the history is the fastest-growing list an admin can ask
+     * for after the audit log.
      *
      * @param entityType {@code STUDENT} or {@code TRAINER}, matching
      *                   {@code BulkUpload.entityType}
      */
-    public List<BulkUpload> getHistory(Long collegeId, String entityType) {
-        return bulkUploadRepository.findByCollegeIdAndEntityTypeOrderByCreatedAtDesc(collegeId, entityType);
+    public Page<BulkUpload> getHistory(Long collegeId, String entityType, Pageable pageable) {
+        return bulkUploadRepository.findByCollegeIdAndEntityTypeOrderByCreatedAtDesc(
+                collegeId, entityType, pageable);
     }
 
     /**

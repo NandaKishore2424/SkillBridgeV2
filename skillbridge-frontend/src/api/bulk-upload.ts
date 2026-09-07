@@ -1,4 +1,5 @@
 import apiClient from './client'
+import type { PagedResponse, PageParams } from './paging'
 
 
 export interface BulkUploadResponse {
@@ -75,13 +76,25 @@ export const downloadTrainerTemplate = async (): Promise<Blob> => {
     return response.data
 }
 
-export const getStudentUploadHistory = async (): Promise<BulkUploadHistory[]> => {
-    const response = await apiClient.get<BulkUploadHistory[]>('/admin/students/bulk-upload/history')
+/**
+ * Upload history, newest first, paged.
+ *
+ * `bulk_uploads` is append-only -- a row per upload, never removed -- so this
+ * is one of the fastest-growing lists in the product.
+ */
+export const getStudentUploadHistory = async (
+    params: PageParams = {},
+): Promise<PagedResponse<BulkUploadHistory>> => {
+    const response = await apiClient.get<PagedResponse<BulkUploadHistory>>(
+        '/admin/students/bulk-upload/history', { params })
     return response.data
 }
 
-export const getTrainerUploadHistory = async (): Promise<BulkUploadHistory[]> => {
-    const response = await apiClient.get<BulkUploadHistory[]>('/admin/trainers/bulk-upload/history')
+export const getTrainerUploadHistory = async (
+    params: PageParams = {},
+): Promise<PagedResponse<BulkUploadHistory>> => {
+    const response = await apiClient.get<PagedResponse<BulkUploadHistory>>(
+        '/admin/trainers/bulk-upload/history', { params })
     return response.data
 }
 

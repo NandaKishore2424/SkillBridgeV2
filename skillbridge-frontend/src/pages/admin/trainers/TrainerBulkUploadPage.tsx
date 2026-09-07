@@ -27,6 +27,7 @@ import {
     getTrainerUploadHistory,
     type BulkUploadResponse
 } from '@/api/bulk-upload'
+import { itemsOf } from '@/api/paging'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import {
     Loader2,
@@ -48,13 +49,17 @@ export function TrainerBulkUploadPage() {
     // History Query
     const { data: history, isLoading: isHistoryLoading } = useQuery({
         queryKey: ['admin', 'trainers', 'upload-history'],
-        queryFn: getTrainerUploadHistory,
-        // TanStack Query v5 hands refetchInterval the Query, not the data --
-        // `data.some(...)` was calling an array method on a Query object, so the
-        // poll never started and an in-progress upload appeared frozen until a
-        // manual reload.
+        queryFn: () => getTrainerUploadHistory({ size: 100 }),
+        // `select` shapes what the hook returns; the cache still holds the raw
+        // PagedResponse, and refetchInterval reads the cache. So this predicate
+        // goes through `.items` while the component below sees a plain array.
+        // Getting this wrong is silent: TanStack Query v5 hands refetchInterval
+        // the Query rather than the data, and an earlier `data.some(...)` here
+        // called an array method on a Query object, so the poll never started
+        // and an in-progress upload appeared frozen until a manual reload.
+        select: itemsOf,
         refetchInterval: (query) =>
-            query.state.data?.some((record) => record.status === 'PROCESSING') ? 5000 : false,
+            query.state.data?.items.some((record) => record.status === 'PROCESSING') ? 5000 : false,
     })
 
     // Upload Mutation

@@ -2,6 +2,8 @@ package com.skillbridge.bulkupload.controller;
 
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.bulkupload.dto.BulkUploadHistoryDTO;
 import com.skillbridge.bulkupload.dto.BulkUploadResponse;
@@ -104,18 +106,32 @@ public class BulkUploadController {
                 .body(resource);
     }
 
+    /**
+     * Upload history, newest first.
+     *
+     * <p>Paged because {@code bulk_uploads} is append-only: a row is written
+     * for every upload and nothing ever removes one, so this list only grows.
+     */
     @GetMapping("/students/bulk-upload/history")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<BulkUploadHistoryDTO>> getUploadHistory() {
-        return ResponseEntity.ok(bulkUploadService.getHistory(SecurityUtils.requireCollegeId(), "STUDENT")
-                .stream().map(BulkUploadHistoryDTO::from).toList());
+    public ResponseEntity<PagedResponse<BulkUploadHistoryDTO>> getUploadHistory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(
+                bulkUploadService.getHistory(SecurityUtils.requireCollegeId(), "STUDENT",
+                        Pagination.of(page, size)),
+                BulkUploadHistoryDTO::from));
     }
 
     @GetMapping("/trainers/bulk-upload/history")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<BulkUploadHistoryDTO>> getTrainerUploadHistory() {
-        return ResponseEntity.ok(bulkUploadService.getHistory(SecurityUtils.requireCollegeId(), "TRAINER")
-                .stream().map(BulkUploadHistoryDTO::from).toList());
+    public ResponseEntity<PagedResponse<BulkUploadHistoryDTO>> getTrainerUploadHistory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(
+                bulkUploadService.getHistory(SecurityUtils.requireCollegeId(), "TRAINER",
+                        Pagination.of(page, size)),
+                BulkUploadHistoryDTO::from));
     }
 
     @PostMapping("/students/{id}/resend-invitation")
