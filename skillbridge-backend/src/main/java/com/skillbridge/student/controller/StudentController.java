@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 
 @RestController
 @RequestMapping("/api/v1/students")
@@ -137,13 +139,26 @@ public class StudentController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * The skill catalogue.
+     *
+     * <p>Paged: a platform-wide master table with no tenant predicate, shared
+     * by every college.
+     */
     @GetMapping("/skills")
-    public ResponseEntity<List<SkillDTO>> getAllSkills() {
-        return ResponseEntity.ok(studentService.getAllSkills().stream().map(SkillDTO::from).toList());
+    public ResponseEntity<PagedResponse<SkillDTO>> getAllSkills(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(
+                studentService.getAllSkills(Pagination.of(page, size)), SkillDTO::from));
     }
 
     @GetMapping("/skills/search")
-    public ResponseEntity<List<SkillDTO>> searchSkills(@RequestParam String q) {
-        return ResponseEntity.ok(studentService.searchSkills(q).stream().map(SkillDTO::from).toList());
+    public ResponseEntity<PagedResponse<SkillDTO>> searchSkills(
+            @RequestParam String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(
+                studentService.searchSkills(q, Pagination.of(page, size)), SkillDTO::from));
     }
 }

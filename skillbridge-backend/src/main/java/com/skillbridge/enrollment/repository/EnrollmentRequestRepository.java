@@ -23,7 +23,23 @@ public interface EnrollmentRequestRepository extends JpaRepository<EnrollmentReq
 
     List<EnrollmentRequest> findByStatus(EnrollmentStatus status);
 
-    List<EnrollmentRequest> findByStudentIdOrderByCreatedAtDesc(Long studentId);
+    /**
+     * One student's applications, newest first.
+     *
+     * <p>Fetch-joins the batch because the DTO reads its name; the derived
+     * finder this replaced took an extra select per row.
+     */
+    @Query(value = """
+           SELECT r FROM EnrollmentRequest r
+           JOIN FETCH r.batch
+           WHERE r.student.id = :studentId
+           ORDER BY r.createdAt DESC
+           """,
+           countQuery = """
+           SELECT count(r) FROM EnrollmentRequest r
+           WHERE r.student.id = :studentId
+           """)
+    Page<EnrollmentRequest> findByStudent(@Param("studentId") Long studentId, Pageable pageable);
 
     List<EnrollmentRequest> findByStudentIdAndStatus(Long studentId, EnrollmentStatus status);
 

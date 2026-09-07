@@ -18,6 +18,8 @@ import com.skillbridge.student.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -154,11 +156,10 @@ public class StudentEnrollmentService {
     }
 
     /** Every application this student has made, newest first. */
-    public List<BatchApplicationDTO> getMyApplications(Long userId) {
+    public Page<BatchApplicationDTO> getMyApplications(Long userId, Pageable pageable) {
         Student student = requireStudentByUser(userId);
-        return requestRepository.findByStudentIdOrderByCreatedAtDesc(student.getId()).stream()
-                .map(r -> toDto(r, false, null))
-                .toList();
+        return requestRepository.findByStudent(student.getId(), pageable)
+                .map(r -> toDto(r, false, null));
     }
 
     // ------------------------------------------------------------------

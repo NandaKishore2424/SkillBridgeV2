@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.common.exception.BadRequestException;
 import com.skillbridge.student.dto.BatchApplicationDTO;
 import com.skillbridge.student.service.StudentEnrollmentService;
@@ -135,12 +137,18 @@ public class StudentDashboardController {
 
     /**
      * The signed-in student's applications, newest first.
+     *
+     * <p>Paged: a student accumulates an application row per batch they ever
+     * applied to, and nothing prunes the rejected or withdrawn ones.
      */
     @GetMapping("/applications")
     @PreAuthorize("hasRole('STUDENT')")
-    public ResponseEntity<List<BatchApplicationDTO>> getMyApplications() {
+    public ResponseEntity<PagedResponse<BatchApplicationDTO>> getMyApplications(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         AuthenticatedUser user = SecurityUtils.currentUser();
-        return ResponseEntity.ok(enrollmentService.getMyApplications(user.getId()));
+        return ResponseEntity.ok(PagedResponse.from(
+                enrollmentService.getMyApplications(user.getId(), Pagination.of(page, size))));
     }
 
     /**

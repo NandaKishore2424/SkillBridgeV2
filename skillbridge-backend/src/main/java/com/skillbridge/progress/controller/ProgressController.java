@@ -2,6 +2,8 @@ package com.skillbridge.progress.controller;
 
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.progress.dto.BatchProgressDTO;
 import com.skillbridge.progress.dto.BulkGradeRequest;
 import com.skillbridge.progress.dto.BulkGradeResultDTO;
@@ -50,18 +52,30 @@ public class ProgressController {
     // Trainer — reads
     // ------------------------------------------------------------------
 
-    /** Every enrolled student's standing in a batch, weakest first. */
+    /**
+     * Every enrolled student's standing in a batch, weakest first.
+     *
+     * <p>Paged: one row per enrolled student, so this grows with the batch.
+     */
     @GetMapping("/trainer/batches/{batchId}/progress")
     @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
-    public ResponseEntity<List<StudentProgressSummaryDTO>> getBatchOverview(@PathVariable Long batchId) {
-        return ResponseEntity.ok(progressService.getBatchOverview(batchId));
+    public ResponseEntity<PagedResponse<StudentProgressSummaryDTO>> getBatchOverview(
+            @PathVariable Long batchId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(
+                progressService.getBatchOverview(batchId, Pagination.of(page, size))));
     }
 
     /** Students below the at-risk threshold. */
     @GetMapping("/trainer/batches/{batchId}/progress/at-risk")
     @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
-    public ResponseEntity<List<StudentProgressSummaryDTO>> getAtRisk(@PathVariable Long batchId) {
-        return ResponseEntity.ok(progressService.getAtRiskStudents(batchId));
+    public ResponseEntity<PagedResponse<StudentProgressSummaryDTO>> getAtRisk(
+            @PathVariable Long batchId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(
+                progressService.getAtRiskStudents(batchId, Pagination.of(page, size))));
     }
 
     /** One student's full tree, for a trainer reviewing them. */
@@ -72,11 +86,20 @@ public class ProgressController {
         return ResponseEntity.ok(progressService.getStudentProgress(studentId, batchId));
     }
 
-    /** The grading grid: every student's row for one topic. */
+    /**
+     * The grading grid: every student's row for one topic.
+     *
+     * <p>Paged for the same reason as the overview — a row per enrolled
+     * student. A trainer grading a class of 400 gets 20 rows at a time.
+     */
     @GetMapping("/trainer/topics/{topicId}/progress")
     @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
-    public ResponseEntity<List<TopicProgressDTO>> getGradingGrid(@PathVariable Long topicId) {
-        return ResponseEntity.ok(progressService.getGradingGrid(topicId));
+    public ResponseEntity<PagedResponse<TopicProgressDTO>> getGradingGrid(
+            @PathVariable Long topicId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(
+                progressService.getGradingGrid(topicId, Pagination.of(page, size))));
     }
 
     // ------------------------------------------------------------------

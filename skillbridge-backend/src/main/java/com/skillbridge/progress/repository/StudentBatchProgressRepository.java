@@ -1,6 +1,8 @@
 package com.skillbridge.progress.repository;
 
 import com.skillbridge.progress.entity.StudentBatchProgress;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -23,7 +25,7 @@ public interface StudentBatchProgressRepository extends JpaRepository<StudentBat
      */
     List<StudentBatchProgress> findByStudentIdAndBatchIdIn(Long studentId, Collection<Long> batchIds);
 
-    List<StudentBatchProgress> findByBatchIdOrderByWeightedPercentAsc(Long batchId);
+    Page<StudentBatchProgress> findByBatchIdOrderByWeightedPercentAsc(Long batchId, Pageable pageable);
 
     /**
      * Students falling behind in a batch.
@@ -31,12 +33,18 @@ public interface StudentBatchProgressRepository extends JpaRepository<StudentBat
      * <p>Ordered ascending so the ones most in need of attention come first,
      * which is the only ordering that makes the report worth opening.
      */
-    @Query("""
+    @Query(value = """
            SELECT sbp FROM StudentBatchProgress sbp
            WHERE sbp.batchId = :batchId
              AND sbp.weightedPercent < :threshold
            ORDER BY sbp.weightedPercent ASC
+           """,
+           countQuery = """
+           SELECT count(sbp) FROM StudentBatchProgress sbp
+           WHERE sbp.batchId = :batchId
+             AND sbp.weightedPercent < :threshold
            """)
-    List<StudentBatchProgress> findAtRisk(@Param("batchId") Long batchId,
-                                          @Param("threshold") java.math.BigDecimal threshold);
+    Page<StudentBatchProgress> findAtRisk(@Param("batchId") Long batchId,
+                                          @Param("threshold") java.math.BigDecimal threshold,
+                                          Pageable pageable);
 }

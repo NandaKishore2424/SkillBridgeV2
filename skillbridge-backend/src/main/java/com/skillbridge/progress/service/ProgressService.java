@@ -24,6 +24,8 @@ import com.skillbridge.trainer.entity.Trainer;
 import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -158,53 +160,49 @@ public class ProgressService {
      * <p>Reads the denormalised summary table rather than aggregating raw progress
      * rows, so the cost is one indexed scan regardless of syllabus size.
      */
-    public List<StudentProgressSummaryDTO> getBatchOverview(Long batchId) {
+    public Page<StudentProgressSummaryDTO> getBatchOverview(Long batchId, Pageable pageable) {
         requireBatch(batchId);
 
-        List<StudentBatchProgress> summaries =
-                summaryRepository.findByBatchIdOrderByWeightedPercentAsc(batchId);
-        if (summaries.isEmpty()) {
-            return List.of();
-        }
-
-        // One lookup for every name, rather than one per summary row.
-        Map<Long, Student> students = studentRepository
-                .findAllById(summaries.stream().map(StudentBatchProgress::getStudentId).toList())
-                .stream()
-                .collect(Collectors.toMap(Student::getId, s -> s));
-
-        return summaries.stream()
-                .map(s -> toSummaryDto(s, students.get(s.getStudentId())))
-                .toList();
+        return withStudentNames(
+                summaryRepository.findByBatchIdOrderByWeightedPercentAsc(batchId, pageable));
     }
 
     /** Students below the at-risk threshold, worst first. */
-    public List<StudentProgressSummaryDTO> getAtRiskStudents(Long batchId) {
+    public Page<StudentProgressSummaryDTO> getAtRiskStudents(Long batchId, Pageable pageable) {
         requireBatch(batchId);
 
-        List<StudentBatchProgress> atRisk = summaryRepository.findAtRisk(batchId, AT_RISK_THRESHOLD);
-        if (atRisk.isEmpty()) {
-            return List.of();
+        return withStudentNames(summaryRepository.findAtRisk(batchId, AT_RISK_THRESHOLD, pageable));
+    }
+
+    /**
+     * Attaches student names to a page of summaries in one extra query.
+     *
+     * <p>The summary row stores a student id and no name, so something has to
+     * resolve them. Doing it per row is one select per student; this collects
+     * the ids on the page and looks them up once. Scoped to the page rather
+     * than the whole result set, which is the point of paginating at all.
+     */
+    private Page<StudentProgressSummaryDTO> withStudentNames(Page<StudentBatchProgress> summaries) {
+        if (summaries.isEmpty()) {
+            return summaries.map(s -> toSummaryDto(s, null));
         }
 
         Map<Long, Student> students = studentRepository
-                .findAllById(atRisk.stream().map(StudentBatchProgress::getStudentId).toList())
+                .findAllById(summaries.getContent().stream()
+                        .map(StudentBatchProgress::getStudentId).toList())
                 .stream()
                 .collect(Collectors.toMap(Student::getId, s -> s));
 
-        return atRisk.stream()
-                .map(s -> toSummaryDto(s, students.get(s.getStudentId())))
-                .toList();
+        return summaries.map(s -> toSummaryDto(s, students.get(s.getStudentId())));
     }
 
     /** Every student's row for one topic — the grading grid. */
-    public List<TopicProgressDTO> getGradingGrid(Long topicId) {
+    public Page<TopicProgressDTO> getGradingGrid(Long topicId, Pageable pageable) {
         SyllabusTopic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Topic", topicId));
 
-        return progressRepository.findGradingGridForTopic(topic.getId()).stream()
-                .map(this::toTopicDto)
-                .toList();
+        return progressRepository.findGradingGridForTopic(topic.getId(), pageable)
+                .map(this::toTopicDto);
     }
 
     // ------------------------------------------------------------------

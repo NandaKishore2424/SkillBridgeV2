@@ -4,6 +4,8 @@ import com.skillbridge.progress.domain.ProgressStatus;
 import com.skillbridge.progress.entity.TopicProgress;
 import com.skillbridge.progress.repository.projection.BatchProgressAggregate;
 import com.skillbridge.progress.repository.projection.StudentBatchCompletion;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -43,13 +45,17 @@ public interface TopicProgressRepository extends JpaRepository<TopicProgress, Lo
     /**
      * The trainer's grading grid for one topic: every enrolled student's row.
      */
-    @Query("""
+    @Query(value = """
            SELECT tp FROM TopicProgress tp
            JOIN FETCH tp.student s
            WHERE tp.topic.id = :topicId
            ORDER BY s.fullName
+           """,
+           countQuery = """
+           SELECT count(tp) FROM TopicProgress tp
+           WHERE tp.topic.id = :topicId
            """)
-    List<TopicProgress> findGradingGridForTopic(@Param("topicId") Long topicId);
+    Page<TopicProgress> findGradingGridForTopic(@Param("topicId") Long topicId, Pageable pageable);
 
     List<TopicProgress> findByStudentIdAndBatchIdAndTopicIdIn(Long studentId, Long batchId,
                                                               Collection<Long> topicIds);

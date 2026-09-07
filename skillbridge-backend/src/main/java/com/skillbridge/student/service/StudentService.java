@@ -386,12 +386,19 @@ public class StudentService {
         studentProjectRepository.delete(project);
     }
 
-    public List<Skill> getAllSkills() {
-        return skillRepository.findAll();
+    /**
+     * The skill catalogue.
+     *
+     * <p>Paged: this is a platform-wide master table with no tenant predicate,
+     * so it is the one list every college's students share and the one that
+     * grows fastest with the product rather than with any one customer.
+     */
+    public Page<Skill> getAllSkills(Pageable pageable) {
+        return skillRepository.findAll(pageable);
     }
 
-    public List<Skill> searchSkills(String query) {
-        return skillRepository.findByNameContainingIgnoreCase(query);
+    public Page<Skill> searchSkills(String query, Pageable pageable) {
+        return skillRepository.findByNameContainingIgnoreCase(query, pageable);
     }
 
     // Helper methods
