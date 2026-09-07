@@ -1,4 +1,5 @@
 import apiClient from './client';
+import type { PagedResponse, PageParams } from './paging';
 
 // ============================================================================
 // Batch API
@@ -136,9 +137,11 @@ export const enrollmentApi = {
     removeStudent: (batchId: number, studentId: number) =>
         apiClient.delete(`/admin/batches/${batchId}/enrollments/${studentId}`),
 
-    // Get pending requests
-    getPendingRequests: () =>
-        apiClient.get('/admin/enrollment-requests/pending'),
+    // Pending requests, newest first. Paged: the queue grows with the college,
+    // and with the whole platform for a SYSTEM_ADMIN.
+    getPendingRequests: (params: PageParams = {}) =>
+        apiClient.get<PagedResponse<EnrollmentRequestData>>(
+            '/admin/enrollment-requests/pending', { params }),
 
     // Approve request
     approveRequest: (requestId: number) =>
@@ -163,9 +166,10 @@ export const trainerEnrollmentApi = {
     }) =>
         apiClient.post('/trainer/enrollment-requests', data),
 
-    // Get trainer's own requests
-    getMyRequests: () =>
-        apiClient.get('/trainer/enrollment-requests'),
+    // The calling trainer's own pending requests, newest first. Paged.
+    getMyRequests: (params: PageParams = {}) =>
+        apiClient.get<PagedResponse<EnrollmentRequestData>>(
+            '/trainer/enrollment-requests', { params }),
 };
 
 // ============================================================================

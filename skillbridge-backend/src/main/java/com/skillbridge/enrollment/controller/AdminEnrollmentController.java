@@ -2,6 +2,8 @@ package com.skillbridge.enrollment.controller;
 
 import com.skillbridge.enrollment.dto.BatchEnrollmentDTO;
 import com.skillbridge.enrollment.dto.EnrolledStudentDTO;
+import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.enrollment.dto.EnrollmentRequestDTO;
 import com.skillbridge.enrollment.service.EnrollmentManagementService;
 import lombok.RequiredArgsConstructor;
@@ -73,15 +75,20 @@ public class AdminEnrollmentController {
     }
 
     /**
-     * Get all pending enrollment requests
+     * Pending enrollment requests, newest first.
      * GET /api/v1/admin/enrollment-requests/pending
+     *
+     * <p>Paged: the queue is one row per student per batch change, and it grows
+     * with the college. For a SYSTEM_ADMIN it grows with the whole platform.
      */
     @GetMapping("/enrollment-requests/pending")
     @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
-    public ResponseEntity<List<EnrollmentRequestDTO>> getPendingRequests() {
-        log.info("Admin API: Get all pending enrollment requests");
-        List<EnrollmentRequestDTO> requests = enrollmentService.getPendingRequests();
-        return ResponseEntity.ok(requests);
+    public ResponseEntity<PagedResponse<EnrollmentRequestDTO>> getPendingRequests(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.info("Admin API: Get pending enrollment requests");
+        return ResponseEntity.ok(PagedResponse.from(
+                enrollmentService.getPendingRequests(Pagination.of(page, size))));
     }
 
     /**

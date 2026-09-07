@@ -28,6 +28,8 @@ import com.skillbridge.trainer.entity.Trainer;
 import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -195,22 +197,26 @@ public class EnrollmentManagementService {
      * never actually applied.
      */
     @Transactional(readOnly = true)
-    public List<EnrollmentRequestDTO> getPendingRequests() {
+    public Page<EnrollmentRequestDTO> getPendingRequests(Pageable pageable) {
         AuthenticatedUser caller = SecurityUtils.currentUser();
-        List<EnrollmentRequest> rows = caller.isSystemAdmin()
-                ? requestRepository.findAllPending()
-                : requestRepository.findPendingForCollege(SecurityUtils.requireCollegeId());
+        Page<EnrollmentRequest> rows = caller.isSystemAdmin()
+                ? requestRepository.findAllPending(pageable)
+                : requestRepository.findPendingForCollege(SecurityUtils.requireCollegeId(), pageable);
 
-        return rows.stream()
-                .map(this::convertToRequestDTO)
-                .collect(Collectors.toList());
+        return rows.map(this::convertToRequestDTO);
     }
 
+    /**
+     * One trainer's own pending requests.
+     *
+     * @param trainerId the {@code trainers.id} of the calling trainer, resolved
+     *                  from the security principal by the controller
+     */
     @Transactional(readOnly = true)
-    public List<EnrollmentRequestDTO> getTrainerRequests(Long trainerId) {
-        return requestRepository.findByTrainerIdAndStatus(trainerId, EnrollmentStatus.PENDING).stream()
-                .map(this::convertToRequestDTO)
-                .collect(Collectors.toList());
+    public Page<EnrollmentRequestDTO> getTrainerRequests(Long trainerId, Pageable pageable) {
+        return requestRepository
+                .findByTrainerAndStatus(trainerId, EnrollmentStatus.PENDING, pageable)
+                .map(this::convertToRequestDTO);
     }
 
     /**

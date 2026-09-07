@@ -2,6 +2,8 @@ package com.skillbridge.enrollment.repository;
 
 import com.skillbridge.enrollment.domain.EnrollmentStatus;
 import com.skillbridge.enrollment.entity.EnrollmentRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -40,7 +42,7 @@ public interface EnrollmentRequestRepository extends JpaRepository<EnrollmentReq
      * predicate is explicit here so the query is correct whether or not any
      * filter is enabled.
      */
-    @Query("""
+    @Query(value = """
            SELECT r FROM EnrollmentRequest r
            JOIN FETCH r.batch
            JOIN FETCH r.student
@@ -48,19 +50,54 @@ public interface EnrollmentRequestRepository extends JpaRepository<EnrollmentReq
            WHERE r.status = com.skillbridge.enrollment.domain.EnrollmentStatus.PENDING
              AND r.collegeId = :collegeId
            ORDER BY r.createdAt DESC
+           """,
+           countQuery = """
+           SELECT count(r) FROM EnrollmentRequest r
+           WHERE r.status = com.skillbridge.enrollment.domain.EnrollmentStatus.PENDING
+             AND r.collegeId = :collegeId
            """)
-    List<EnrollmentRequest> findPendingForCollege(@Param("collegeId") Long collegeId);
+    Page<EnrollmentRequest> findPendingForCollege(@Param("collegeId") Long collegeId, Pageable pageable);
 
     /** Every pending request, across all colleges. SYSTEM_ADMIN only. */
-    @Query("""
+    @Query(value = """
            SELECT r FROM EnrollmentRequest r
            JOIN FETCH r.batch
            JOIN FETCH r.student
            LEFT JOIN FETCH r.trainer
            WHERE r.status = com.skillbridge.enrollment.domain.EnrollmentStatus.PENDING
            ORDER BY r.createdAt DESC
+           """,
+           countQuery = """
+           SELECT count(r) FROM EnrollmentRequest r
+           WHERE r.status = com.skillbridge.enrollment.domain.EnrollmentStatus.PENDING
            """)
-    List<EnrollmentRequest> findAllPending();
+    Page<EnrollmentRequest> findAllPending(Pageable pageable);
+
+    /**
+     * One trainer's requests in a given state, newest first.
+     *
+     * <p>Fetch-joined for the same reason as the pending queues: the DTO mapper
+     * reads the batch name, the student's name and roll number and the
+     * trainer's name, which is four extra selects per row on the derived
+     * finder this replaced.
+     */
+    @Query(value = """
+           SELECT r FROM EnrollmentRequest r
+           JOIN FETCH r.batch
+           JOIN FETCH r.student
+           LEFT JOIN FETCH r.trainer t
+           WHERE t.id = :trainerId
+             AND r.status = :status
+           ORDER BY r.createdAt DESC
+           """,
+           countQuery = """
+           SELECT count(r) FROM EnrollmentRequest r
+           WHERE r.trainer.id = :trainerId
+             AND r.status = :status
+           """)
+    Page<EnrollmentRequest> findByTrainerAndStatus(@Param("trainerId") Long trainerId,
+                                                   @Param("status") EnrollmentStatus status,
+                                                   Pageable pageable);
 
     long countByBatchIdAndStatus(Long batchId, EnrollmentStatus status);
 
