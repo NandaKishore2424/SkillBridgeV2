@@ -59,6 +59,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { itemsOf } from '@/api/paging'
 
 const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'outline'> = {
   UPCOMING: 'outline',
@@ -140,7 +141,8 @@ function TrainersTab({ batchId }: any) {
   // Fetch assigned trainers
   const { data: assignedTrainers } = useQuery({
     queryKey: ['admin', 'batches', batchId, 'trainers'],
-    queryFn: () => getBatchTrainers(batchId),
+    queryFn: () => getBatchTrainers(batchId, { size: 100 }),
+    select: itemsOf,
   })
 
   // Update selectedTrainers when assignedTrainers data arrives
@@ -282,7 +284,8 @@ function CompaniesTab({ batchId }: any) {
   // Fetch assigned companies
   const { data: assignedCompanies } = useQuery({
     queryKey: ['admin', 'batches', batchId, 'companies'],
-    queryFn: () => getBatchCompanies(batchId),
+    queryFn: () => getBatchCompanies(batchId, { size: 100 }),
+    select: itemsOf,
   })
 
   // Update selectedCompanies when assignedCompanies data arrives

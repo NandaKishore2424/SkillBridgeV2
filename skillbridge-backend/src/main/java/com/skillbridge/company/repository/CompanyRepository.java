@@ -27,6 +27,18 @@ import java.util.Optional;
 @Repository
 public interface CompanyRepository extends JpaRepository<Company, Long> {
 
+    /**
+     * Companies mapped to one batch, a page at a time.
+     *
+     * <p>Selected through the join table rather than by paging the batch's
+     * {@code companies} collection — see {@code TrainerRepository.findByBatch}
+     * for why a collection fetch cannot be paginated in SQL.
+     */
+    @Query(value = "select c from Batch b join b.companies c left join fetch c.college "
+                 + "where b.id = :batchId order by c.name",
+           countQuery = "select count(c) from Batch b join b.companies c where b.id = :batchId")
+    Page<Company> findByBatch(@Param("batchId") Long batchId, Pageable pageable);
+
     long countByCollegeId(Long collegeId);
 
     Page<Company> findByCollegeId(Long collegeId, Pageable pageable);

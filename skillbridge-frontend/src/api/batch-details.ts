@@ -27,13 +27,21 @@ export const getBatchDetails = async (id: number): Promise<BatchDetails> => {
   return response.data
 }
 
-export const getAssignedTrainers = async (batchId: number): Promise<Trainer[]> => {
-  const response = await apiClient.get<Trainer[]>(`/admin/batches/${batchId}/trainers`)
+export const getAssignedTrainers = async (
+  batchId: number,
+  params: PageParams = {},
+): Promise<PagedResponse<Trainer>> => {
+  const response = await apiClient.get<PagedResponse<Trainer>>(
+    `/admin/batches/${batchId}/trainers`, { params })
   return response.data
 }
 
-export const getAssignedCompanies = async (batchId: number): Promise<Company[]> => {
-  const response = await apiClient.get<Company[]>(`/admin/batches/${batchId}/companies`)
+export const getAssignedCompanies = async (
+  batchId: number,
+  params: PageParams = {},
+): Promise<PagedResponse<Company>> => {
+  const response = await apiClient.get<PagedResponse<Company>>(
+    `/admin/batches/${batchId}/companies`, { params })
   return response.data
 }
 
@@ -90,3 +98,4 @@ export {
   approveEnrollment,
   rejectEnrollment,
 } from './college-admin'
+import type { PagedResponse, PageParams } from './paging'

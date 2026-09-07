@@ -16,6 +16,24 @@ import java.util.Optional;
 public interface TrainerRepository extends JpaRepository<Trainer, Long> {
     Optional<Trainer> findByUser_Id(Long userId);
 
+    /**
+     * Trainers assigned to one batch, a page at a time.
+     *
+     * <p>Selects the trainers directly through the join table rather than
+     * loading the batch and paging its {@code trainers} collection. That
+     * distinction matters: Hibernate cannot push LIMIT/OFFSET into SQL for a
+     * collection fetch, so it reads every row and pages in memory, which is
+     * exactly the failure paginating is meant to prevent. Selecting the
+     * association's target as the query root makes it an ordinary join.
+     *
+     * <p>{@code user} is fetch-joined because the DTO reads the email and
+     * active flag off it.
+     */
+    @Query(value = "select t from Batch b join b.trainers t join fetch t.user "
+                 + "where b.id = :batchId order by t.fullName",
+           countQuery = "select count(t) from Batch b join b.trainers t where b.id = :batchId")
+    Page<Trainer> findByBatch(@Param("batchId") Long batchId, Pageable pageable);
+
     /** Bulk form of {@link #findByUser_Id}, so a list of rows resolves in one query. */
     List<Trainer> findByUser_IdIn(Collection<Long> userIds);
 

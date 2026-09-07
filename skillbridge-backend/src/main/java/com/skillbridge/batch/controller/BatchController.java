@@ -103,36 +103,42 @@ public class BatchController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Trainers assigned to this batch.
+     *
+     * <p>The batch is resolved and tenant-checked first, then the trainers are
+     * queried as their own page. Loading the batch with its {@code trainers}
+     * collection and paging that would page in memory -- Hibernate cannot push
+     * LIMIT/OFFSET into a collection fetch.
+     */
     @GetMapping("/{id}/trainers")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<TrainerDTO>> getBatchTrainers(@PathVariable Long id) {
+    public ResponseEntity<PagedResponse<TrainerDTO>> getBatchTrainers(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         log.info("Fetching trainers for batch: {}", id);
-        Optional<Batch> batchOpt = batchRepository.findByIdWithTrainers(id)
-                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()));
-        if (batchOpt.isEmpty()) {
+        if (!isVisibleBatch(id)) {
             return ResponseEntity.notFound().build();
         }
-
-        List<TrainerDTO> trainers = batchOpt.get().getTrainers().stream()
-                .map(this::convertTrainerToDTO)
-                .collect(java.util.stream.Collectors.toList());
-        return ResponseEntity.ok(trainers);
+        return ResponseEntity.ok(PagedResponse.from(
+                trainerRepository.findByBatch(id, Pagination.of(page, size)),
+                this::convertTrainerToDTO));
     }
 
     @GetMapping("/{id}/companies")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<List<CompanyDTO>> getBatchCompanies(@PathVariable Long id) {
+    public ResponseEntity<PagedResponse<CompanyDTO>> getBatchCompanies(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         log.info("Fetching companies for batch: {}", id);
-        Optional<Batch> batchOpt = batchRepository.findByIdWithCompanies(id)
-                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()));
-        if (batchOpt.isEmpty()) {
+        if (!isVisibleBatch(id)) {
             return ResponseEntity.notFound().build();
         }
-
-        List<CompanyDTO> companies = batchOpt.get().getCompanies().stream()
-                .map(this::convertCompanyToDTO)
-                .collect(java.util.stream.Collectors.toList());
-        return ResponseEntity.ok(companies);
+        return ResponseEntity.ok(PagedResponse.from(
+                companyRepository.findByBatch(id, Pagination.of(page, size)),
+                this::convertCompanyToDTO));
     }
 
     @PostMapping
@@ -360,6 +366,18 @@ public class BatchController {
                 countsByBatchId(batchRepository.countTrainersByBatchIds(ids)).getOrDefault(loaded.getId(), 0L),
                 countsByBatchId(batchRepository.countCompaniesByBatchIds(ids)).getOrDefault(loaded.getId(), 0L),
                 countsByBatchId(batchRepository.countEnrollmentsByBatchIds(ids)).getOrDefault(loaded.getId(), 0L));
+    }
+
+    /**
+     * Does this batch exist and belong to the caller's college?
+     *
+     * <p>A batch in another college and a batch that does not exist must be
+     * indistinguishable from outside, so both answer false and both become 404.
+     */
+    private boolean isVisibleBatch(Long id) {
+        return batchRepository.findByIdWithCollege(id)
+                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()))
+                .isPresent();
     }
 
     /**
