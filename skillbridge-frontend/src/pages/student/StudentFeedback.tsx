@@ -32,7 +32,9 @@ const StudentFeedback = () => {
 
   const { data: batches } = useQuery({
     queryKey: ['student-batches'],
-    queryFn: getStudentBatches,
+    // Paged; this select fills a batch picker, which needs the plain array.
+    queryFn: () => getStudentBatches({ size: 100 }),
+    select: itemsOf,
   });
 
   // /feedback/my-feedback is paged. This screen splits the rows into "received"

@@ -69,31 +69,41 @@ public class StudentDashboardController {
     }
 
     /**
-     * Get all available batches for enrollment
+     * Batches open to this student, soonest first.
+     *
+     * <p>Paged: this is every OPEN, ACTIVE or UPCOMING batch in the college, so
+     * it grows with the college rather than with the student.
      */
     @GetMapping("/batches/available")
     @PreAuthorize("hasRole('STUDENT')")
-    public ResponseEntity<List<BatchDTO>> getAvailableBatches() {
+    public ResponseEntity<PagedResponse<BatchDTO>> getAvailableBatches(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Fetching available batches for student: {}", user.getEmail());
 
-        List<BatchDTO> batches = dashboardService.getAvailableBatches(user.getCollegeId());
-        return ResponseEntity.ok(batches);
+        return ResponseEntity.ok(PagedResponse.from(
+                dashboardService.getAvailableBatches(user.getCollegeId(), Pagination.of(page, size))));
     }
 
     /**
-     * Get batches the student is enrolled in
+     * Batches the student is enrolled in, most recent intake first.
+     *
+     * <p>Paged: one row per enrollment, and enrollments accumulate over a
+     * student's whole time at the college.
      */
     @GetMapping("/batches")
     @PreAuthorize("hasRole('STUDENT')")
-    public ResponseEntity<List<StudentBatchDTO>> getMyBatches() {
+    public ResponseEntity<PagedResponse<StudentBatchDTO>> getMyBatches(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
         log.info("Fetching enrolled batches for student: {}", user.getEmail());
 
-        List<StudentBatchDTO> batches = dashboardService.getStudentBatches(user.getId());
-        return ResponseEntity.ok(batches);
+        return ResponseEntity.ok(PagedResponse.from(
+                dashboardService.getStudentBatches(user.getId(), Pagination.of(page, size))));
     }
 
     /**

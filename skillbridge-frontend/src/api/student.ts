@@ -6,6 +6,7 @@
 
 import apiClient from './client'
 import type { Batch } from '@/shared/types'
+import type { PagedResponse, PageParams } from './paging'
 
 // ==================== Student Dashboard ====================
 
@@ -60,18 +61,31 @@ export const getStudentDashboardStats = async (): Promise<StudentDashboardStats>
   return response.data
 }
 
+/**
+ * Top recommendations. Deliberately NOT paged: the backend caps this at six by
+ * construction, so it is bounded already and the ranking is the point.
+ */
 export const getRecommendedBatches = async (): Promise<RecommendedBatch[]> => {
   const response = await apiClient.get<RecommendedBatch[]>('/student/batches/recommended')
   return response.data
 }
 
-export const getAllAvailableBatches = async (): Promise<Batch[]> => {
-  const response = await apiClient.get<Batch[]>('/student/batches/available')
+/**
+ * Batches open to this student. Paged -- every OPEN, ACTIVE or UPCOMING batch
+ * in the college, so it grows with the college, not with the student.
+ */
+export const getAllAvailableBatches = async (
+  params: PageParams = {},
+): Promise<PagedResponse<Batch>> => {
+  const response = await apiClient.get<PagedResponse<Batch>>('/student/batches/available', { params })
   return response.data
 }
 
-export const getStudentBatches = async (): Promise<StudentBatch[]> => {
-  const response = await apiClient.get<StudentBatch[]>('/student/batches')
+/** Batches the student is enrolled in. Paged -- enrollments accumulate. */
+export const getStudentBatches = async (
+  params: PageParams = {},
+): Promise<PagedResponse<StudentBatch>> => {
+  const response = await apiClient.get<PagedResponse<StudentBatch>>('/student/batches', { params })
   return response.data
 }
 

@@ -37,6 +37,7 @@ import {
   getStudentBatches,
   applyToBatch,
 } from '@/api/student'
+import { itemsOf } from '@/api/paging'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import {
   BookOpen,
@@ -111,7 +112,10 @@ export function StudentDashboard() {
     isLoading: availableLoading,
   } = useQuery({
     queryKey: ['student', 'batches', 'available'],
-    queryFn: getAllAvailableBatches,
+    // Paged. This card lists batches to apply to and has no pager yet, so it
+    // takes the first page at the server's maximum size.
+    queryFn: () => getAllAvailableBatches({ size: 100 }),
+    select: itemsOf,
   })
 
   const {
@@ -119,7 +123,8 @@ export function StudentDashboard() {
     isLoading: enrolledLoading,
   } = useQuery({
     queryKey: ['student', 'batches', 'enrolled'],
-    queryFn: getStudentBatches,
+    queryFn: () => getStudentBatches({ size: 100 }),
+    select: itemsOf,
   })
 
   const applyMutation = useMutation({

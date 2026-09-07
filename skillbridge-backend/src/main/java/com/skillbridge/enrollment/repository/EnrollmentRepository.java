@@ -4,6 +4,8 @@ import com.skillbridge.enrollment.domain.EnrollmentState;
 import com.skillbridge.enrollment.entity.Enrollment;
 import com.skillbridge.enrollment.repository.projection.StudentStatsProjection;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -68,14 +70,19 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
      * during serialisation rather than quietly issuing another query. The fetch
      * joins are not an optimisation here — they are what makes the endpoint work.
      */
-    @Query("""
+    @Query(value = """
            SELECT DISTINCT e FROM Enrollment e
            JOIN FETCH e.batch b
            JOIN FETCH b.college
            WHERE e.student.id = :studentId
            ORDER BY b.startDate DESC
+           """,
+           countQuery = """
+           SELECT count(DISTINCT e) FROM Enrollment e
+           WHERE e.student.id = :studentId
            """)
-    List<Enrollment> findAllWithBatchDetailsByStudentId(@Param("studentId") Long studentId);
+    Page<Enrollment> findAllWithBatchDetailsByStudentId(@Param("studentId") Long studentId,
+                                                        Pageable pageable);
 
     @Query("SELECT e.batch.id FROM Enrollment e WHERE e.student.id = :studentId")
     List<Long> findBatchIdsByStudentId(@Param("studentId") Long studentId);

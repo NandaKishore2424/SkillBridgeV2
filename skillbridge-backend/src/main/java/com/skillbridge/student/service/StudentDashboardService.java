@@ -17,6 +17,8 @@ import com.skillbridge.student.repository.StudentRepository;
 import com.skillbridge.trainer.entity.Trainer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,17 +90,21 @@ public class StudentDashboardService {
      * summaries keyed by batch. Asking for progress per batch inside the mapping
      * loop would be an N+1 on exactly the screen where it hurts most.
      */
-    public List<StudentBatchDTO> getStudentBatches(Long userId) {
+    public Page<StudentBatchDTO> getStudentBatches(Long userId, Pageable pageable) {
         Student student = requireStudent(userId);
 
-        List<Enrollment> enrollments =
-                enrollmentRepository.findAllWithBatchDetailsByStudentId(student.getId());
+        Page<Enrollment> enrollments =
+                enrollmentRepository.findAllWithBatchDetailsByStudentId(student.getId(), pageable);
 
         if (enrollments.isEmpty()) {
-            return List.of();
+            return enrollments.map(e -> toStudentBatchDto(e, null));
         }
 
-        List<Long> batchIds = enrollments.stream()
+        // Progress summaries for the batches on THIS page, in one query. Scoping
+        // it to the page rather than to every enrollment is the whole point of
+        // paginating: otherwise the cheap query stays proportional to the
+        // student's entire history.
+        List<Long> batchIds = enrollments.getContent().stream()
                 .map(e -> e.getBatch().getId())
                 .toList();
 
@@ -106,21 +112,17 @@ public class StudentDashboardService {
                 .findByStudentIdAndBatchIdIn(student.getId(), batchIds).stream()
                 .collect(Collectors.toMap(StudentBatchProgress::getBatchId, Function.identity()));
 
-        return enrollments.stream()
-                .map(e -> toStudentBatchDto(e, progressByBatch.get(e.getBatch().getId())))
-                .toList();
+        return enrollments.map(e -> toStudentBatchDto(e, progressByBatch.get(e.getBatch().getId())));
     }
 
     /**
      * Batches open to this student, excluding ones they are already in.
      */
-    public List<BatchDTO> getAvailableBatches(Long collegeId) {
+    public Page<BatchDTO> getAvailableBatches(Long collegeId, Pageable pageable) {
         if (collegeId == null) {
-            return List.of();
+            return Page.empty(pageable);
         }
-        return batchRepository.findAvailableForCollege(collegeId).stream()
-                .map(this::toBatchDto)
-                .toList();
+        return batchRepository.findAvailableForCollege(collegeId, pageable).map(this::toBatchDto);
     }
 
     /**
@@ -128,6 +130,12 @@ public class StudentDashboardService {
      *
      * <p>Delegated to {@link BatchRecommendationService}; see that class for why
      * the scoring is a transparent heuristic rather than a model.
+     *
+     * <p>Deliberately not paged. The result is capped at
+     * {@link #RECOMMENDATION_LIMIT} by construction, so it is bounded already —
+     * a pager over a top-six list is a control nobody would use, and the
+     * ranking is the point. If the limit ever becomes a client parameter this
+     * has to be revisited.
      */
     public List<RecommendedBatchDTO> getRecommendedBatches(Long userId) {
         Student student = requireStudent(userId);

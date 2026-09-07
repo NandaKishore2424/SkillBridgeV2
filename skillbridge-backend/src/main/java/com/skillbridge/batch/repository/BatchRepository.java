@@ -54,14 +54,20 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
     List<Batch> findOpenForCollegeExcluding(@Param("collegeId") Long collegeId,
                                             @Param("excludedIds") Collection<Long> excludedIds);
 
-    @Query("""
+    @Query(value = """
            SELECT b FROM Batch b
            WHERE b.college.id = :collegeId
              AND b.deletedAt IS NULL
              AND b.status IN ('OPEN', 'ACTIVE', 'UPCOMING')
            ORDER BY b.startDate ASC
+           """,
+           countQuery = """
+           SELECT count(b) FROM Batch b
+           WHERE b.college.id = :collegeId
+             AND b.deletedAt IS NULL
+             AND b.status IN ('OPEN', 'ACTIVE', 'UPCOMING')
            """)
-    List<Batch> findAvailableForCollege(@Param("collegeId") Long collegeId);
+    Page<Batch> findAvailableForCollege(@Param("collegeId") Long collegeId, Pageable pageable);
 
     /**
      * Load a batch for a capacity-sensitive write.
