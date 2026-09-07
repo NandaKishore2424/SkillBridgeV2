@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { getTrainerBatches, getBatchStudents } from '@/api/trainer';
 import { feedbackApi } from '@/api/feedback';
+import { itemsOf } from '@/api/paging';
 import { AuthenticatedLayout, PageWrapper } from '@/shared/components/layout';
 import { RoleGuard } from '@/shared/components/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -42,9 +43,14 @@ const FeedbackManagement = () => {
     enabled: !!selectedBatchId,
   });
 
+  // /feedback/my-feedback is paged. This screen splits the rows into "received"
+  // and "given" client-side and has no pager, so it takes the first page at the
+  // server's maximum size; `select: itemsOf` keeps the rest of the component
+  // working on a plain array. A pager here is still to be built.
   const { data: myFeedback, isLoading: isLoadingFeedback } = useQuery({
     queryKey: ['my-feedback'],
-    queryFn: feedbackApi.getMyFeedback,
+    queryFn: () => feedbackApi.getMyFeedback({ size: 100 }),
+    select: itemsOf,
   });
 
   const createFeedbackMutation = useMutation({

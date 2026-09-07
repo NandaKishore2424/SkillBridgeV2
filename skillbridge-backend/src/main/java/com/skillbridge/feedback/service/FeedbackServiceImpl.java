@@ -18,6 +18,8 @@ import com.skillbridge.student.repository.StudentRepository;
 import com.skillbridge.trainer.entity.Trainer;
 import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,28 +98,28 @@ public class FeedbackServiceImpl implements FeedbackService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<FeedbackResponseDTO> getFeedbackByBatch(Long batchId, AuthenticatedUser caller) {
+    public Page<FeedbackResponseDTO> getFeedbackByBatch(Long batchId, AuthenticatedUser caller, Pageable pageable) {
         batchRepository.findById(batchId)
                 .filter(b -> isVisibleTo(caller, b.getCollege().getId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("Batch", batchId));
 
-        return map(feedbackRepository.findByBatch(batchId));
+        return map(feedbackRepository.findByBatch(batchId, pageable));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<FeedbackResponseDTO> getFeedbackAboutStudent(Long studentId, AuthenticatedUser caller) {
+    public Page<FeedbackResponseDTO> getFeedbackAboutStudent(Long studentId, AuthenticatedUser caller, Pageable pageable) {
         Student student = studentRepository.findById(studentId)
                 .filter(s -> isVisibleTo(caller, s.getCollege().getId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
 
-        return map(feedbackRepository.findReceivedBy(student.getUser().getId()));
+        return map(feedbackRepository.findReceivedBy(student.getUser().getId(), pageable));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<FeedbackResponseDTO> getMyFeedback(AuthenticatedUser caller) {
-        return map(feedbackRepository.findInvolving(caller.getId()));
+    public Page<FeedbackResponseDTO> getMyFeedback(AuthenticatedUser caller, Pageable pageable) {
+        return map(feedbackRepository.findInvolving(caller.getId(), pageable));
     }
 
     // --- inbound translation ------------------------------------------------
@@ -177,9 +179,11 @@ public class FeedbackServiceImpl implements FeedbackService {
 
     // --- outbound translation ----------------------------------------------
 
-    private List<FeedbackResponseDTO> map(List<Feedback> rows) {
-        Parties parties = Parties.resolve(rows, studentRepository, trainerRepository);
-        return rows.stream().map(row -> toDTO(row, parties)).collect(Collectors.toList());
+    private Page<FeedbackResponseDTO> map(Page<Feedback> rows) {
+        // Resolved from the page's own content, so the two bulk lookups cover
+        // exactly the rows being returned rather than the whole result set.
+        Parties parties = Parties.resolve(rows.getContent(), studentRepository, trainerRepository);
+        return rows.map(row -> toDTO(row, parties));
     }
 
     /**

@@ -1,6 +1,8 @@
 package com.skillbridge.feedback.controller;
 
 import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.feedback.dto.FeedbackRequestDTO;
 import com.skillbridge.feedback.dto.FeedbackResponseDTO;
 import com.skillbridge.feedback.service.FeedbackService;
@@ -12,16 +14,16 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 /**
  * Feedback endpoints.
  *
- * <p>Paths and payloads are unchanged from what {@code src/api/feedback.ts}
- * already calls. What changed underneath is that they now work: the entity
- * points at a table that exists, and the principal is resolved through
- * {@link SecurityUtils} rather than {@code authentication.getName()} on a raw
- * JPA entity.
+ * <p>The three reads return a {@link PagedResponse}. Feedback is append-only
+ * and nothing prunes it, so every one of these lists grows for the life of the
+ * account, the batch or the student it is keyed by — {@code /my-feedback} for a
+ * trainer accumulates a row per student per batch per term, indefinitely.
+ *
+ * <p>The principal is resolved through {@link SecurityUtils} rather than
+ * {@code authentication.getName()} on a raw JPA entity.
  */
 @RestController
 @RequestMapping("/api/v1/feedback")
@@ -42,16 +44,22 @@ public class FeedbackController {
     /** Everything the caller is party to, in either direction. */
     @GetMapping("/my-feedback")
     @PreAuthorize("hasAnyRole('STUDENT', 'TRAINER')")
-    public ResponseEntity<List<FeedbackResponseDTO>> getMyFeedback(Authentication authentication) {
-        return ResponseEntity.ok(feedbackService.getMyFeedback(SecurityUtils.requirePrincipal(authentication)));
+    public ResponseEntity<PagedResponse<FeedbackResponseDTO>> getMyFeedback(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(feedbackService.getMyFeedback(
+                SecurityUtils.requirePrincipal(authentication), Pagination.of(page, size))));
     }
 
     @GetMapping("/batch/{batchId}")
     @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN', 'TRAINER')")
-    public ResponseEntity<List<FeedbackResponseDTO>> getFeedbackByBatch(
-            @PathVariable Long batchId, Authentication authentication) {
-        return ResponseEntity.ok(
-                feedbackService.getFeedbackByBatch(batchId, SecurityUtils.requirePrincipal(authentication)));
+    public ResponseEntity<PagedResponse<FeedbackResponseDTO>> getFeedbackByBatch(
+            @PathVariable Long batchId, Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(feedbackService.getFeedbackByBatch(
+                batchId, SecurityUtils.requirePrincipal(authentication), Pagination.of(page, size))));
     }
 
     /**
@@ -64,9 +72,11 @@ public class FeedbackController {
      */
     @GetMapping("/student/{studentId}")
     @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN', 'TRAINER')")
-    public ResponseEntity<List<FeedbackResponseDTO>> getFeedbackByStudent(
-            @PathVariable Long studentId, Authentication authentication) {
-        return ResponseEntity.ok(
-                feedbackService.getFeedbackAboutStudent(studentId, SecurityUtils.requirePrincipal(authentication)));
+    public ResponseEntity<PagedResponse<FeedbackResponseDTO>> getFeedbackByStudent(
+            @PathVariable Long studentId, Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(PagedResponse.from(feedbackService.getFeedbackAboutStudent(
+                studentId, SecurityUtils.requirePrincipal(authentication), Pagination.of(page, size))));
     }
 }

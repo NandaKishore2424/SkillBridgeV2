@@ -4,7 +4,8 @@ import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.feedback.dto.FeedbackRequestDTO;
 import com.skillbridge.feedback.dto.FeedbackResponseDTO;
 
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Feedback between the people on a batch.
@@ -20,15 +21,15 @@ public interface FeedbackService {
 
     FeedbackResponseDTO createFeedback(FeedbackRequestDTO request, AuthenticatedUser caller);
 
-    List<FeedbackResponseDTO> getFeedbackByBatch(Long batchId, AuthenticatedUser caller);
+    Page<FeedbackResponseDTO> getFeedbackByBatch(Long batchId, AuthenticatedUser caller, Pageable pageable);
 
     /**
      * Feedback written <em>about</em> a student, addressed by student profile id
      * — {@code students.id}, which is what the client already holds — not by the
      * {@code users.id} the table actually stores.
      */
-    List<FeedbackResponseDTO> getFeedbackAboutStudent(Long studentId, AuthenticatedUser caller);
+    Page<FeedbackResponseDTO> getFeedbackAboutStudent(Long studentId, AuthenticatedUser caller, Pageable pageable);
 
     /** Everything the caller is party to, given or received. */
-    List<FeedbackResponseDTO> getMyFeedback(AuthenticatedUser caller);
+    Page<FeedbackResponseDTO> getMyFeedback(AuthenticatedUser caller, Pageable pageable);
 }
