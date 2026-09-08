@@ -34,6 +34,7 @@ import com.skillbridge.common.tenant.SoftDeleteService;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import com.skillbridge.common.exception.BusinessRuleException;
@@ -117,15 +118,17 @@ public class BatchController {
         Page<Batch> batches = batchRepository.findAll(spec, Pagination.of(page, size,
                 SortParameter.parse(sort, SORTABLE, Sort.by(Sort.Direction.DESC, "startDate"))));
         List<Long> ids = batches.getContent().stream().map(Batch::getId).toList();
-        Map<Long, Long> trainerCounts = countsByBatchId(batchRepository.countTrainersByBatchIds(ids));
-        Map<Long, Long> companyCounts = countsByBatchId(batchRepository.countCompaniesByBatchIds(ids));
-        Map<Long, Long> studentCounts = countsByBatchId(batchRepository.countEnrollmentsByBatchIds(ids));
+
+        // All three counts in one round trip. They used to be three grouped
+        // queries -- each bounded, but round trips are what a remote database
+        // charges for.
+        Map<Long, long[]> counts = associationCounts(ids);
         // Maps through the page rather than the already-built list, so the paging
         // metadata and the content cannot come from different page objects.
-        return ResponseEntity.ok(PagedResponse.from(batches, b -> convertToDTO(b,
-                trainerCounts.getOrDefault(b.getId(), 0L),
-                companyCounts.getOrDefault(b.getId(), 0L),
-                studentCounts.getOrDefault(b.getId(), 0L))));
+        return ResponseEntity.ok(PagedResponse.from(batches, b -> {
+            long[] c = counts.getOrDefault(b.getId(), EMPTY_COUNTS);
+            return convertToDTO(b, c[0], c[1], c[2]);
+        }));
     }
 
     @GetMapping("/{id}")
@@ -403,6 +406,23 @@ public class BatchController {
                 countsByBatchId(batchRepository.countTrainersByBatchIds(ids)).getOrDefault(loaded.getId(), 0L),
                 countsByBatchId(batchRepository.countCompaniesByBatchIds(ids)).getOrDefault(loaded.getId(), 0L),
                 countsByBatchId(batchRepository.countEnrollmentsByBatchIds(ids)).getOrDefault(loaded.getId(), 0L));
+    }
+
+    private static final long[] EMPTY_COUNTS = {0L, 0L, 0L};
+
+    /** {@code batchId -> [trainers, companies, students]} for a page. */
+    private Map<Long, long[]> associationCounts(List<Long> batchIds) {
+        if (batchIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, long[]> counts = new HashMap<>();
+        for (Object[] row : batchRepository.countAssociationsByBatchIds(batchIds)) {
+            counts.put(((Number) row[0]).longValue(), new long[]{
+                    ((Number) row[1]).longValue(),
+                    ((Number) row[2]).longValue(),
+                    ((Number) row[3]).longValue()});
+        }
+        return counts;
     }
 
     /**

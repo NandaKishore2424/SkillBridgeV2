@@ -1,6 +1,7 @@
 package com.skillbridge.syllabus.entity;
 
 import com.skillbridge.batch.entity.Batch;
+import org.hibernate.annotations.BatchSize;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -74,6 +75,7 @@ public class SyllabusModule {
     @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC")
     @Builder.Default
+    @BatchSize(size = 25)
     private List<SyllabusSubmodule> submodules = new ArrayList<>();
 
     @CreationTimestamp

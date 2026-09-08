@@ -2,6 +2,7 @@ package com.skillbridge.student.entity;
 
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.college.entity.College;
+import org.hibernate.annotations.BatchSize;
 import jakarta.persistence.*;
 import org.hibernate.annotations.SQLRestriction;
 import lombok.AllArgsConstructor;
@@ -75,10 +76,12 @@ public class Student {
 
     @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
+    @BatchSize(size = 25)
     private List<StudentSkill> skills = new ArrayList<>();
 
     @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
+    @BatchSize(size = 25)
     private List<StudentProject> projects = new ArrayList<>();
 
     /**

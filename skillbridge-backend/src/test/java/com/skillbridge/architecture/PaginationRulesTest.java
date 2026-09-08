@@ -9,13 +9,18 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.OneToMany;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Page;
+import org.hibernate.annotations.BatchSize;
 import org.springframework.data.jpa.repository.Query;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 
@@ -109,6 +114,21 @@ class PaginationRulesTest {
                 .that().areDeclaredInClassesThat().haveSimpleNameEndingWith("Repository")
                 .should(declareACountQueryWhenPagingAFetchJoin())
                 .because("Spring Data cannot derive a count from a query containing a fetch join");
+
+        rule.check(production);
+    }
+
+    @Test
+    @DisplayName("every collection association carries a @BatchSize")
+    void collectionsAreBatchFetched() {
+        ArchRule rule = fields()
+                .that().areAnnotatedWith(OneToMany.class)
+                .or().areAnnotatedWith(ManyToMany.class)
+                .or().areAnnotatedWith(ElementCollection.class)
+                .should().beAnnotatedWith(BatchSize.class)
+                .because("a lazy collection touched in a loop is one query per row; @BatchSize "
+                        + "makes that N/size+1 instead. It is the net for the fetch join somebody "
+                        + "forgot, and it costs nothing to have");
 
         rule.check(production);
     }

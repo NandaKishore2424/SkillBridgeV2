@@ -7,6 +7,7 @@ import com.skillbridge.batch.controller.BatchController;
 import com.skillbridge.student.controller.StudentAdminController;
 import com.skillbridge.student.service.StudentDashboardService;
 import com.skillbridge.syllabus.service.SyllabusService;
+import com.skillbridge.testsupport.InMemoryPaginationDetector;
 import com.skillbridge.testsupport.QueryCountAssertion;
 import com.skillbridge.testsupport.TenantFixture;
 import com.skillbridge.trainer.service.TrainerDashboardService;
@@ -164,15 +165,18 @@ class QueryEfficiencyTest {
     @Test
     @DisplayName("GET /batches/{id}/syllabus — bounded regardless of tree size")
     void syllabusTree() {
-        asCollegeAdmin(small.collegeId);
-        var smallCount = queries.countQueries(
-                () -> syllabusService.getCurriculumByBatchId(small.batchIds.get(0)));
-        asCollegeAdmin(large.collegeId);
-        var largeCount = queries.countQueries(
-                () -> syllabusService.getCurriculumByBatchId(large.batchIds.get(0)));
+        try (var detector = new InMemoryPaginationDetector()) {
+            asCollegeAdmin(small.collegeId);
+            var smallCount = queries.countQueries(
+                    () -> syllabusService.getCurriculumByBatchId(small.batchIds.get(0)));
+            asCollegeAdmin(large.collegeId);
+            var largeCount = queries.countQueries(
+                    () -> syllabusService.getCurriculumByBatchId(large.batchIds.get(0)));
 
-        record("GET /batches/{id}/syllabus", smallCount.queryCount(), largeCount.queryCount());
-        smallCount.assertDoesNotGrowInto(largeCount);
+            record("GET /batches/{id}/syllabus", smallCount.queryCount(), largeCount.queryCount());
+            detector.assertNone("GET /batches/{id}/syllabus");
+            smallCount.assertDoesNotGrowInto(largeCount);
+        }
     }
 
     @Test
@@ -192,10 +196,15 @@ class QueryEfficiencyTest {
      */
     private void compare(String label, java.util.function.Supplier<?> onSmall,
                          java.util.function.Supplier<?> onLarge) {
-        var smallCount = queries.countQueries(onSmall);
-        var largeCount = queries.countQueries(onLarge);
-        record(label, smallCount.queryCount(), largeCount.queryCount());
-        smallCount.assertDoesNotGrowInto(largeCount);
+        // Watches for Hibernate paginating in the heap, which produces the
+        // right page and unbounded memory and fails nothing on its own.
+        try (var detector = new InMemoryPaginationDetector()) {
+            var smallCount = queries.countQueries(onSmall);
+            var largeCount = queries.countQueries(onLarge);
+            record(label, smallCount.queryCount(), largeCount.queryCount());
+            detector.assertNone(label);
+            smallCount.assertDoesNotGrowInto(largeCount);
+        }
     }
 
     /**

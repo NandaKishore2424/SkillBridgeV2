@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.company.entity.Company;
 import com.skillbridge.trainer.entity.Trainer;
+import org.hibernate.annotations.BatchSize;
 import jakarta.persistence.*;
 import org.hibernate.annotations.SQLRestriction;
 import lombok.AllArgsConstructor;
@@ -80,11 +81,25 @@ public class Batch {
     @Builder.Default
     private Long version = 0L;
 
-    // Many-to-Many relationship with Trainers
+    /**
+     * Trainers assigned to this batch.
+     *
+     * <p>{@code @BatchSize} is the safety net, not the fix. Where a read path
+     * needs these it should say so — a fetch join, or a bulk query keyed by the
+     * page's ids, both of which this codebase uses. What the annotation buys is
+     * what happens when somebody forgets: Hibernate loads the collection for up
+     * to 25 batches in one {@code WHERE batch_id IN (?,...)} rather than one
+     * query per batch, so an accidental N+1 becomes an N/25+1. Bounded rather
+     * than free, which is the difference between a slow page and an incident.
+     *
+     * <p>Every collection association in this codebase carries one, and
+     * {@code PaginationRulesTest} fails the build if a new one does not.
+     */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "batch_trainers", joinColumns = @JoinColumn(name = "batch_id"), inverseJoinColumns = @JoinColumn(name = "trainer_id"))
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "batches" })
     @Builder.Default
+    @BatchSize(size = 25)
     private Set<Trainer> trainers = new HashSet<>();
 
     // Many-to-Many relationship with Companies
@@ -92,6 +107,7 @@ public class Batch {
     @JoinTable(name = "batch_companies", joinColumns = @JoinColumn(name = "batch_id"), inverseJoinColumns = @JoinColumn(name = "company_id"))
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "batches" })
     @Builder.Default
+    @BatchSize(size = 25)
     private Set<Company> companies = new HashSet<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)

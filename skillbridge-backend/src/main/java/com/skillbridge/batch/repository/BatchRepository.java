@@ -204,6 +204,31 @@ public interface BatchRepository extends JpaRepository<Batch, Long>, JpaSpecific
     @Query("select e.student.id, e.batch.id from Enrollment e where e.student.id in :studentIds")
     List<Object[]> findBatchIdsByStudentIds(@Param("studentIds") Collection<Long> studentIds);
 
+    /**
+     * {@code [batchId, trainerCount, companyCount, enrolledCount]} for a page,
+     * in a single round trip.
+     *
+     * <p>Replaces three separate grouped counts. Each of those was correct and
+     * bounded — one query per page, not per row — but against a database in
+     * another region the cost of a read is dominated by round trips, not by
+     * what the round trip does. Three became one and
+     * {@code GET /admin/batches} went from 4 statements to 2.
+     *
+     * <p>Correlated subqueries rather than three left-join-group-bys, because
+     * joining two collections in one query multiplies the rows: a batch with 3
+     * trainers and 2 companies would produce 6, and every count would be wrong
+     * in a way that looks plausible.
+     */
+    @Query("""
+           SELECT b.id,
+                  (SELECT count(t) FROM Batch b2 JOIN b2.trainers t WHERE b2.id = b.id),
+                  (SELECT count(c) FROM Batch b3 JOIN b3.companies c WHERE b3.id = b.id),
+                  (SELECT count(e) FROM Enrollment e WHERE e.batch.id = b.id)
+           FROM Batch b
+           WHERE b.id IN :batchIds
+           """)
+    List<Object[]> countAssociationsByBatchIds(@Param("batchIds") Collection<Long> batchIds);
+
     /** {@code [batchId, enrolledCount]} for a page of batches, in one query. */
     @Query("select e.batch.id, count(e.id) from Enrollment e where e.batch.id in :batchIds group by e.batch.id")
     List<Object[]> countEnrollmentsByBatchIds(@Param("batchIds") Collection<Long> batchIds);
