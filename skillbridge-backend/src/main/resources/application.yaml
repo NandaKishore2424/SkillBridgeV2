@@ -79,6 +79,26 @@ spring:
         order_inserts: true
         order_updates: true
 
+        # Hibernate's statistics counter, which is how QueryCountAssertion sees
+        # how many statements a call emits. It is what makes an N+1 a test
+        # failure instead of something you notice in production.
+        #
+        # On in every profile on purpose. The overhead is a handful of atomic
+        # counters -- Hibernate's own docs call it negligible -- and the
+        # alternative is a guard that only works where it is already switched
+        # on, which is never the environment where the surprise happens. It also
+        # feeds the JMX/actuator hibernate metrics for free.
+        generate_statistics: true
+        # Statistics on their own log a summary per session at INFO, which is
+        # noise. The logger is muted in the logging block below; the counters
+        # stay live.
+
+logging:
+  level:
+    # Statistics are collected (see generate_statistics) but the per-session
+    # summary Hibernate logs is not wanted in normal output.
+    org.hibernate.stat: WARN
+
 jwt:
   secret: ${JWT_SECRET}
   accessTokenTtlSeconds: ${JWT_ACCESS_TTL:3600}

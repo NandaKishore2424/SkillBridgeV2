@@ -1,0 +1,24 @@
+# Profile for the integration tests.
+#
+# The datasource is NOT set here: tests run against whatever application-local
+# provides, gated on DATABASE_URL being set. That gate is deliberate -- without
+# it the integration tests skip silently and a green run proves nothing.
+#
+# What this profile adds is visibility. When a query-count assertion fails, the
+# first question is always "which queries?", and answering it should not require
+# editing config and re-running.
+spring:
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+        highlight_sql: true
+
+logging:
+  level:
+    # The SQL, and the parameters bound into it. `jdbc.bind` at TRACE is the
+    # setting that turns a log full of `?` into something you can paste into
+    # psql -- without it, reading a failure means guessing at the values.
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+    org.hibernate.stat: DEBUG

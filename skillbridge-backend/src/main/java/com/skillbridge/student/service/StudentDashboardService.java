@@ -22,6 +22,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import com.skillbridge.company.entity.Company;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -97,13 +100,13 @@ public class StudentDashboardService {
                 enrollmentRepository.findAllWithBatchDetailsByStudentId(student.getId(), pageable);
 
         if (enrollments.isEmpty()) {
-            return enrollments.map(e -> toStudentBatchDto(e, null));
+            return enrollments.map(e -> toStudentBatchDto(e, null, List.of(), List.of()));
         }
 
-        // Progress summaries for the batches on THIS page, in one query. Scoping
-        // it to the page rather than to every enrollment is the whole point of
-        // paginating: otherwise the cheap query stays proportional to the
-        // student's entire history.
+        // Everything below is per PAGE, not per row. Scoping these to the page
+        // rather than to every enrollment is the whole point of paginating:
+        // otherwise the cheap queries stay proportional to the student's entire
+        // history.
         List<Long> batchIds = enrollments.getContent().stream()
                 .map(e -> e.getBatch().getId())
                 .toList();
@@ -112,7 +115,30 @@ public class StudentDashboardService {
                 .findByStudentIdAndBatchIdIn(student.getId(), batchIds).stream()
                 .collect(Collectors.toMap(StudentBatchProgress::getBatchId, Function.identity()));
 
-        return enrollments.map(e -> toStudentBatchDto(e, progressByBatch.get(e.getBatch().getId())));
+        // The trainers and companies each batch is shown with. These used to be
+        // read straight off the lazy collections inside the mapper, which is
+        // two queries per row -- twelve enrolled batches cost 28 statements
+        // where three cost 10. QueryEfficiencyTest caught it.
+        Map<Long, List<Trainer>> trainersByBatch = groupByBatch(
+                batchRepository.findTrainersByBatchIds(batchIds));
+        Map<Long, List<Company>> companiesByBatch = groupByBatch(
+                batchRepository.findCompaniesByBatchIds(batchIds));
+
+        return enrollments.map(e -> toStudentBatchDto(e,
+                progressByBatch.get(e.getBatch().getId()),
+                trainersByBatch.getOrDefault(e.getBatch().getId(), List.of()),
+                companiesByBatch.getOrDefault(e.getBatch().getId(), List.of())));
+    }
+
+    /** Folds {@code [batchId, entity]} rows into a lookup keyed by batch. */
+    @SuppressWarnings("unchecked")
+    private static <T> Map<Long, List<T>> groupByBatch(List<Object[]> rows) {
+        Map<Long, List<T>> grouped = new HashMap<>();
+        for (Object[] row : rows) {
+            grouped.computeIfAbsent(((Number) row[0]).longValue(), k -> new ArrayList<>())
+                    .add((T) row[1]);
+        }
+        return grouped;
     }
 
     /**
@@ -155,7 +181,14 @@ public class StudentDashboardService {
                 .findByStudentIdAndBatchId(student.getId(), batchId)
                 .orElse(null);
 
-        return toStudentBatchDto(enrollment, summary);
+        // A single batch, so loading its associations here is one query each,
+        // not one per row -- the same bulk finders, over a page of one.
+        List<Long> ids = List.of(batchId);
+        Map<Long, List<Trainer>> trainers = groupByBatch(batchRepository.findTrainersByBatchIds(ids));
+        Map<Long, List<Company>> companies = groupByBatch(batchRepository.findCompaniesByBatchIds(ids));
+        return toStudentBatchDto(enrollment, summary,
+                trainers.getOrDefault(batchId, List.of()),
+                companies.getOrDefault(batchId, List.of()));
     }
 
     /**
@@ -200,7 +233,15 @@ public class StudentDashboardService {
     // Mapping
     // ------------------------------------------------------------------
 
-    private StudentBatchDTO toStudentBatchDto(Enrollment enrollment, StudentBatchProgress summary) {
+    /**
+     * Maps one enrolled batch.
+     *
+     * <p>Trainers and companies are passed in rather than read off
+     * {@code batch}: they are lazy collections, and touching them here is a
+     * query per row. The caller loads both for the whole page.
+     */
+    private StudentBatchDTO toStudentBatchDto(Enrollment enrollment, StudentBatchProgress summary,
+                                              List<Trainer> trainers, List<Company> companies) {
         Batch batch = enrollment.getBatch();
 
         StudentBatchDTO dto = new StudentBatchDTO();
@@ -216,19 +257,17 @@ public class StudentDashboardService {
         dto.setCollegeName(batch.getCollege() == null ? null : batch.getCollege().getName());
         dto.setEnrolledAt(enrollment.getEnrolledAt());
 
-        dto.setTrainers(batch.getTrainers().stream()
-                .map(this::toTrainerInfo)
-                .toList());
+        dto.setTrainers(trainers.stream().map(this::toTrainerInfo).toList());
 
-        dto.setCompanies(batch.getCompanies().stream()
+        dto.setCompanies(companies.stream()
                 .map(c -> StudentBatchDTO.CompanyInfo.builder()
                         .id(c.getId())
                         .name(c.getName())
                         .build())
                 .toList());
 
-        dto.setTrainerCount(batch.getTrainers().size());
-        dto.setCompanyCount(batch.getCompanies().size());
+        dto.setTrainerCount(trainers.size());
+        dto.setCompanyCount(companies.size());
         dto.setProgress(toProgressInfo(summary));
 
         return dto;

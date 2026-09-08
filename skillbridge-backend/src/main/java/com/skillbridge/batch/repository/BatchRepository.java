@@ -209,6 +209,24 @@ public interface BatchRepository extends JpaRepository<Batch, Long>, JpaSpecific
     List<Object[]> countEnrollmentsByBatchIds(@Param("batchIds") Collection<Long> batchIds);
 
     /**
+     * {@code [batchId, Trainer]} pairs for a page of batches, in one query.
+     *
+     * <p>For a screen that lists each batch <em>with</em> its trainers. Reading
+     * {@code batch.getTrainers()} inside a map is two queries per row once
+     * companies are read too; this is one for the page.
+     *
+     * <p>Returns pairs rather than fetch-joining the collection onto the page,
+     * because Hibernate cannot paginate a collection fetch in SQL -- it would
+     * read every row and page in memory.
+     */
+    @Query("select b.id, t from Batch b join b.trainers t where b.id in :batchIds")
+    List<Object[]> findTrainersByBatchIds(@Param("batchIds") Collection<Long> batchIds);
+
+    /** {@code [batchId, Company]} pairs for a page of batches. See above. */
+    @Query("select b.id, c from Batch b join b.companies c where b.id in :batchIds")
+    List<Object[]> findCompaniesByBatchIds(@Param("batchIds") Collection<Long> batchIds);
+
+    /**
      * Live batches this trainer is assigned to. Guards trainer deletion.
      *
      * <p>Counts through the join table explicitly and filters {@code deletedAt}

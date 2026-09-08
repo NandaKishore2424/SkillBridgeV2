@@ -49,6 +49,21 @@ public class SyllabusService {
 
         List<SyllabusModule> modules = moduleRepository.findByBatchIdWithSubmodulesAndTopics(batchId);
 
+        // Second query: initialise every sub-module's topics at once. Walking
+        // the tree without this is one query per sub-module -- 8 modules cost
+        // 18 statements where 2 cost 6. It cannot be folded into the query
+        // above because both associations are Lists and Hibernate rejects two
+        // collection fetches in one query. The result is ignored on purpose:
+        // the point is the side effect on the persistence context, which leaves
+        // the mappers below able to read getTopics() for free.
+        List<Long> submoduleIds = modules.stream()
+                .flatMap(m -> m.getSubmodules().stream())
+                .map(SyllabusSubmodule::getId)
+                .toList();
+        if (!submoduleIds.isEmpty()) {
+            submoduleRepository.fetchTopicsFor(submoduleIds);
+        }
+
         return modules.stream()
                 .map(this::convertToModuleDTO)
                 .collect(Collectors.toList());

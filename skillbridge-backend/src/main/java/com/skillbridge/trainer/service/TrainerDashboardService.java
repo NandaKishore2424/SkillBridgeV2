@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 import com.skillbridge.common.exception.ForbiddenException;
 
@@ -58,9 +60,18 @@ public class TrainerDashboardService {
         public Page<TrainerBatchDTO> getTrainerBatches(Long userId, Pageable pageable) {
                 log.info("Getting batches for trainer userId: {}", userId);
 
-                return batchRepository.findByTrainerUserId(userId, pageable)
+                Page<Batch> batches = batchRepository.findByTrainerUserId(userId, pageable);
+
+                // One grouped count for the whole page. This was
+                // countByBatchId(batch.getId()) inside the map -- a query per
+                // row, so twelve batches cost thirteen statements where three
+                // cost four. QueryEfficiencyTest caught it.
+                Map<Long, Long> enrolled = countsByBatchId(batchRepository.countEnrollmentsByBatchIds(
+                                batches.getContent().stream().map(Batch::getId).toList()));
+
+                return batches
                                 .map(batch -> {
-                                        int enrolledCount = enrollmentRepository.countByBatchId(batch.getId());
+                                        long enrolledCount = enrolled.getOrDefault(batch.getId(), 0L);
 
                                         return TrainerBatchDTO.builder()
                                                         .id(batch.getId())
@@ -72,10 +83,19 @@ public class TrainerDashboardService {
                                                                         : null)
                                                         .endDate(batch.getEndDate() != null ? batch.getEndDate().format(
                                                                         DateTimeFormatter.ISO_LOCAL_DATE) : null)
-                                                        .enrolledCount(enrolledCount)
+                                                        .enrolledCount((int) enrolledCount)
                                                         .syllabus(null) // TODO: add syllabus info when needed
                                                         .build();
                                 });
+        }
+
+        /** {@code [batchId, count]} rows folded into a lookup. */
+        private static Map<Long, Long> countsByBatchId(List<Object[]> rows) {
+                Map<Long, Long> counts = new HashMap<>();
+                for (Object[] row : rows) {
+                        counts.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+                }
+                return counts;
         }
 
         public Page<TrainerStudentDTO> getBatchStudents(Long userId, Long batchId, Pageable pageable) {
