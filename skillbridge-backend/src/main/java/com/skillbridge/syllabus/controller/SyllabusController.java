@@ -33,6 +33,28 @@ public class SyllabusController {
     /**
      * Get complete curriculum for a batch
      * GET /api/v1/batches/{batchId}/syllabus
+     *
+     * <p><b>Deliberately not paginated</b>, and the only list-shaped read in the
+     * API that is not. Every other one was converted in Phase 02 Task 3; this
+     * one was considered and left, so that a future reader finds a decision
+     * here rather than an oversight.
+     *
+     * <p>Three reasons. It is a tree, not a list: the client renders modules,
+     * submodules and topics together and reorders modules by
+     * {@code displayOrder}, which cannot work if module 3 and module 1 are on
+     * different pages. Paginating the modules would bound only the outer
+     * dimension — a single module's submodules and topics would still be
+     * unbounded — so it buys less than the truncation it risks. And the query
+     * already {@code LEFT JOIN FETCH}es the submodule collection, so adding a
+     * {@code Pageable} to it would page in memory rather than in SQL: an
+     * HHH000104 warning and no actual bound, which is worse than not paginating
+     * because it reads as done.
+     *
+     * <p>The residual risk is real and accepted: a curriculum with thousands of
+     * modules would return all of them. The bound today is that a human authors
+     * the curriculum. If that ever stops being true — bulk import, or copying
+     * curricula in a loop — the fix is a documented cap on the tree size rather
+     * than offset pagination.
      */
     @GetMapping("/batches/{batchId}/syllabus")
     // Was hasAnyRole('TRAINER', 'ADMIN'). There is no ADMIN role in this system
