@@ -101,6 +101,64 @@ public interface BatchRepository extends JpaRepository<Batch, Long>, JpaSpecific
     @Query("select b from Batch b join fetch b.college where b.id = :id")
     Optional<Batch> findByIdWithCollege(@Param("id") Long id);
 
+    // ------------------------------------------------------------------
+    // Trainer assignments
+    // ------------------------------------------------------------------
+    //
+    // These three read `batch_trainers`, the @ManyToMany join table on
+    // Batch.trainers, which is the one BatchAssignmentService writes and the
+    // one GET /admin/batches/{id}/trainers reads.
+    //
+    // They replace a second table, `trainer_batches`, mapped by a TrainerBatch
+    // entity that the whole trainer side used to read. Nothing in the
+    // application ever wrote it, so every trainer's dashboard was empty and
+    // ProgressService could never authorise anyone to grade. See the 2026-09-08
+    // entry in HANDOVER.md.
+    //
+    // Rooting the query at Batch rather than at the join row is not just
+    // tidier: Batch carries @SQLRestriction("deleted_at IS NULL"), so a
+    // soft-deleted batch drops out here automatically. The old query could
+    // return one.
+    //
+    // `join b.trainers` is a plain join, not a fetch, so these paginate in SQL.
+
+    /** Batches this trainer is assigned to, most recent intake first. */
+    @Query(value = """
+           SELECT b FROM Batch b
+           JOIN b.trainers t
+           WHERE t.user.id = :trainerUserId
+           ORDER BY b.startDate DESC
+           """,
+           countQuery = """
+           SELECT count(b) FROM Batch b
+           JOIN b.trainers t
+           WHERE t.user.id = :trainerUserId
+           """)
+    Page<Batch> findByTrainerUserId(@Param("trainerUserId") Long trainerUserId, Pageable pageable);
+
+    /** Unpaged form, for the dashboard counters that aggregate over all of them. */
+    @Query("""
+           SELECT b FROM Batch b
+           JOIN b.trainers t
+           WHERE t.user.id = :trainerUserId
+           ORDER BY b.startDate DESC
+           """)
+    List<Batch> findByTrainerUserId(@Param("trainerUserId") Long trainerUserId);
+
+    /**
+     * Is this trainer assigned to this batch?
+     *
+     * <p>The authorisation gate for every trainer-facing read and every grading
+     * write, so it is deliberately a count in SQL rather than a load-and-check.
+     */
+    @Query("""
+           SELECT count(b) > 0 FROM Batch b
+           JOIN b.trainers t
+           WHERE b.id = :batchId AND t.user.id = :trainerUserId
+           """)
+    boolean isTrainerAssignedToBatch(@Param("trainerUserId") Long trainerUserId,
+                                     @Param("batchId") Long batchId);
+
     /** {@code [batchId, trainerCount]} rows. Left join so a batch with none still appears. */
     @Query("select b.id, count(t.id) from Batch b left join b.trainers t where b.id in :ids group by b.id")
     List<Object[]> countTrainersByBatchIds(@Param("ids") Collection<Long> ids);

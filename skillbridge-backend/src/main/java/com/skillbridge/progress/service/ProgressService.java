@@ -2,7 +2,6 @@ package com.skillbridge.progress.service;
 
 import com.skillbridge.batch.entity.Batch;
 import com.skillbridge.batch.repository.BatchRepository;
-import com.skillbridge.batch.repository.TrainerBatchRepository;
 import com.skillbridge.common.exception.BusinessRuleException;
 import com.skillbridge.common.exception.ForbiddenException;
 import com.skillbridge.common.exception.ResourceNotFoundException;
@@ -70,7 +69,6 @@ public class ProgressService {
     private final StudentRepository studentRepository;
     private final TrainerRepository trainerRepository;
     private final BatchRepository batchRepository;
-    private final TrainerBatchRepository trainerBatchRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final SyllabusTopicRepository topicRepository;
 
@@ -532,7 +530,7 @@ public class ProgressService {
      * authorisation to touch a particular batch.
      */
     private void requireTrainerAssignedToBatch(Long trainerUserId, Long batchId) {
-        if (!trainerBatchRepository.existsByTrainerUserIdAndBatchId(trainerUserId, batchId)) {
+        if (!batchRepository.isTrainerAssignedToBatch(trainerUserId, batchId)) {
             throw new ForbiddenException("You are not assigned to this batch.");
         }
     }

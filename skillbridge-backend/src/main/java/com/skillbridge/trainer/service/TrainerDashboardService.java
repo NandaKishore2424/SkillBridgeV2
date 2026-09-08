@@ -1,8 +1,7 @@
 package com.skillbridge.trainer.service;
 
 import com.skillbridge.batch.entity.Batch;
-import com.skillbridge.batch.entity.TrainerBatch;
-import com.skillbridge.batch.repository.TrainerBatchRepository;
+import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.enrollment.entity.Enrollment;
 import com.skillbridge.enrollment.repository.EnrollmentRepository;
 import com.skillbridge.student.entity.Student;
@@ -26,21 +25,21 @@ import com.skillbridge.common.exception.ForbiddenException;
 @Slf4j
 @Transactional(readOnly = true)
 public class TrainerDashboardService {
-        private final TrainerBatchRepository trainerBatchRepository;
+        private final BatchRepository batchRepository;
         private final EnrollmentRepository enrollmentRepository;
 
         public TrainerDashboardStatsDTO getDashboardStats(Long userId) {
                 log.info("Getting dashboard stats for trainer userId: {}", userId);
 
-                List<TrainerBatch> trainerBatches = trainerBatchRepository.findByTrainerUserId(userId);
-                List<Long> batchIds = trainerBatches.stream()
-                                .map(tb -> tb.getBatch().getId())
+                List<Batch> assigned = batchRepository.findByTrainerUserId(userId);
+                List<Long> batchIds = assigned.stream()
+                                .map(Batch::getId)
                                 .collect(Collectors.toList());
 
-                int assignedBatches = trainerBatches.size();
+                int assignedBatches = assigned.size();
 
-                long activeBatches = trainerBatches.stream()
-                                .filter(tb -> "ACTIVE".equals(tb.getBatch().getStatus()))
+                long activeBatches = assigned.stream()
+                                .filter(b -> "ACTIVE".equals(b.getStatus()))
                                 .count();
 
                 int totalStudents = 0;
@@ -59,12 +58,8 @@ public class TrainerDashboardService {
         public Page<TrainerBatchDTO> getTrainerBatches(Long userId, Pageable pageable) {
                 log.info("Getting batches for trainer userId: {}", userId);
 
-                Page<TrainerBatch> trainerBatches =
-                                trainerBatchRepository.findByTrainerUser(userId, pageable);
-
-                return trainerBatches
-                                .map(tb -> {
-                                        Batch batch = tb.getBatch();
+                return batchRepository.findByTrainerUserId(userId, pageable)
+                                .map(batch -> {
                                         int enrolledCount = enrollmentRepository.countByBatchId(batch.getId());
 
                                         return TrainerBatchDTO.builder()
@@ -87,7 +82,7 @@ public class TrainerDashboardService {
                 log.info("Getting students for batch {} by trainer userId: {}", batchId, userId);
 
                 // Verify trainer has access to this batch
-                boolean hasAccess = trainerBatchRepository.existsByTrainerUserIdAndBatchId(userId, batchId);
+                boolean hasAccess = batchRepository.isTrainerAssignedToBatch(userId, batchId);
                 if (!hasAccess) {
                         throw new ForbiddenException("Trainer does not have access to this batch");
                 }

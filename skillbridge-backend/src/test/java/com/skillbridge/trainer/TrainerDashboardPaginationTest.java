@@ -21,21 +21,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Pages the two trainer dashboard reads against rows that actually exist.
  *
- * <p>This test exists because these two endpoints cannot be exercised through
- * the API. They read {@code trainer_batches}, and <strong>nothing in the
- * application ever writes that table</strong> — the admin-side assignment
- * service writes {@code batch_trainers}, the {@code @ManyToMany} join table on
- * {@code Batch}, which is a different table modelling the same relationship.
- * Assigning a trainer to a batch and then asking as that trainer returns an
- * empty page, so a test driven through the API would page over nothing and
- * assert nothing. Pagination that has only ever returned an empty page has not
- * been tested.
+ * <p>The fixture writes {@code batch_trainers} — the {@code @ManyToMany} join
+ * table on {@code Batch.trainers}, and the single source of truth for who
+ * teaches what. It used to write {@code trainer_batches}, a second table that
+ * the trainer side read and <em>nothing</em> ever wrote; that split is fixed
+ * and the dead table is gone from the mapping.
  *
- * <p>So the fixture writes {@code trainer_batches} with JDBC. That is not an
- * endorsement of the schema — the split is a real bug, tracked separately, and
- * whichever table survives it, these queries are the ones that have to page
- * correctly. If the read paths are repointed at {@code batch_trainers}, this
- * fixture is the thing that should change with them.
+ * <p>{@link TrainerAssignmentVisibilityTest} is the test that would have caught
+ * the split. This one is about paging, and seeds the join table directly so it
+ * can control the ordering and the page boundaries.
  *
  * <p>Everything is seeded and removed here rather than depending on whatever is
  * in the database. Asserting against ambient data is how a paging test passes
@@ -86,7 +80,8 @@ class TrainerDashboardPaginationTest {
                 insertBatch(collegeId, "Paging Fixture Batch A", 30),
                 insertBatch(collegeId, "Paging Fixture Batch C", 20));
         batchIds.forEach(batchId -> jdbc.update(
-                "INSERT INTO trainer_batches (trainer_id, batch_id) VALUES (?, ?)", trainerId, batchId));
+                "INSERT INTO batch_trainers (trainer_id, batch_id, created_at) VALUES (?, ?, now())",
+                trainerId, batchId));
 
         batchWithStudents = batchIds.get(0);
         for (String name : List.of("Carol Fixture", "Alice Fixture", "Bob Fixture")) {
@@ -193,7 +188,7 @@ class TrainerDashboardPaginationTest {
     private void removeFixture() {
         String collegeIds = "SELECT id FROM colleges WHERE code = '" + COLLEGE_CODE + "'";
         jdbc.update("DELETE FROM enrollments WHERE college_id IN (" + collegeIds + ")");
-        jdbc.update("DELETE FROM trainer_batches WHERE batch_id IN "
+        jdbc.update("DELETE FROM batch_trainers WHERE batch_id IN "
                 + "(SELECT id FROM batches WHERE college_id IN (" + collegeIds + "))");
         jdbc.update("DELETE FROM batches WHERE college_id IN (" + collegeIds + ")");
         jdbc.update("DELETE FROM students WHERE college_id IN (" + collegeIds + ")");
