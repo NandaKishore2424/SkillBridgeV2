@@ -53,18 +53,25 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     // hand-expanded form -- `a < c OR (a = c AND b < d)` -- is equivalent and
     // the planner usually will not use the index for it.
     //
-    // NOTE: the index these seeks want does not exist yet. Flyway was removed,
-    // so it has to be applied to the database by hand:
+    // Backed by two composite indexes, applied by hand on 2026-09-08 because
+    // Flyway is gone:
     //
-    //   CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_log_college_seek
-    //       ON audit_log (college_id, occurred_at DESC, id DESC);
-    //   CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_log_seek
-    //       ON audit_log (occurred_at DESC, id DESC);
+    //   idx_audit_log_college_seek  (college_id, occurred_at DESC, id DESC)
+    //   idx_audit_log_seek          (occurred_at DESC, id DESC)
     //
-    // The column order matters: the equality predicate first, then the sort
-    // key in the direction it is read. Until they exist these queries are
-    // correct but scan, so the constant-time property keyset pagination is for
-    // is not yet delivered -- only made reachable. Tracked in HANDOVER.md.
+    // The column order is what makes them work: the equality predicate first,
+    // then the sort key in the direction it is read. Confirmed with EXPLAIN --
+    // the planner picks them on its own and produces an Index Only Scan whose
+    // Index Cond contains the whole row comparison:
+    //
+    //   Index Cond: ((college_id = 1) AND (ROW(occurred_at, id) < ROW($1, $2)))
+    //
+    // That is the property this design exists for. The seek is satisfied inside
+    // the index, so the cost of page 5000 is the cost of page 1, and no Sort
+    // node appears because the index is already in the order the query asks
+    // for. If a future change reorders these columns or drops the DESC, the
+    // query keeps working and quietly stops being constant time -- so re-run
+    // EXPLAIN, do not assume.
     //
     // Ordering by occurred_at alone would be non-deterministic across pages:
     // audit rows written by one request share a timestamp, so the tie-break on
