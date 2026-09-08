@@ -57,10 +57,21 @@ export interface BatchWithDetails extends Batch {
   companyCount: number
 }
 
-/** Filters applied server-side by the admin list endpoints. */
+/**
+ * Filters applied server-side by the admin list endpoints.
+ *
+ * Each endpoint accepts the subset that makes sense for it -- `status` on
+ * batches, `active` on people, `hiringType` on companies -- and ignores the
+ * rest, so one type covers all four call sites.
+ */
 export interface ListFilters {
   search?: string
+  /** Batches: UPCOMING / OPEN / ACTIVE / COMPLETED / CANCELLED. */
   status?: string
+  /** Students and trainers: filters on the login's active flag. */
+  active?: boolean
+  /** Companies: FULL_TIME / INTERNSHIP / BOTH. */
+  hiringType?: string
   /** `field` or `field,asc` / `field,desc`; unknown fields are a 400. */
   sort?: string
 }
@@ -91,6 +102,8 @@ export const getBatches = async (
  * not send it.
  */
 export function omitEmpty(filters: ListFilters): ListFilters {
+  // `false` is a real value for `active` and must survive; only undefined,
+  // null and the empty string are dropped.
   return Object.fromEntries(
     Object.entries(filters).filter(([, v]) => v !== undefined && v !== null && v !== ''),
   )
@@ -144,9 +157,13 @@ export interface CreateCompanyRequest {
   notes?: string
 }
 
-export const getCompanies = async (page = 0, size = 20): Promise<PagedResponse<Company>> => {
+export const getCompanies = async (
+  page = 0,
+  size = 20,
+  filters: ListFilters = {},
+): Promise<PagedResponse<Company>> => {
   const response = await apiClient.get<PagedResponse<Company>>('/admin/companies', {
-    params: { page, size },
+    params: { page, size, ...omitEmpty(filters) },
   })
   return response.data
 }
@@ -209,9 +226,13 @@ export interface CreateTrainerRequest {
   bio?: string
 }
 
-export const getTrainers = async (page = 0, size = 20): Promise<PagedResponse<Trainer>> => {
+export const getTrainers = async (
+  page = 0,
+  size = 20,
+  filters: ListFilters = {},
+): Promise<PagedResponse<Trainer>> => {
   const response = await apiClient.get<PagedResponse<Trainer>>('/admin/trainers', {
-    params: { page, size },
+    params: { page, size, ...omitEmpty(filters) },
   })
   return response.data
 }
@@ -266,9 +287,13 @@ export interface StudentWithDetails extends Student {
   enrolledBatchIds?: number[]
 }
 
-export const getStudents = async (page = 0, size = 20): Promise<PagedResponse<StudentWithDetails>> => {
+export const getStudents = async (
+  page = 0,
+  size = 20,
+  filters: ListFilters = {},
+): Promise<PagedResponse<StudentWithDetails>> => {
   const response = await apiClient.get<PagedResponse<StudentWithDetails>>('/admin/students', {
-    params: { page, size },
+    params: { page, size, ...omitEmpty(filters) },
   })
   return response.data
 }

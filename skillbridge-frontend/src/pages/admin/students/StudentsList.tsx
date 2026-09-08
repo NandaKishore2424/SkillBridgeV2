@@ -9,7 +9,7 @@
  * - Actions: View, Edit, Activate/Deactivate
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AuthenticatedLayout } from '@/shared/components/layout'
@@ -55,10 +55,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui'
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 
 export function StudentsList() {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
+  const debouncedSearch = useDebouncedValue(searchQuery)
+
+  // A narrowing search has to reset the page. Staying on page 3 while the
+  // result set shrinks to two rows shows an empty table that reads as
+  // "no matches".
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch])
   const [page, setPage] = useState(0)
   const pageSize = 20
   const { showSuccess, showError } = useToastNotifications()
@@ -69,8 +78,11 @@ export function StudentsList() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['admin', 'students', page, pageSize],
-    queryFn: () => getStudents(page, pageSize),
+    queryKey: ['admin', 'students', page, pageSize, debouncedSearch],
+    queryFn: () => getStudents(page, pageSize, { search: debouncedSearch }),
+    // Keeps the current rows on screen while the next page loads, so filtering
+    // does not flash the skeleton on every keystroke that clears the debounce.
+    placeholderData: (previous) => previous,
   })
 
   // Update student status mutation
@@ -89,16 +101,10 @@ export function StudentsList() {
   })
 
   // Filter students
-  const filteredStudents = studentsPage?.items?.filter((student) => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      student.rollNumber.toLowerCase().includes(query) ||
-      student.email.toLowerCase().includes(query) ||  // Fixed: email is on student directly
-      student.degree?.toLowerCase().includes(query) ||
-      student.branch?.toLowerCase().includes(query)
-    )
-  })
+  // Filtered by the server; `items` is the answer, not a starting point. The
+  // client-side version searched only the page already fetched, so a match on
+  // page 3 was invisible from page 1.
+  const filteredStudents = studentsPage?.items
 
   const handleStatusToggle = (student: StudentWithDetails) => {
     const newStatus = !student.isActive

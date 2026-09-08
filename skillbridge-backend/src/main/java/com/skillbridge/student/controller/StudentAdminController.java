@@ -7,6 +7,8 @@ import com.skillbridge.student.service.StudentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
+import com.skillbridge.common.dto.SortParameter;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -30,15 +32,35 @@ public class StudentAdminController {
     private final StudentService studentService;
     private final SoftDeleteService softDeleteService;
 
+    /**
+     * Student fields a client may sort by, mapped to entity paths.
+     *
+     * <p>Anything not listed is a 400 naming these, rather than a 500 from deep
+     * inside the query — see {@link SortParameter}.
+     */
+    private static final Map<String, String> SORTABLE = SortParameter.allow(
+            "fullName", "fullName",
+            "rollNumber", "rollNumber",
+            "email", "user.email",
+            "degree", "degree",
+            "branch", "branch",
+            "year", "year",
+            "createdAt", "createdAt");
+
     @GetMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<PagedResponse<StudentDTO>> getAllStudents(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String sort
     ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
-        Page<StudentDTO> students = studentService.getStudentsByCollege(user.getCollegeId(), Pagination.of(page, size));
+        Page<StudentDTO> students = studentService.getStudentsByCollege(
+                user.getCollegeId(), search, active,
+                Pagination.of(page, size, SortParameter.parse(sort, SORTABLE, Sort.by("fullName"))));
         return ResponseEntity.ok(PagedResponse.from(students));
     }
 

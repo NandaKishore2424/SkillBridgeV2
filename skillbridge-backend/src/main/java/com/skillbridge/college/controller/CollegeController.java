@@ -168,7 +168,7 @@ public class CollegeController {
         log.info("Fetching students for college {}", collegeId);
         requireCollege(collegeId);
         return ResponseEntity.ok(PagedResponse.from(
-                studentService.getStudentsByCollege(collegeId, Pagination.of(page, size))));
+                studentService.getStudentsByCollege(collegeId, null, null, Pagination.of(page, size))));
     }
 
     @GetMapping("/{collegeId}/batches")
@@ -199,7 +199,7 @@ public class CollegeController {
         log.info("Fetching trainers for college {}", collegeId);
         requireCollege(collegeId);
         return ResponseEntity.ok(PagedResponse.from(
-                trainerService.getTrainersByCollege(collegeId, Pagination.of(page, size))));
+                trainerService.getTrainersByCollege(collegeId, null, null, Pagination.of(page, size))));
     }
 
     /** One grouped count query per page, keyed by batch id. */

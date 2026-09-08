@@ -12,6 +12,8 @@ import com.skillbridge.student.entity.*;
 import com.skillbridge.student.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.skillbridge.student.repository.StudentSpecifications;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -127,8 +129,22 @@ public class StudentService {
         return mapPage(students);
     }
 
-    public Page<StudentDTO> getStudentsByCollege(Long collegeId, Pageable pageable) {
-        Page<Student> page = studentRepository.findByCollegeIdWithUser(collegeId, pageable);
+    /**
+     * The college's students, optionally filtered.
+     *
+     * <p>{@code search} and {@code active} are applied in SQL. The list screen
+     * used to filter the page it already held, so a student on page 3 could not
+     * be found from page 1.
+     */
+    public Page<StudentDTO> getStudentsByCollege(Long collegeId, String search, Boolean active,
+                                                  Pageable pageable) {
+        Specification<Student> spec = Specification.allOf(
+                StudentSpecifications.withUser(),
+                StudentSpecifications.inCollege(collegeId),
+                StudentSpecifications.matches(search),
+                StudentSpecifications.isActive(active));
+
+        Page<Student> page = studentRepository.findAll(spec, pageable);
         List<StudentDTO> mapped = mapPage(page.getContent());
         return new org.springframework.data.domain.PageImpl<>(mapped, pageable, page.getTotalElements());
     }

@@ -8,6 +8,8 @@ import com.skillbridge.trainer.service.TrainerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
+import com.skillbridge.common.dto.SortParameter;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -29,6 +31,16 @@ import com.skillbridge.auth.security.SecurityUtils;
 @CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class TrainerAdminController {
     private final TrainerService trainerService;
+
+    /** Trainer fields a client may sort by. See {@link SortParameter}. */
+    private static final Map<String, String> SORTABLE = SortParameter.allow(
+            "fullName", "fullName",
+            "email", "user.email",
+            "department", "department",
+            "specialization", "specialization",
+            "yearsOfExperience", "yearsOfExperience",
+            "createdAt", "createdAt");
+
     private final SoftDeleteService softDeleteService;
     private final BatchAssignmentService batchAssignmentService;
 
@@ -36,11 +48,16 @@ public class TrainerAdminController {
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<PagedResponse<TrainerDTO>> getAllTrainers(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String sort
     ) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
-        Page<TrainerDTO> trainers = trainerService.getTrainersByCollege(user.getCollegeId(), Pagination.of(page, size));
+        Page<TrainerDTO> trainers = trainerService.getTrainersByCollege(
+                user.getCollegeId(), search, active,
+                Pagination.of(page, size, SortParameter.parse(sort, SORTABLE, Sort.by("fullName"))));
         return ResponseEntity.ok(PagedResponse.from(trainers));
     }
 

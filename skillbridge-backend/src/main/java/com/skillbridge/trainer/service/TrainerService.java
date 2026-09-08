@@ -13,6 +13,8 @@ import com.skillbridge.trainer.entity.Trainer;
 import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.skillbridge.trainer.repository.TrainerSpecifications;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -108,8 +110,16 @@ public class TrainerService {
         return mapPage(trainerRepository.findByCollegeIdWithUser(collegeId));
     }
 
-    public Page<TrainerDTO> getTrainersByCollege(Long collegeId, Pageable pageable) {
-        Page<Trainer> page = trainerRepository.findByCollegeIdWithUser(collegeId, pageable);
+    /** The college's trainers, optionally filtered. See {@code StudentService}. */
+    public Page<TrainerDTO> getTrainersByCollege(Long collegeId, String search, Boolean active,
+                                                  Pageable pageable) {
+        Specification<Trainer> spec = Specification.allOf(
+                TrainerSpecifications.withUser(),
+                TrainerSpecifications.inCollege(collegeId),
+                TrainerSpecifications.matches(search),
+                TrainerSpecifications.isActive(active));
+
+        Page<Trainer> page = trainerRepository.findAll(spec, pageable);
         return new org.springframework.data.domain.PageImpl<>(
                 mapPage(page.getContent()), pageable, page.getTotalElements());
     }

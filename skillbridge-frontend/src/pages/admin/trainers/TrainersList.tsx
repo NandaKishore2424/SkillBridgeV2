@@ -57,11 +57,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui'
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 
 export function TrainersList() {
   const queryClient = useQueryClient()
   const location = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
+  const debouncedSearch = useDebouncedValue(searchQuery)
+
+  // A narrowing search has to reset the page. Staying on page 3 while the
+  // result set shrinks to two rows shows an empty table that reads as
+  // "no matches".
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch])
   const [page, setPage] = useState(0)
   const pageSize = 20
   const { showSuccess, showError } = useToastNotifications()
@@ -80,8 +89,11 @@ export function TrainersList() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['admin', 'trainers', page, pageSize],
-    queryFn: () => getTrainers(page, pageSize),
+    queryKey: ['admin', 'trainers', page, pageSize, debouncedSearch],
+    queryFn: () => getTrainers(page, pageSize, { search: debouncedSearch }),
+    // Keeps the current rows on screen while the next page loads, so filtering
+    // does not flash the skeleton on every keystroke that clears the debounce.
+    placeholderData: (previous) => previous,
   })
 
   // Update trainer status mutation
@@ -100,16 +112,10 @@ export function TrainersList() {
   })
 
   // Filter trainers
-  const filteredTrainers = trainersPage?.items?.filter((trainer) => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      trainer.fullName.toLowerCase().includes(query) ||
-      trainer.email.toLowerCase().includes(query) ||
-      trainer.department?.toLowerCase().includes(query) ||
-      trainer.specialization?.toLowerCase().includes(query)
-    )
-  })
+  // Filtered by the server; `items` is the answer, not a starting point. The
+  // client-side version searched only the page already fetched, so a match on
+  // page 3 was invisible from page 1.
+  const filteredTrainers = trainersPage?.items
 
   const handleStatusToggle = (trainer: Trainer) => {
     const newStatus = !trainer.isActive

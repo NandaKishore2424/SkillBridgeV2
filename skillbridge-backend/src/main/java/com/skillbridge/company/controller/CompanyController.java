@@ -16,6 +16,10 @@ import com.skillbridge.company.entity.Company;
 import com.skillbridge.company.repository.CompanyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.skillbridge.common.dto.SortParameter;
+import com.skillbridge.company.repository.CompanySpecifications;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -44,11 +48,27 @@ public class CompanyController {
     private final BatchAssignmentService batchAssignmentService;
     private final CollegeAdminRepository collegeAdminRepository;
 
+    /** Company fields a client may sort by. See {@link SortParameter}. */
+    private static final Map<String, String> SORTABLE = SortParameter.allow(
+            "name", "name",
+            "domain", "domain",
+            "hiringType", "hiringType",
+            "createdAt", "createdAt");
+
+    /**
+     * Companies visible to the caller, filtered and sorted server-side.
+     *
+     * <p>{@code search} matches name or domain, {@code hiringType} filters.
+     * Both are applied in SQL rather than to the page already fetched.
+     */
     @GetMapping
     @PreAuthorize("hasRole('SYSTEM_ADMIN') or hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<PagedResponse<CompanyDTO>> getAllCompanies(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String hiringType,
+            @RequestParam(required = false) String sort
     ) {
         log.info("Fetching all companies");
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -65,27 +85,32 @@ public class CompanyController {
             }
         }
 
-        Page<Company> companies;
-        if (userCollegeId == null) {
-            companies = companyRepository.findAllWithCollege(Pagination.of(page, size));
-        } else {
-            companies = companyRepository.findByCollegeIdWithCollege(userCollegeId, Pagination.of(page, size));
-        }
+        // A null userCollegeId here means SYSTEM_ADMIN, who is deliberately
+        // unscoped; inCollege(null) is then a no-op rather than a leak.
+        Specification<Company> spec = Specification.allOf(
+                CompanySpecifications.withCollege(),
+                CompanySpecifications.inCollege(userCollegeId),
+                CompanySpecifications.matches(search),
+                CompanySpecifications.hasHiringType(hiringType));
+
+        Page<Company> companies = companyRepository.findAll(spec, Pagination.of(page, size,
+                SortParameter.parse(sort, SORTABLE, Sort.by("name"))));
 
         List<Long> companyIds = companies.getContent().stream().map(Company::getId).toList();
         Map<Long, List<Long>> batchesByCompany = companyIds.isEmpty()
                 ? Map.of()
                 : IdGrouping.byOwner(batchRepository.findBatchIdsByCompanyIds(companyIds));
 
-        List<CompanyDTO> items = companies.getContent().stream()
-                .map(c -> {
-                    CompanyDTO dto = convertToDTO(c);
-                    dto.setLinkedBatchIds(IdGrouping.forOwner(batchesByCompany, c.getId()));
-                    return dto;
-                })
-                .toList();
-
-        return ResponseEntity.ok(PagedResponse.from(companies, this::convertToDTO));
+        // Mapped through the page, so linkedBatchIds actually reaches the
+        // response. It was built into a local `items` list that was then
+        // dropped on the floor -- the response re-mapped from the page with a
+        // bare convertToDTO, so every company came back with a null
+        // linkedBatchIds and the grouped query was paid for and discarded.
+        return ResponseEntity.ok(PagedResponse.from(companies, c -> {
+            CompanyDTO dto = convertToDTO(c);
+            dto.setLinkedBatchIds(IdGrouping.forOwner(batchesByCompany, c.getId()));
+            return dto;
+        }));
     }
 
     @GetMapping("/{id}")
