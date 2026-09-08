@@ -3,6 +3,10 @@ package com.skillbridge.common.audit;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.security.SecurityUtils;
 import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.Cursor;
+import com.skillbridge.common.dto.CursorPage;
+import java.time.LocalDateTime;
+import java.util.List;
 import com.skillbridge.common.dto.Pagination;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -37,34 +41,53 @@ public class AuditLogController {
 
     private final AuditLogRepository auditLogRepository;
 
+    /**
+     * The audit trail, newest first, keyset-paginated.
+     *
+     * <p>Pass no {@code cursor} for the first page, then the {@code nextCursor}
+     * from each response for the one after. There is no page number and no
+     * total: this table grows faster than any other here, and both a
+     * {@code COUNT(*)} and an {@code OFFSET} get more expensive the deeper the
+     * trail goes, while a seek does not.
+     */
     @GetMapping
     @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
-    public ResponseEntity<PagedResponse<AuditLogDTO>> list(
-            @RequestParam(defaultValue = "0") int page,
+    public ResponseEntity<CursorPage<AuditLogDTO>> list(
+            @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String action
     ) {
-        // This table grows faster than any other; an unbounded page size is a
-        // trivial way to make the server read millions of rows.
-        PageRequest pageable = Pagination.of(page, size);
+        // Blank cursor decodes to Cursor.start(), which is why there is no
+        // first-page branch anywhere below.
+        Cursor from = Cursor.decode(cursor);
+        LocalDateTime cursorTime = from.timestamp();
+        Long cursorId = from.id();
+
+        // One row more than asked for, so "is there another page" costs a row
+        // rather than a COUNT. Pagination.of still clamps the size, so the
+        // extra row cannot be used to step past the cap.
+        int limit = Pagination.clampSize(size);
+        PageRequest window = Pagination.of(0, limit + 1);
+
         AuthenticatedUser caller = SecurityUtils.currentUser();
 
         // Tenant scope is decided first and the action filter applied within it.
         // Ordering these the other way round -- branching on the action filter
         // first -- would let ?action=... escape the college scope entirely.
-        Page<AuditLog> rows;
+        List<AuditLog> rows;
         boolean filtered = action != null && !action.isBlank();
         if (caller.isSystemAdmin()) {
             rows = filtered
-                    ? auditLogRepository.findByActionOrderByOccurredAtDesc(action, pageable)
-                    : auditLogRepository.findAllByOrderByOccurredAtDesc(pageable);
+                    ? auditLogRepository.seekByAction(action, cursorTime, cursorId, window)
+                    : auditLogRepository.seekAll(cursorTime, cursorId, window);
         } else {
             Long collegeId = SecurityUtils.requireCollegeId();
             rows = filtered
-                    ? auditLogRepository.findByCollegeIdAndActionOrderByOccurredAtDesc(collegeId, action, pageable)
-                    : auditLogRepository.findByCollegeIdOrderByOccurredAtDesc(collegeId, pageable);
+                    ? auditLogRepository.seekByCollegeAndAction(collegeId, action, cursorTime, cursorId, window)
+                    : auditLogRepository.seekByCollege(collegeId, cursorTime, cursorId, window);
         }
 
-        return ResponseEntity.ok(PagedResponse.from(rows, AuditLogDTO::from));
+        return ResponseEntity.ok(CursorPage.of(rows, limit, AuditLogDTO::from,
+                row -> new Cursor(row.getOccurredAt(), row.getId()).encode()));
     }
 }
