@@ -10,6 +10,8 @@ import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
 import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.common.dto.PagedResponse;
+import com.skillbridge.common.dto.SortParameter;
+import com.skillbridge.batch.repository.BatchSpecifications;
 import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.company.dto.CompanyDTO;
 import com.skillbridge.company.entity.Company;
@@ -20,6 +22,8 @@ import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -54,11 +58,37 @@ public class BatchController {
     private final TrainerRepository trainerRepository;
     private final CompanyRepository companyRepository;
 
+    /**
+     * Batch fields a client may sort by, mapped to entity paths.
+     *
+     * <p>Deliberately short. Every entry is a column the list screen actually
+     * offers, and anything not here is a 400 rather than a 500 from deep inside
+     * the query — see {@link SortParameter}.
+     */
+    private static final Map<String, String> SORTABLE = SortParameter.allow(
+            "name", "name",
+            "status", "status",
+            "startDate", "startDate",
+            "endDate", "endDate",
+            "createdAt", "createdAt");
+
+    /**
+     * The college's batches, filtered and sorted server-side.
+     *
+     * <p>{@code search} and {@code status} are applied in SQL on purpose. The
+     * list screen used to filter {@code items} client-side, which searched only
+     * the page already on screen: a batch on page 3 was invisible to a search
+     * run from page 1, and the empty state said "try adjusting your search
+     * query". Filtering has to happen where the whole result set is.
+     */
     @GetMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<PagedResponse<BatchDTO>> getAllBatches(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String sort
     ) {
         log.info("Fetching all batches for college admin");
         // Get college ID from authenticated user
@@ -78,7 +108,14 @@ public class BatchController {
             return ResponseEntity.badRequest().build();
         }
 
-        Page<Batch> batches = batchRepository.findByCollegeIdWithCollege(collegeId, Pagination.of(page, size));
+        Specification<Batch> spec = Specification.allOf(
+                BatchSpecifications.withCollege(),
+                BatchSpecifications.inCollege(collegeId),
+                BatchSpecifications.hasStatus(status),
+                BatchSpecifications.matches(search));
+
+        Page<Batch> batches = batchRepository.findAll(spec, Pagination.of(page, size,
+                SortParameter.parse(sort, SORTABLE, Sort.by(Sort.Direction.DESC, "startDate"))));
         List<Long> ids = batches.getContent().stream().map(Batch::getId).toList();
         Map<Long, Long> trainerCounts = countsByBatchId(batchRepository.countTrainersByBatchIds(ids));
         Map<Long, Long> companyCounts = countsByBatchId(batchRepository.countCompaniesByBatchIds(ids));

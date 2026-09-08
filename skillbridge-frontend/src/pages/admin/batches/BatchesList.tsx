@@ -63,6 +63,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui'
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 
 const STATUS_COLORS: Record<BatchStatus, 'default' | 'secondary' | 'outline'> = {
   UPCOMING: 'outline',
@@ -89,14 +90,31 @@ export function BatchesList() {
     }
   }, [location.state, showSuccess])
 
-  // Fetch batches
+  // Search and status go to the server. Debounced so typing "database" is one
+  // request rather than eight, and the results cannot land out of order.
+  const debouncedSearch = useDebouncedValue(searchQuery)
+
+  // A filter change has to reset the page. Staying on page 3 while narrowing to
+  // two results shows an empty list that looks like "no matches".
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch, statusFilter])
+
   const {
     data: batchesPage,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['admin', 'batches', page, pageSize],
-    queryFn: () => getBatches(page, pageSize),
+    queryKey: ['admin', 'batches', page, pageSize, debouncedSearch, statusFilter],
+    queryFn: () =>
+      getBatches(page, pageSize, {
+        search: debouncedSearch,
+        status: statusFilter === 'ALL' ? undefined : statusFilter,
+      }),
+    // Without this the table blanks to the skeleton on every keystroke that
+    // survives the debounce. Keeping the previous page visible while the next
+    // one loads is the difference between filtering and flickering.
+    placeholderData: (previous) => previous,
   })
 
   // Update batch status mutation
@@ -112,15 +130,8 @@ export function BatchesList() {
     },
   })
 
-  // Filter batches
-  const filteredBatches = batchesPage?.items?.filter((batch) => {
-    const matchesSearch =
-      !searchQuery ||
-      batch.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      batch.description?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === 'ALL' || batch.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  // Already filtered by the server; `items` is the answer, not a starting point.
+  const filteredBatches = batchesPage?.items
 
   const handleStatusChange = (batch: BatchWithDetails, newStatus: BatchStatus) => {
     if (

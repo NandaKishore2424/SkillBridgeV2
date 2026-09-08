@@ -57,11 +57,43 @@ export interface BatchWithDetails extends Batch {
   companyCount: number
 }
 
-export const getBatches = async (page = 0, size = 20): Promise<PagedResponse<BatchWithDetails>> => {
+/** Filters applied server-side by the admin list endpoints. */
+export interface ListFilters {
+  search?: string
+  status?: string
+  /** `field` or `field,asc` / `field,desc`; unknown fields are a 400. */
+  sort?: string
+}
+
+/**
+ * Batches for the admin list.
+ *
+ * `search` and `status` go to the server rather than being applied to `items`
+ * afterwards. Filtering the page you already have only ever searches that page:
+ * before this, a batch on page 3 could not be found from page 1.
+ */
+export const getBatches = async (
+  page = 0,
+  size = 20,
+  filters: ListFilters = {},
+): Promise<PagedResponse<BatchWithDetails>> => {
   const response = await apiClient.get<PagedResponse<BatchWithDetails>>('/admin/batches', {
-    params: { page, size },
+    params: { page, size, ...omitEmpty(filters) },
   })
   return response.data
+}
+
+/**
+ * Drops blank filter values so they never reach the query string.
+ *
+ * `?search=` is not the same request as no `search` at all: an empty string
+ * would be sent, and every endpoint would have to defend against it. Cheaper to
+ * not send it.
+ */
+export function omitEmpty(filters: ListFilters): ListFilters {
+  return Object.fromEntries(
+    Object.entries(filters).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+  )
 }
 
 export const getBatchById = async (id: number): Promise<BatchWithDetails> => {
