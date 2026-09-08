@@ -99,6 +99,18 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!--
+		  ArchUnit enforces the conventions that this codebase has already been
+		  bitten by forgetting: unbounded page sizes, entities on the wire,
+		  tenant-unscoped reads. A convention nothing checks is a convention the
+		  next contributor cannot know about.
+		-->
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit-junit5</artifactId>
+			<version>1.4.1</version>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-test</artifactId>
