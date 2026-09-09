@@ -76,7 +76,15 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/colleges/active").permitAll() // Public endpoint for registration
-                .requestMatchers("/actuator/**").permitAll()
+                // Probes need health and info without a token. Everything else
+                // under /actuator is admin-only: /actuator/metrics enumerates
+                // every metric name, and http.server.requests carries one URI
+                // template per route -- a complete map of the API surface, which
+                // is the exact thing SWAGGER_ENABLED defaults to false to avoid
+                // publishing. /actuator/prometheus dumps the values with it.
+                .requestMatchers("/actuator/health", "/actuator/health/**",
+                                 "/actuator/info").permitAll()
+                .requestMatchers("/actuator/**").hasRole("SYSTEM_ADMIN")
                 // The contract itself is public; the interactive UI is gated by
                 // SWAGGER_ENABLED and simply is not mapped when that is false.
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()

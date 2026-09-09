@@ -43,6 +43,18 @@ spring:
       connection-timeout: 30000   # 30s
       validation-timeout: 5000    # 5s
 
+      # Name the pool so the Micrometer gauges are labelled, and name the JDBC
+      # connections so they are attributable on the server. Without
+      # ApplicationName every one of our sockets shows up in pg_stat_activity as
+      # the driver's default "PostgreSQL JDBC Driver", which is what the AI
+      # service and the ETL pipeline are called too -- so on a shared 60-
+      # connection server you cannot tell whose connections are holding the
+      # ceiling. Measured 2026-09-09: our two idle connections were
+      # indistinguishable from any other JDBC client's.
+      pool-name: SkillBridgeHikari
+      data-source-properties:
+        ApplicationName: skillbridge-backend
+
   rabbitmq:
     addresses: ${AMQP_URL}
 
@@ -115,10 +127,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # metrics/prometheus carry the Hikari pool gauges. The one that matters
+        # is hikaricp.connections.pending: any sustained non-zero value means
+        # requests are queueing for a connection, and it goes non-zero well
+        # before anyone reports slowness.
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when-authorized
+  metrics:
+    tags:
+      application: skillbridge
 
 # OpenAPI. The JSON document stays on so the drift check and client generation
 # can read it; the interactive UI is opt-in because it is a complete map of the
