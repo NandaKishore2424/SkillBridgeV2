@@ -45,6 +45,21 @@ public class Trainer {
     @Column(name = "specialization", columnDefinition = "TEXT")
     private String specialization;
 
+    /**
+     * Everything this row is searchable by, lowercased and space-joined:
+     * {@code full_name}, {@code department}, {@code specialization} and the
+     * owning login's email.
+     *
+     * <p><b>Read-only. The database computes it.</b> Same design, and the same
+     * reason, as {@link com.skillbridge.student.entity.Student#getSearchText()}
+     * -- the trainer search had the identical shape, an OR spanning the
+     * {@code trainers}/{@code users} join that no index could serve.
+     *
+     * <p>See {@code db/schema/2026-09-09-search-text.sql}.
+     */
+    @Column(name = "search_text", insertable = false, updatable = false)
+    private String searchText;
+
     @Column(name = "bio", columnDefinition = "TEXT")
     private String bio;
 

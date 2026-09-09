@@ -45,16 +45,26 @@ public final class TrainerSpecifications {
     }
 
     /** Name, department and specialisation — plus email, which is on {@code user}. */
+    /**
+     * Matches name, department, specialization and email as one predicate
+     * against {@code search_text}.
+     *
+     * <p>This had the identical defect as the student search: the OR spanned
+     * the {@code trainers}/{@code users} join, so no index could serve it and
+     * Postgres carried the whole disjunction as a {@code Join Filter}. See
+     * {@link com.skillbridge.student.repository.StudentSpecifications#matches}
+     * for the measurements and the design.
+     *
+     * <p>{@code like} on the raw column, not {@code lower(...)} — the column is
+     * already lowercased, and a {@code lower()} wrapper would not match the
+     * expression the index was built on.
+     */
     public static Specification<Trainer> matches(String term) {
         if (isBlank(term)) {
             return (root, query, cb) -> cb.conjunction();
         }
         String pattern = "%" + term.trim().toLowerCase(Locale.ROOT) + "%";
-        return (root, query, cb) -> cb.or(
-                cb.like(cb.lower(root.get("fullName")), pattern),
-                cb.like(cb.lower(root.get("department")), pattern),
-                cb.like(cb.lower(root.get("specialization")), pattern),
-                cb.like(cb.lower(userJoin(root, query).get("email")), pattern));
+        return (root, query, cb) -> cb.like(root.get("searchText"), pattern);
     }
 
     /**

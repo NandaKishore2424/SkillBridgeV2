@@ -38,100 +38,117 @@ byte-identical.
 
 ---
 
-## 2. Trigram indexes for `?search=`
+## 2. Trigram indexes for `?search=` — and the OR that could not use them
 
 Phase 02 moved search server-side. The predicate is `lower(col) LIKE '%term%'`,
 and a B-tree cannot serve a leading wildcard — Postgres has no option but a
 sequential scan. `pg_trgm` indexes character trigrams, which it can.
 
-Installed 2026-09-08 (`CREATE EXTENSION pg_trgm`), with:
+Installed 2026-09-08 (`CREATE EXTENSION pg_trgm`), on the lowercased value,
+because the predicate is `lower(col) LIKE` and an index on the raw column cannot
+serve it.
 
-| Index | Column |
-|---|---|
-| `idx_batches_name_trgm` | `lower(batches.name)` |
-| `idx_batches_desc_trgm` | `lower(batches.description)` |
-| `idx_students_name_trgm` | `lower(students.full_name)` |
-| `idx_students_roll_trgm` | `lower(students.roll_number)` |
-| `idx_trainers_name_trgm` | `lower(trainers.full_name)` |
-| `idx_companies_name_trgm` | `lower(companies.name)` |
-| `idx_users_email_trgm` | `lower(users.email)` |
+### The finding: the student and trainer searches could not use them
 
-They index the **lowercased** value, because the predicate is `lower(col) LIKE`
-— an index on the raw column cannot serve it.
-
-**Verified working for a single column.** With seqscan disabled:
-
-```
-Bitmap Heap Scan on students s
-  Recheck Cond: (lower(full_name) ~~ '%arjun%')
-  ->  Bitmap Index Scan on idx_students_name_trgm
-        Index Cond: (lower(full_name) ~~ '%arjun%')
-```
-
-### The finding that matters: the student and trainer searches cannot use them
-
-`StudentSpecifications.matches` ORs across five columns, and one of them —
-`email` — lives on `users`, not `students`. A disjunction that spans two
-relations **cannot be pushed to either side**: Postgres must join first and
-then filter. The plan shows exactly that:
+`StudentSpecifications.matches` ORed five columns, and one — `email` — lives on
+`users`, not `students`. **A disjunction that spans two relations cannot be
+pushed to either side**, so Postgres joins first and filters after:
 
 ```
 Merge Join
   Join Filter: (lower(s.full_name) ~~ '%arjun%' OR ... OR lower(u.email) ~~ '%arjun%')
 ```
 
-`Join Filter`, not `Index Cond`. This is structural, not a cost decision, so it
-does not change with volume. **The trigram indexes on `students` and `trainers`
-buy nothing for the search as currently written.** They are kept because every
-fix below needs them and they cost ~16 kB each at this size.
+`Join Filter`, not `Index Cond`. Structural, not a cost decision, so it does not
+change with volume. `TrainerSpecifications` had the identical shape.
 
-`TrainerSpecifications` has the same shape. `batches` and `companies` search
-only their own columns, so they are not affected by this.
+### Resolved 2026-09-09, and measured before it was chosen
 
-### What would fix it
+The real tables hold 15 students, which is far too small for any plan to mean
+anything — at that size Postgres correctly ignores every index. So the designs
+were compared on a **50,000-row copy of this schema in a throwaway
+`search_probe` schema, built, measured and dropped in the same session.**
 
-In rough order of cost:
+The old plan, at 50k rows:
 
-1. **Drop email from the people searches.** One-line change; loses "find a
-   student by email", which is a real thing admins do.
-2. **Rewrite as a `UNION`** of two single-table searches. Indexable, but does
-   not compose with the Specification API that gives these endpoints their
-   filtering.
-3. **A maintained search column** — `students.search_text` plus one GIN index.
-   One index instead of five, one predicate instead of an OR, and indexable.
-   This is the design worth having; it is a schema change and has not been made.
+```
+Hash Join
+  Join Filter: (lower(s.full_name) ~~ ... OR lower(u.email) ~~ '%kulkarni%')
+  Rows Removed by Join Filter: 8500
+  ->  Seq Scan on users u  (actual rows=50000)     <-- every user, every keystroke
+  ->  Bitmap Heap Scan on students s (actual rows=9000)
+Execution Time: 43.7 ms
+```
 
-   > **It cannot be a plain generated column, which is how this was first
-   > written.** A `GENERATED ALWAYS AS (...) STORED` expression may only read
-   > columns of the same row, so it cannot reach `users.email`. Verified against
-   > this database on 2026-09-09:
-   >
-   > ```
-   > cross-table (subquery on users.email)  -> REJECTED:
-   >     cannot use subquery in column generation expression
-   > same-row (full_name || roll_number)    -> ALLOWED
-   > ```
-   >
-   > So including email needs one of:
-   >
-   > - **a trigger** on `students` *and* on `users`, since an email change must
-   >   rewrite the student's row — two triggers, and the second is the one
-   >   people forget;
-   > - **a stored copy** of email on `students`, kept in sync by the
-   >   application, with the staleness that implies;
-   > - **dropping email from the predicate** and keeping the generated column
-   >   for the student's own text, which *is* same-row and works today. This is
-   >   option 1 and option 3 combined, and it is the cheapest thing that is
-   >   actually indexable.
-   >
-   > Decide that before writing the migration; it changes the whole shape.
+Four designs were measured, with the harness asserting that each returned
+**exactly the same rows** as the baseline before timing it:
 
-### What is NOT established
+| design | 000042 (0 hits) | arjun.kumar1 (0) | sharma2 (84) | kulkarni (500) | correct? |
+|---|---|---|---|---|---|
+| OR across the join (before) | 50.21 ms | 50.74 ms | 50.68 ms | 20.42 ms | — |
+| drop email, own columns only | 0.36 ms | 1.94 ms | **0.27 ms** | 2.50 ms | **no — missed all 84** |
+| own column OR semi-join on users | 16.08 ms | 11.73 ms | 12.24 ms | 14.99 ms | yes |
+| **`search_text` incl. email** | **0.58 ms** | **0.74 ms** | **1.24 ms** | **3.06 ms** | **yes** |
 
-Whether a **single-table** OR across several trigram-indexed columns becomes a
-`BitmapOr` of index scans at volume. The real tables are far too small to make
-the planner reveal it, and the 50k-row experiment set up to answer it was
-aborted for time. Assume nothing here until it is measured.
+Two things that table settles:
+
+- **Dropping email is not a cheap alternative, it is a wrong answer.** For
+  `sharma2` it returned 0 rows where the truth was 84 — those students match on
+  their email address and on nothing else. That is the cost the earlier draft of
+  this document described as "loses a real thing admins do"; it is 100% of the
+  results for that term.
+- **The winning design is 33–87× faster on selective terms**, and on `@sbu.edu`,
+  which matches 9001 of 9001 rows, it is **1.0×** — no better, and no worse.
+  When a term matches nearly everything, a sequential scan *is* the right plan,
+  and this design lets the planner choose it.
+
+The plan it produces is the one worth wanting:
+
+```
+Bitmap Heap Scan on students s
+  ->  BitmapAnd
+        ->  Bitmap Index Scan on idx_students_search_live
+              Index Cond: (search_text ~~ '%sharma2%')
+        ->  Bitmap Index Scan on idx_students_college
+```
+
+4× fewer buffers than the baseline, and one GIN index (5496 kB at 50k rows)
+replaces three trigram indexes (6216 kB) — smaller as well as usable.
+
+### Why it needs a trigger and not just a generated column
+
+A `GENERATED ALWAYS AS ... STORED` expression may only read columns of the same
+row. Verified against this database:
+
+```
+cross-table (subquery on users.email)  -> REJECTED:
+    cannot use subquery in column generation expression
+same-row (full_name || roll_number)    -> ALLOWED
+```
+
+So email is denormalised onto `students.user_email` / `trainers.user_email` by
+`trg_students_user_email` / `trg_trainers_user_email`, and `search_text` is
+generated over that plus the row's own text.
+
+**The split is the point.** Postgres itself guarantees `search_text` is never
+stale with respect to four of its five inputs, so the trigger surface shrinks to
+the one input it cannot cover — email. That one is kept current by
+`trg_users_email_propagate` on `users`, which is the half that is easy to
+forget: without it, changing someone's address leaves them findable only by
+their **old** one, and nothing errors.
+
+`SearchTextMaintenanceTest` guards exactly that, and its assertions were
+confirmed non-vacuous by making `user_email` stale and watching the current
+address become unfindable.
+
+### Still not dropped
+
+`idx_students_name_trgm`, `idx_students_roll_trgm` and `idx_trainers_name_trgm`
+were built for a predicate that could never use them and are now unreferenced.
+They are kept for one release so the new plan can be observed in production
+first; dropping an index is the step that is expensive to undo on a large table.
+`idx_users_email_trgm` stays permanently — the users list searches email on its
+own table, where a trigram index does work.
 
 ---
 
