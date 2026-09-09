@@ -76,6 +76,25 @@ public class SyllabusService {
     /**
      * Create a new module for a batch with optional sub-modules
      */
+    /**
+     * Transactional because it is a write, which it was not before.
+     *
+     * <p>Every mutating method on this service ran without one. Spring Data
+     * makes each individual {@code save} or {@code delete} atomic on its own,
+     * so nothing was visibly broken -- but a method that reads, checks and then
+     * writes had each step in a separate transaction. {@code createModule}
+     * asks {@code existsByBatchIdAndDisplayOrder} and then saves: between those
+     * two statements another request can insert the same display order, and the
+     * check has already passed. A single transaction closes the window that the
+     * check was written to close.
+     *
+     * <p>It also gives {@link com.skillbridge.common.tenant.TenantFilterAspect}
+     * a session to enable {@code collegeFilter} on. The tenant boundary here
+     * does not depend on that -- every lookup goes through a
+     * {@link com.skillbridge.common.tenant.TenantGuard} check explicitly -- but
+     * defence in depth is the point of having both.
+     */
+    @Transactional
     public SyllabusModuleDTO createModule(Long batchId, CreateModuleRequest request) {
         log.info("Creating module '{}' for batch {}", request.getName(), batchId);
 
@@ -114,6 +133,7 @@ public class SyllabusService {
     /**
      * Update a module
      */
+    @Transactional
     public SyllabusModuleDTO updateModule(Long moduleId, UpdateModuleRequest request) {
         log.info("Updating module {}", moduleId);
 
@@ -150,6 +170,7 @@ public class SyllabusService {
     /**
      * Delete a module (will cascade delete all sub-modules and topics)
      */
+    @Transactional
     public void deleteModule(Long moduleId) {
         log.info("Deleting module {}", moduleId);
 
@@ -168,6 +189,7 @@ public class SyllabusService {
     /**
      * Create a sub-module under a module
      */
+    @Transactional
     public SyllabusSubmoduleDTO createSubmodule(Long moduleId, CreateSubmoduleRequest request) {
         log.info("Creating sub-module '{}' for module {}", request.getName(), moduleId);
 
@@ -189,6 +211,7 @@ public class SyllabusService {
     /**
      * Update a sub-module
      */
+    @Transactional
     public SyllabusSubmoduleDTO updateSubmodule(Long submoduleId, UpdateSubmoduleRequest request) {
         log.info("Updating sub-module {}", submoduleId);
 
@@ -228,6 +251,7 @@ public class SyllabusService {
     /**
      * Delete a sub-module (will cascade delete all topics)
      */
+    @Transactional
     public void deleteSubmodule(Long submoduleId) {
         log.info("Deleting sub-module {}", submoduleId);
 
@@ -246,6 +270,7 @@ public class SyllabusService {
     /**
      * Add a topic to a sub-module
      */
+    @Transactional
     public SyllabusTopicDTO addTopicToSubmodule(Long submoduleId, CreateTopicRequest request) {
         log.info("Adding topic '{}' to sub-module {}", request.getName(), submoduleId);
 
@@ -268,6 +293,7 @@ public class SyllabusService {
     /**
      * Update a topic
      */
+    @Transactional
     public SyllabusTopicDTO updateTopic(Long topicId, UpdateTopicRequest request) {
         log.info("Updating topic {}", topicId);
 
@@ -292,6 +318,7 @@ public class SyllabusService {
     /**
      * Delete a topic
      */
+    @Transactional
     public void deleteTopic(Long topicId) {
         log.info("Deleting topic {}", topicId);
 
@@ -306,6 +333,7 @@ public class SyllabusService {
     /**
      * Toggle topic completion status
      */
+    @Transactional
     public SyllabusTopicDTO toggleTopicCompletion(Long topicId) {
         log.info("Toggling completion for topic {}", topicId);
 

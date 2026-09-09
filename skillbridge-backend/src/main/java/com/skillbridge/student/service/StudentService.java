@@ -104,6 +104,17 @@ public class StudentService {
         return mapToDTO(savedStudent);
     }
 
+    /**
+     * Read-only, and transactional on purpose. Without an ambient transaction
+     * each repository call opens and commits its own, which costs a round trip
+     * per call to a database in another region -- measured at 5.00 connection
+     * checkouts for one GET /admin/students -- and leaves
+     * {@link com.skillbridge.common.tenant.TenantFilterAspect} with no session
+     * to enable {@code collegeFilter} on, since it only advises
+     * {@code @Transactional} methods. One transaction also means one snapshot,
+     * so a page and the rows it is mapped from cannot disagree.
+     */
+    @Transactional(readOnly = true)
     public StudentDTO getStudentProfile(Long userId) {
         Student student = studentRepository.findByUserIdWithUser(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
@@ -117,6 +128,7 @@ public class StudentService {
      * because there are two of them: a check at one call site is a check the
      * other one is missing.
      */
+    @Transactional(readOnly = true)
     public StudentDTO getStudentById(Long studentId) {
         Student student = studentRepository.findByIdWithUser(studentId)
                 .filter(st -> TenantGuard.isVisible(st.getCollege().getId()))
@@ -124,6 +136,7 @@ public class StudentService {
         return mapToDTO(student);
     }
 
+    @Transactional(readOnly = true)
     public List<StudentDTO> getAllStudentsByCollege(Long collegeId) {
         List<Student> students = studentRepository.findByCollegeIdWithUser(collegeId);
         return mapPage(students);
@@ -136,6 +149,7 @@ public class StudentService {
      * used to filter the page it already held, so a student on page 3 could not
      * be found from page 1.
      */
+    @Transactional(readOnly = true)
     public Page<StudentDTO> getStudentsByCollege(Long collegeId, String search, Boolean active,
                                                   Pageable pageable) {
         Specification<Student> spec = Specification.allOf(
@@ -411,10 +425,12 @@ public class StudentService {
      * so it is the one list every college's students share and the one that
      * grows fastest with the product rather than with any one customer.
      */
+    @Transactional(readOnly = true)
     public Page<Skill> getAllSkills(Pageable pageable) {
         return skillRepository.findAll(pageable);
     }
 
+    @Transactional(readOnly = true)
     public Page<Skill> searchSkills(String query, Pageable pageable) {
         return skillRepository.findByNameContainingIgnoreCase(query, pageable);
     }

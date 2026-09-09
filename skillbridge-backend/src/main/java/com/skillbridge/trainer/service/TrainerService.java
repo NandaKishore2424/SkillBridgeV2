@@ -92,6 +92,17 @@ public class TrainerService {
         return mapToDTO(savedTrainer);
     }
 
+    /**
+     * Read-only, and transactional on purpose. Without an ambient transaction
+     * each repository call opens and commits its own, which costs a round trip
+     * per call to a database in another region -- measured at 5.00 connection
+     * checkouts for one GET /admin/students -- and leaves
+     * {@link com.skillbridge.common.tenant.TenantFilterAspect} with no session
+     * to enable {@code collegeFilter} on, since it only advises
+     * {@code @Transactional} methods. One transaction also means one snapshot,
+     * so a page and the rows it is mapped from cannot disagree.
+     */
+    @Transactional(readOnly = true)
     public TrainerDTO getTrainerProfile(Long userId) {
         Trainer trainer = trainerRepository.findByUserIdWithUser(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trainer profile not found"));
@@ -99,6 +110,7 @@ public class TrainerService {
     }
 
     /** Serves both {@code GET /admin/trainers/{id}} and {@code GET /trainers/{id}}. */
+    @Transactional(readOnly = true)
     public TrainerDTO getTrainerById(Long trainerId) {
         Trainer trainer = trainerRepository.findByIdWithUser(trainerId)
                 .filter(t -> TenantGuard.isVisible(t.getCollege().getId()))
@@ -106,11 +118,13 @@ public class TrainerService {
         return mapToDTO(trainer);
     }
 
+    @Transactional(readOnly = true)
     public List<TrainerDTO> getAllTrainersByCollege(Long collegeId) {
         return mapPage(trainerRepository.findByCollegeIdWithUser(collegeId));
     }
 
     /** The college's trainers, optionally filtered. See {@code StudentService}. */
+    @Transactional(readOnly = true)
     public Page<TrainerDTO> getTrainersByCollege(Long collegeId, String search, Boolean active,
                                                   Pageable pageable) {
         Specification<Trainer> spec = Specification.allOf(

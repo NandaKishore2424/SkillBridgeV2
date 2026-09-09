@@ -47,6 +47,18 @@ Large tenant: 12 batches, 12 students, 8 modules per batch.
 "Before" shows the two measurements where the count grew — those were real
 N+1s, found by this test on its first run.
 
+> **Queries are not connections, and this table counts queries.** On
+> 2026-09-09 the read services were annotated `@Transactional(readOnly = true)`,
+> which took `GET /admin/students` from 5.00 connection checkouts per request to
+> 2.00 — but it is still **5 queries**, and this table is unchanged. Previously
+> each of those queries opened and committed its own transaction; now they share
+> one. Against a database in another region that is five `BEGIN`/`COMMIT` round
+> trips saved, which is the larger cost at ~150 ms RTT, but it is not an N+1 fix
+> and the ⚠️ against the ≤ 3 target still stands. The two are measured by
+> different instruments — `QueryEfficiencyTest` via Hibernate's statement
+> counter, checkouts via `hikaricp.connections.usage` — and improving one does
+> not move the other. See `docs/CONNECTION_POOL.md` § 6.
+
 ### The three N+1s that were fixed
 
 **`GET /trainer/batches`** called `countByBatchId(batch.getId())` inside the

@@ -120,6 +120,16 @@ Two numbers follow from that, and they matter more than the pool size:
 - **~5 connection acquisitions per HTTP request**, consistent across every run
   (`hikaricp.connections.usage` count ÷ requests). Five separate transactions,
   each paying a round trip.
+
+  **Fixed 2026-09-09.** The cause was that the read services were not
+  `@Transactional`, so every repository call opened and committed its own
+  transaction. Annotating them `@Transactional(readOnly = true)` took
+  `GET /admin/students` from **5.00 checkouts per request to 2.00**, and
+  `/admin/trainers` from 3.00 to 2.00 — measured, and reproducible to two
+  decimal places because the counts are deterministic. The remaining two are one
+  for the auth filter's `findById` and one for the service transaction itself.
+  `TransactionalReadRulesTest` fails the build if a service method reaches a
+  repository without a transaction again.
 - **Every authenticated request does a `userRepository.findById`** in
   `TokenAuthenticationFilter`, to read `isActive` — which the JWT already
   carries, along with email, role and `collegeId`. One round trip per request,
@@ -140,7 +150,7 @@ sustained load had throttled the instance. Single-request latency drifted from
 
 What is *structural*, and reproduced, is everything the sizing rests on: the
 15-connection ceiling, the 1171 ms creation cost, the three-way oversubscription,
-the ~5 acquisitions per request. None of those are timing artifacts.
+the acquisitions per request (deterministic to two decimal places, before and after). None of those are timing artifacts.
 
 ## 8. Metrics
 
