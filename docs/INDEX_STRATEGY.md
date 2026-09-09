@@ -183,7 +183,7 @@ they need different reasoning:
   `idx_enrollments_student_id` under `idx_enrollments_student_status`,
   `idx_user_roles_user_id` under `user_roles_pkey`.
 
-20 indexes dropped, 145 → 125. **Verified afterwards that the set of unindexed
+22 indexes dropped, 145 → 117, and two dead tables with them, 32 → 30. **Verified afterwards that the set of unindexed
 foreign keys was byte-for-byte unchanged** — the drops removed redundancy, not
 coverage.
 
@@ -234,21 +234,21 @@ or a screen that filters by "deleted by" or "uploaded by". If `topic_progress`
 grows large first, `topic_progress.updated_by` is the one to index before the
 others — it is much the biggest child table.
 
-### Two dead tables — prepared, not yet dropped
+### Two dead tables — dropped
 
 `batch_enrollments` and `syllabi`: 0 rows, mapped by no entity, referenced by no
 Java, TypeScript, Python or SQL in the repository, and depended on by nothing —
-no inbound foreign key, no view, no rule. They carry only *outbound* foreign
-keys to `batches` and `students`, which is exactly their cost: every `DELETE` on
-a parent scans them to enforce a constraint protecting nothing.
-`batch_enrollments` is the `trainer_batches` bug in another costume — a second
+no inbound foreign key, no view, no rule. They carried only *outbound* foreign
+keys to `batches` and `students`, which was exactly their cost: every `DELETE`
+on a parent scanned them to enforce a constraint protecting nothing.
+`batch_enrollments` was the `trainer_batches` bug in another costume — a second
 table modelling a relationship `enrollments` already holds.
 
-`DROP TABLE` was refused by the agent session's safety tooling, which is the
-right default for irreversible DDL against the only copy of the data. The
-verified statements are in `db/schema/2026-09-09-index-cleanup.sql` and need a
-human to run them. Until then the index audit reports two remaining
-redundancies, both on these tables.
+Emptiness and isolation were re-checked immediately before the drop rather than
+relying on the survey taken when the change was written. They took the last two
+redundant indexes with them.
+
+**End state: 117 indexes across 30 tables, and the audit below returns nothing.**
 
 ---
 

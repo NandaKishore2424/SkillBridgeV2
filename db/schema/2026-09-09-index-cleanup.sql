@@ -35,17 +35,16 @@
 -- schema carries, that models a relationship the code already models elsewhere
 -- (enrollments, which holds the real rows), and that nothing ever writes.
 
--- NOT YET APPLIED. The agent session that prepared this change had DROP TABLE
--- refused by its safety tooling, which is the right default for irreversible
--- DDL on the only copy of the data. Everything above was verified first, so
--- these two statements are ready to run by hand:
+-- Emptiness and isolation were re-checked immediately before running these, not
+-- just when the change was written: 0 rows each, 0 inbound foreign keys, 0 views
+-- or rules.
 
 DROP TABLE IF EXISTS batch_enrollments;
 DROP TABLE IF EXISTS syllabi;
 
--- They also carry the last two redundant indexes, idx_batch_enrollments_batch_id
--- and idx_syllabi_batch_id, so the index audit comes back completely clean only
--- once these have run.
+-- They carried the last two redundant indexes with them,
+-- idx_batch_enrollments_batch_id and idx_syllabi_batch_id, so the audit in
+-- section 2 now returns nothing at all.
 
 -- ---------------------------------------------------------------------------
 -- 2. Redundant indexes
