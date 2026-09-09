@@ -136,6 +136,34 @@
 
 	<build>
 		<plugins>
+			<!--
+				Activates the `test` profile, which is what makes
+				src/main/resources/application-test.yaml load at all.
+
+				It did not, ever. Nothing set spring.profiles.active for tests, so
+				every @SpringBootTest ran on `local` alone and application-test.yaml
+				was a file with no effect: the SQL logging it advertises was never on,
+				and neither was the small connection pool it declares.
+
+				That second one had teeth. Spring caches a context per distinct test
+				configuration, each holding its own Hikari pool, and on `local` that
+				is 12 connections each, against the 15 the Supabase pooler allows
+				this whole project (docs/CONNECTION_POOL.md). Two live contexts
+				exhausted it, and the second failed to start with "Unable to determine
+				Dialect without JDBC metadata", which reads like a driver or config
+				problem rather than "there were no connections left".
+
+				`local` stays first: it carries the datasource. `test` only overrides.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<spring.profiles.active>local,test</spring.profiles.active>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>

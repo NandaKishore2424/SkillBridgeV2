@@ -1,5 +1,6 @@
 package com.skillbridge.company.controller;
 
+import com.skillbridge.common.idempotency.Idempotent;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
@@ -126,6 +127,10 @@ public class CompanyController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // Idempotent: companies has no unique constraint of any kind, so a
+    // double-clicked Create button leaves two identical rows with nothing to
+    // tell them apart afterwards. Requires an Idempotency-Key header.
+    @Idempotent
     @PostMapping
     @PreAuthorize("hasRole('SYSTEM_ADMIN') or hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<?> createCompany(@RequestBody CreateCompanyRequest request) {

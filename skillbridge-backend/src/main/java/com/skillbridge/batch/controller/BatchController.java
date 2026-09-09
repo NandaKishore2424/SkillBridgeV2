@@ -1,5 +1,6 @@
 package com.skillbridge.batch.controller;
 
+import com.skillbridge.common.idempotency.Idempotent;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.batch.dto.BatchDTO;
 import com.skillbridge.batch.entity.Batch;
@@ -181,6 +182,10 @@ public class BatchController {
                 this::convertCompanyToDTO));
     }
 
+    // Idempotent: batches has no unique constraint of any kind, so a
+    // double-clicked Create button leaves two identical rows with nothing to
+    // tell them apart afterwards. Requires an Idempotency-Key header.
+    @Idempotent
     @PostMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<BatchDTO> createBatch(@RequestBody CreateBatchRequest request) {

@@ -29,6 +29,7 @@ import {
   Textarea,
 } from '@/shared/components/ui'
 import { createBatch, type CreateBatchRequest } from '@/api/college-admin'
+import { useIdempotencyKey } from '@/lib/idempotency'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import { Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -78,9 +79,14 @@ export function CreateBatch() {
     },
   })
 
+  // One key for this filled-in form, not one per HTTP call: a double-clicked
+  // submit must send the SAME key, or it creates a second batch.
+  const idempotency = useIdempotencyKey()
+
   const mutation = useMutation({
-    mutationFn: (data: CreateBatchRequest) => createBatch(data),
+    mutationFn: (data: CreateBatchRequest) => createBatch(data, idempotency.current()),
     onSuccess: () => {
+      idempotency.reset()
       showSuccess('Batch created successfully!')
       navigate('/admin/batches')
     },

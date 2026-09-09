@@ -5,6 +5,7 @@
  * All operations are scoped to the admin's college
  */
 
+import { idempotencyHeaders } from '@/lib/idempotency'
 import apiClient from './client'
 import type { Batch, BatchStatus, Student } from '@/shared/types'
 
@@ -114,8 +115,17 @@ export const getBatchById = async (id: number): Promise<BatchWithDetails> => {
   return response.data
 }
 
-export const createBatch = async (data: CreateBatchRequest): Promise<Batch> => {
-  const response = await apiClient.post<Batch>('/admin/batches', data)
+/**
+ * Requires an idempotency key: `batches` has no unique constraint, so a repeated
+ * request would create a second identical row. Get the key from
+ * `useIdempotencyKey` so a retry reuses it -- a freshly generated one per call
+ * would defeat the purpose. See `src/lib/idempotency.ts`.
+ */
+export const createBatch = async (
+  data: CreateBatchRequest,
+  idempotencyKey: string
+): Promise<Batch> => {
+  const response = await apiClient.post<Batch>('/admin/batches', data, idempotencyHeaders(idempotencyKey))
   return response.data
 }
 
@@ -173,8 +183,12 @@ export const getCompanyById = async (id: number): Promise<Company> => {
   return response.data
 }
 
-export const createCompany = async (data: CreateCompanyRequest): Promise<Company> => {
-  const response = await apiClient.post<Company>('/admin/companies', data)
+/** Requires an idempotency key, for the same reason as {@link createBatch}. */
+export const createCompany = async (
+  data: CreateCompanyRequest,
+  idempotencyKey: string
+): Promise<Company> => {
+  const response = await apiClient.post<Company>('/admin/companies', data, idempotencyHeaders(idempotencyKey))
   return response.data
 }
 

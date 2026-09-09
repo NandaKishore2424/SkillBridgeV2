@@ -1,5 +1,6 @@
 package com.skillbridge.student.controller;
 
+import com.skillbridge.common.idempotency.Idempotent;
 import com.skillbridge.student.dto.*;
 import com.skillbridge.common.api.DeprecatedEndpoint;
 import com.skillbridge.student.dto.SkillDTO;
@@ -121,6 +122,10 @@ public class StudentController {
         return ResponseEntity.ok().build();
     }
 
+    // Idempotent: student_projects has no unique constraint of any kind, so a
+    // double-clicked Create button leaves two identical rows with nothing to
+    // tell them apart afterwards. Requires an Idempotency-Key header.
+    @Idempotent
     @PostMapping("/me/projects")
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<StudentProjectDTO> addProject(@RequestBody CreateStudentProjectRequest request) {

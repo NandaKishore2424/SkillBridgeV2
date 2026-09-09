@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui'
 import { createCompany, type CreateCompanyRequest } from '@/api/college-admin'
+import { useIdempotencyKey } from '@/lib/idempotency'
 import { getAllColleges } from '@/api/admin'
 import { useAuth } from '@/shared/hooks/useAuth'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
@@ -90,9 +91,14 @@ export function CreateCompany() {
     },
   })
 
+  // One key for this filled-in form, not one per HTTP call: a double-clicked
+  // submit must send the SAME key, or it creates a second company.
+  const idempotency = useIdempotencyKey()
+
   const mutation = useMutation({
-    mutationFn: (data: CreateCompanyRequest) => createCompany(data),
+    mutationFn: (data: CreateCompanyRequest) => createCompany(data, idempotency.current()),
     onSuccess: () => {
+      idempotency.reset()
       showSuccess('Company created successfully!')
       navigate('/admin/companies')
     },
