@@ -152,33 +152,103 @@ own table, where a trigram index does work.
 
 ---
 
-## 3. Known gaps, not yet acted on
+## 3. The catalogued cleanups — done 2026-09-09, and what the catalogue got wrong
 
-**Two foreign keys have no index on the referencing column.** Every `DELETE` on
-the parent scans the child to enforce the constraint:
+This section used to list gaps. They are closed. The corrections are worth more
+than the closure, because all three came from re-deriving the audit instead of
+trusting what was written here.
 
-- `batches.deleted_by → users`
-- `bulk_uploads.uploaded_by_user_id → users`
+| this document claimed | actual |
+|---|---|
+| 14 exact-duplicate index pairs | **1** |
+| 2 unindexed foreign keys | **10** in `public` |
+| "do not drop the `_live` indexes" | true for four of five |
 
-**Fourteen exact-duplicate index pairs**, same columns and same order — for
-example `users_email_key` and `idx_users_email`, `students_user_id_key` and
-`idx_students_user_id`. Each pair is maintained on every write and serves one
-purpose.
+**Why 14 became 1.** The original audit compared `pg_index.indkey` — the column
+list — and nothing else. That conflates a `UNIQUE` index with a plain one over
+the same columns, and it ignores partial predicates entirely, which is the very
+mistake this section warned about two paragraphs later. Two indexes are
+interchangeable only if *everything* matches: access method, key columns and
+order, opclasses, expressions, uniqueness **and** predicate. Normalising
+`pg_get_indexdef()` minus the index's own name makes that structural rather than
+a judgement call, and on that basis there was exactly one true duplicate.
 
-> **Do not drop the `_live` indexes.** `idx_students_live`, `idx_batches_college_live`,
-> `idx_colleges_live`, `idx_companies_live` and `idx_trainers_live` look like
-> duplicates by column list and are **partial** (`WHERE deleted_at IS NULL`).
-> A partial index over the same columns is a different, smaller index that
-> serves the soft-delete-filtered queries every entity issues via
-> `@SQLRestriction`. An audit that compares only `pg_index.indkey` will report
-> them as duplicates. Check `pg_get_expr(indpred, indrelid)` before dropping
-> anything.
+The other 19 redundancies were real but of two different kinds, which is why
+they need different reasoning:
 
-**Two dead tables**, both empty and mapped by nothing:
-`batch_enrollments` and `syllabi`. `batch_enrollments` is the same shape as the
-`trainer_batches` bug fixed earlier — a table the schema carries and the code
-does not know about. Nothing writes them; their only cost is that a `DELETE` on
-`batches` scans them for FK enforcement.
+- **7 shadowed by a `UNIQUE` index** on the same columns — `idx_users_email`
+  under `users_email_key`, and similar. The unique index enforces a constraint
+  so it cannot go; the plain one is pure write overhead.
+- **12 a strict leading prefix of a wider index** with the same predicate —
+  `idx_enrollments_student_id` under `idx_enrollments_student_status`,
+  `idx_user_roles_user_id` under `user_roles_pkey`.
+
+20 indexes dropped, 145 → 125. **Verified afterwards that the set of unindexed
+foreign keys was byte-for-byte unchanged** — the drops removed redundancy, not
+coverage.
+
+### The one `_live` index that really was redundant
+
+The standing advice here was *do not drop the `_live` indexes*, and it is right
+about the mistake it describes. `idx_batches_college_live` is
+`(college_id, status) WHERE deleted_at IS NULL` and `idx_batches_college_status`
+is `(college_id, status)` with no predicate: a column-list comparison calls
+those duplicates, and they are not. Both are kept.
+
+But prefix redundancy still applies *within* one predicate:
+
+```
+idx_students_live      (college_id)              WHERE deleted_at IS NULL
+uk_students_roll_live  (college_id, roll_number) WHERE deleted_at IS NULL
+```
+
+Identical predicate, and `college_id` leads both, so every plan that could use
+the first can use the second. `idx_students_live` was dropped;
+`idx_colleges_live`, `idx_companies_live`, `idx_trainers_live` and
+`idx_batches_college_live` have no such partner and remain.
+
+### The 10 unindexed foreign keys are deliberately still unindexed
+
+`batches.deleted_by`, `colleges.deleted_by`, `companies.deleted_by`,
+`students.deleted_by`, `trainers.deleted_by`, `enrollments.enrolled_by`,
+`enrollment_requests.reviewed_by`, `bulk_uploads.uploaded_by_user_id`,
+`idempotency_keys.user_id` → `users`, and `topic_progress.updated_by` →
+`trainers`.
+
+An unindexed foreign key costs a scan of the *child* when a **parent** row is
+deleted or its key updated. Both halves were checked before deciding:
+
+- **Nothing hard-deletes a user or a trainer.** The application soft-deletes;
+  the only `@Modifying` `DELETE` in the codebase is `TopicProgress` by student
+  and batch. The scan these indexes would avoid does not happen.
+- **None of these columns is ever a query predicate** — no derived finder, no
+  Specification, no `@Query` mentions any of them. They are written as an audit
+  trail and read back only through the row that carries them.
+
+Adding ten indexes that serve neither purpose is what Phase 05 warns about in
+its own words: *an index that isn't used is worse than no index — it costs write
+throughput and buys nothing.*
+
+**What would change the answer:** a hard-delete or GDPR erasure path on `users`,
+or a screen that filters by "deleted by" or "uploaded by". If `topic_progress`
+grows large first, `topic_progress.updated_by` is the one to index before the
+others — it is much the biggest child table.
+
+### Two dead tables — prepared, not yet dropped
+
+`batch_enrollments` and `syllabi`: 0 rows, mapped by no entity, referenced by no
+Java, TypeScript, Python or SQL in the repository, and depended on by nothing —
+no inbound foreign key, no view, no rule. They carry only *outbound* foreign
+keys to `batches` and `students`, which is exactly their cost: every `DELETE` on
+a parent scans them to enforce a constraint protecting nothing.
+`batch_enrollments` is the `trainer_batches` bug in another costume — a second
+table modelling a relationship `enrollments` already holds.
+
+`DROP TABLE` was refused by the agent session's safety tooling, which is the
+right default for irreversible DDL against the only copy of the data. The
+verified statements are in `db/schema/2026-09-09-index-cleanup.sql` and need a
+human to run them. Until then the index audit reports two remaining
+redundancies, both on these tables.
 
 ---
 
