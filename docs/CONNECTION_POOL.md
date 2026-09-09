@@ -140,29 +140,54 @@ what makes deactivating a user take effect immediately instead of at token
 expiry, an hour later. Trading it for a cached or claims-only check is a
 decision about that window, not a performance tweak, so it has not been made.
 
-**Investigated 2026-09-09, and it is already as cheap as one lookup gets.** The
-obvious suspicion was that it cost *two* statements rather than one: `roles` is
-an eager `@ManyToMany`, and eager does not promise a join — Hibernate resolves
-that collection with a second select when loading a page of users, which is what
-`@BatchSize(100)` on it is for. Measured with Hibernate's own statement counter,
-a single-entity load uses a join and costs **one statement**, with the roles
-included. A fetch-join variant was written, measured against it, found to change
-nothing, and removed rather than kept as a query that looks like an optimisation.
+**Removed 2026-09-09.** First, the obvious suspicion was tested and was wrong:
+`roles` is an eager `@ManyToMany`, and eager does not promise a join, so the
+lookup might have cost *two* statements. Measured with Hibernate's statement
+counter, a single-entity load uses a join and costs one. A fetch-join variant was
+written, measured at 1 against 1, and deleted rather than kept as an
+optimisation that optimises nothing.
 
-So the remaining ~150 ms is one round trip and cannot be reduced by rewriting the
-query. The two ways to remove it are:
+So the round trip could not be removed by rewriting the query, only by not making
+it. The filter now builds the principal from the token's claims, and the access
+token TTL was cut from 1 hour to **15 minutes** in the same change, because the
+token's lifetime is now the revocation window.
 
-- **Cache the user by id.** This is Phase 06's, and it is already specified there
-  — L2, 5 minute TTL, *"must invalidate on role change"* — so building a Caffeine
-  cache here now would be the wrong topology and would have to be undone.
-- **Trust the JWT's claims.** The token already carries `isActive`, `email`,
-  `role` and `collegeId`. This removes the round trip entirely and widens the
-  revocation window from immediate to the access-token TTL, currently one hour.
-  That is a security decision, not a tuning one.
+| | before | after |
+|---|---|---|
+| `GET /admin/students` | 2.00 checkouts | **1.00** |
+| `GET /admin/trainers` | 2.00 checkouts | **1.00** |
+| `/actuator/metrics` (authenticated) | 1.00 | **0.00** |
 
-`AuthPathQueryCostTest` pins the count at one, so the cost cannot silently double
-before either of those happens — making `roles` lazy or adding a second lookup to
-the filter fails the build.
+Three things had to be true first, and each was a way to turn a latency change
+into a security bug:
+
+- **The token had to carry every role.** It carried one `role` claim; the
+  principal is built from `user.getRoles()`, a set. Authorising on the first
+  alone would silently drop the rest. There is now a `roles` claim.
+- **The token had to carry `mustChangePassword`.** It did not, and
+  `PasswordChangeRequiredFilter` reads it. A missing claim reads as `false`,
+  which is precisely the bypass that flag exists to close — and this project has
+  already had it set on every bulk-provisioned account and enforced on none.
+- **`AuthService` ended `primaryRole` with `.orElse("SYSTEM_ADMIN")`**, at all
+  three issuing sites. A user with no roles was handed the highest privilege in
+  the system. It was inert while authorities came from the database and would
+  have gone live the moment the claim was trusted. It now refuses to issue a
+  token instead.
+
+What was given up: a deactivated user used to lose access on their next request
+and now keeps it for up to the TTL. The bound is real rather than best-effort —
+`/auth/refresh` re-reads the user and refuses an inactive one, so nobody extends
+past the token they already hold.
+
+Tokens issued before the change have neither new claim, so the filter falls back
+to the database for those rather than defaulting them. Every token reissues
+within one TTL, after which that branch is dead.
+
+`AuthPathQueryCostTest` still pins the repository lookup at one statement, for
+the fallback path and for anything else that loads a user on a hot path.
+`ClaimsBasedAuthenticationTest` covers the rest: all roles carried,
+`mustChangePassword` still enforced from the token, a roleless principal refused,
+and a pre-change token still accepted.
 
 ## 7. A caution about the measurements
 

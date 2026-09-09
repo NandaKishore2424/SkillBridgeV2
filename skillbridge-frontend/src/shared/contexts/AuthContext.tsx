@@ -12,7 +12,7 @@
  * - Automatic token refresh on 401 errors
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { AuthContextValue, AuthState, LoginCredentials } from '@/shared/types/auth'
 import type { User, UserRole } from '@/shared/types'
@@ -339,20 +339,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
   /**
    * Refresh access token
    */
+  /**
+   * Refreshes the access token, at most once at a time.
+   *
+   * **The single-flight guard is load-bearing, not an optimisation.** The server
+   * rotates refresh tokens: a successful refresh revokes the one it was given.
+   * A page that fires several requests at once — every dashboard here does —
+   * gets several 401s the moment the access token expires, and without this
+   * guard each one would call refresh with the *same* stored token. The first
+   * succeeds and revokes it; the rest are rejected as invalid, and the catch
+   * below logs the user out.
+   *
+   * That was survivable while access tokens lasted an hour. They now last
+   * fifteen minutes (the token is authoritative for authorisation, so its
+   * lifetime is the revocation window), so the race would be four times as
+   * frequent. Concurrent callers share one in-flight refresh instead.
+   */
+  const refreshInFlight = useRef<Promise<void> | null>(null)
+
   const refreshAccessToken = useCallback(async () => {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-    if (!refreshToken) {
-      throw new Error('No refresh token available')
+    if (refreshInFlight.current) {
+      return refreshInFlight.current
     }
 
+    const attempt = (async () => {
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
+      if (!refreshToken) {
+        throw new Error('No refresh token available')
+      }
+
+      try {
+        const response = await authAPI.refreshToken(refreshToken)
+        await handleAuthSuccess(response)
+      } catch (error) {
+        // Refresh failed, logout user
+        clearAuthState()
+        navigate('/login')
+        throw error
+      }
+    })()
+
+    refreshInFlight.current = attempt
     try {
-      const response = await authAPI.refreshToken(refreshToken)
-      await handleAuthSuccess(response)
-    } catch (error) {
-      // Refresh failed, logout user
-      clearAuthState()
-      navigate('/login')
-      throw error
+      return await attempt
+    } finally {
+      refreshInFlight.current = null
     }
   }, [navigate])
 

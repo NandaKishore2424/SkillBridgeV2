@@ -177,7 +177,30 @@ logging:
 
 jwt:
   secret: ${JWT_SECRET}
-  accessTokenTtlSeconds: ${JWT_ACCESS_TTL:3600}
+
+  # THIS IS THE REVOCATION WINDOW, not just a session length.
+  #
+  # Since 2026-09-09 TokenAuthenticationFilter builds the principal from the
+  # token's claims instead of reloading the user on every request. That removed a
+  # database round trip -- ~150 ms, under every authenticated endpoint, one of the
+  # two connection checkouts a request made -- and gave up the property that paid
+  # for it: a deactivated user used to lose access on their very next request, and
+  # now keeps it until their access token expires.
+  #
+  # So this number is how long a deactivated or demoted user keeps working. An
+  # hour was defensible when the filter re-read the user and this value only
+  # controlled how often clients refreshed; it is not defensible as a revocation
+  # window. Fifteen minutes bounds it while costing each active client four
+  # refreshes an hour, against the one lookup per request it replaces.
+  #
+  # The bound is real rather than best-effort: /auth/refresh re-reads the user and
+  # refuses an inactive one, so a deactivated user cannot extend past the token
+  # they already hold.
+  #
+  # Lower it if that window is too wide; the cost is refresh traffic, and each
+  # refresh also rotates the refresh token, so it is two writes rather than a
+  # read.
+  accessTokenTtlSeconds: ${JWT_ACCESS_TTL:900}      # 15m
   refreshTokenTtlSeconds: ${JWT_REFRESH_TTL:1209600}
 
 rateLimit:

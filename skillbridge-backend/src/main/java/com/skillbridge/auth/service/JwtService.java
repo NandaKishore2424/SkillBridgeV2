@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.Base64;
 import java.util.Date;
 
@@ -47,7 +49,32 @@ public class JwtService {
         this.accessTokenTtlSeconds = accessTokenTtlSeconds;
     }
 
-    public String generateAccessToken(User user, String primaryRole) {
+    /**
+     * Issues an access token carrying everything authorisation needs.
+     *
+     * <p><b>These claims are authoritative.</b> Since 2026-09-09
+     * {@code TokenAuthenticationFilter} builds the principal from them instead
+     * of re-reading the user on every request, so anything missing here is a
+     * permission the request will not have, and anything stale here stays stale
+     * until the token expires. Two claims exist only for that reason:
+     *
+     * <ul>
+     *   <li>{@code roles} — every role, not just {@code role}. The single
+     *       {@code role} claim is kept for the client, which displays it, but a
+     *       user may hold more than one and authorising on the first alone would
+     *       silently drop the rest.</li>
+     *   <li>{@code mustChangePassword} — read by
+     *       {@code PasswordChangeRequiredFilter}. It used to come from the
+     *       entity; omitting it here would default it to false and reopen a hole
+     *       this project has already closed once, where the flag was set on
+     *       every bulk-provisioned account and enforced on none.</li>
+     * </ul>
+     *
+     * <p>The token's lifetime is now the revocation window: a deactivated user
+     * keeps access until it expires. See {@code jwt.accessTokenTtlSeconds}.
+     */
+    public String generateAccessToken(User user, String primaryRole, Set<String> roles,
+                                      boolean mustChangePassword) {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(accessTokenTtlSeconds);
 
@@ -57,8 +84,10 @@ public class JwtService {
                 .expiration(Date.from(exp))
                 .claim("email", user.getEmail())
                 .claim("role", primaryRole)
+                .claim("roles", List.copyOf(roles))
                 .claim("collegeId", user.getCollegeId())
                 .claim("isActive", user.getIsActive())
+                .claim("mustChangePassword", mustChangePassword)
                 // No algorithm argument: 0.12 infers HS256 from the key length.
                 .signWith(signingKey)
                 .compact();
@@ -74,6 +103,17 @@ public class JwtService {
             // response tells an attacker which part of their forgery to fix.
             return false;
         }
+    }
+
+    /**
+     * The verified claims, for callers that need more than the subject.
+     *
+     * <p>Throws if the token is invalid or expired — parsing <em>is</em> the
+     * verification, so there is no way to read a claim without having checked
+     * the signature first.
+     */
+    public Claims claims(String token) {
+        return parseClaims(token);
     }
 
     public Long getUserId(String token) {

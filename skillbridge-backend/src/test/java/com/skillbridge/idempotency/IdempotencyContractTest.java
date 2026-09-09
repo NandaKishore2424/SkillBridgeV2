@@ -65,7 +65,8 @@ class IdempotencyContractTest {
         jdbc.update("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
                 fixture.adminUserId, roleId);
         User admin = userRepository.findById(fixture.adminUserId).orElseThrow();
-        token = jwtService.generateAccessToken(admin, "COLLEGE_ADMIN");
+        token = jwtService.generateAccessToken(admin, "COLLEGE_ADMIN",
+                java.util.Set.of("COLLEGE_ADMIN"), false);
     }
 
     @AfterEach

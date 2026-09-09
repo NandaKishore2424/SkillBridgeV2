@@ -63,6 +63,41 @@ public class AuthenticatedUser implements UserDetails {
                 .toList();
     }
 
+    /**
+     * Builds the principal from a verified token's claims, without touching the
+     * database.
+     *
+     * <p>The signature is what makes this safe: a claim cannot be altered
+     * without the signing key, so these values are exactly what the server put
+     * there when the token was issued. What they are not is *fresh* — they
+     * describe the user as of issue time, so a role change or a deactivation
+     * takes effect when the token expires rather than on the next request. That
+     * is the trade this constructor exists to make, and the access-token TTL is
+     * its bound.
+     *
+     * <p>{@code roles} is required and must be non-empty. A token with no roles
+     * would otherwise produce a principal with no authorities that still passes
+     * authentication, which reads as "logged in but everything is forbidden" —
+     * confusing to debug and one refactor away from being defaulted to
+     * something worse.
+     */
+    public AuthenticatedUser(Long id, String email, Long collegeId, boolean active,
+                             boolean mustChangePassword, Set<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Cannot build an authenticated principal with no roles (user " + id + ")");
+        }
+        this.id = id;
+        this.email = email;
+        this.collegeId = collegeId;
+        this.active = active;
+        this.mustChangePassword = mustChangePassword;
+        this.roles = Set.copyOf(roles);
+        this.authorities = this.roles.stream()
+                .map(name -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + name))
+                .toList();
+    }
+
     /** True for a system administrator, who deliberately has no tenant scope. */
     public boolean isSystemAdmin() {
         return roles.contains("SYSTEM_ADMIN");

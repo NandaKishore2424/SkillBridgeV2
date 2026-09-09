@@ -109,18 +109,15 @@ public class AuthService {
             throw new UnauthorizedException("Invalid email or password");
         }
 
-        // Get primary role
-        String primaryRole = user.getRoles().stream()
-                .findFirst()
-                .map(role -> role.getName())
-                .orElse("SYSTEM_ADMIN");
+        String primaryRole = primaryRoleOf(user);
 
         log.info("Login successful for user: {} with role: {}", user.getEmail(), primaryRole);
         auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
                 AuditAction.LOGIN_SUCCESS, AuditAction.OUTCOME_SUCCESS,
                 "{\"role\":\"" + primaryRole + "\"}");
 
-        String accessToken = jwtService.generateAccessToken(user, primaryRole);
+        String accessToken = jwtService.generateAccessToken(user, primaryRole, roleNamesOf(user),
+                Boolean.TRUE.equals(user.getMustChangePassword()));
         String refreshToken = issueRefreshToken(user);
 
         UserDto userDto = UserDto.builder()
@@ -166,12 +163,10 @@ public class AuthService {
             throw new UnauthorizedException("Account is inactive");
         }
 
-        String primaryRole = user.getRoles().stream()
-                .findFirst()
-                .map(role -> role.getName())
-                .orElse("SYSTEM_ADMIN");
+        String primaryRole = primaryRoleOf(user);
 
-        String newAccessToken = jwtService.generateAccessToken(user, primaryRole);
+        String newAccessToken = jwtService.generateAccessToken(user, primaryRole, roleNamesOf(user),
+                Boolean.TRUE.equals(user.getMustChangePassword()));
         storedToken.setRevoked(true);
         refreshTokenRepository.save(storedToken);
 
@@ -293,12 +288,10 @@ public class AuthService {
         auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
                 AuditAction.FIRST_LOGIN_COMPLETED, AuditAction.OUTCOME_SUCCESS, null);
 
-        String primaryRole = user.getRoles().stream()
-                .findFirst()
-                .map(role -> role.getName())
-                .orElse("SYSTEM_ADMIN");
+        String primaryRole = primaryRoleOf(user);
 
-        String accessToken = jwtService.generateAccessToken(user, primaryRole);
+        String accessToken = jwtService.generateAccessToken(user, primaryRole, roleNamesOf(user),
+                Boolean.TRUE.equals(user.getMustChangePassword()));
         String refreshToken = issueRefreshToken(user);
 
         UserDto userDto = UserDto.builder()
@@ -361,4 +354,38 @@ public class AuthService {
             throw new InternalServerException("Failed to hash token");
         }
     }
+
+    /**
+     * The role name to put in the token's {@code role} claim.
+     *
+     * <p><b>A user with no roles gets none.</b> All three call sites used to end
+     * {@code .orElse("SYSTEM_ADMIN")}, which handed the highest privilege in the
+     * system to any account whose roles had not been set — a bulk-provisioned
+     * user mid-setup, or one whose {@code user_roles} rows were removed.
+     *
+     * <p>It was inert while the authentication filter derived authorities from
+     * the database and ignored this claim. It stopped being inert the moment the
+     * filter began trusting claims, which is why it is fixed here rather than
+     * noted: the change that made the token authoritative is the change that
+     * would have made this exploitable.
+     */
+    private static String primaryRoleOf(User user) {
+        return user.getRoles().stream()
+                .findFirst()
+                .map(Role::getName)
+                .orElseThrow(() -> {
+                    log.error("User {} has no roles; refusing to issue a token rather than "
+                            + "guessing a privilege level", user.getId());
+                    return new UnauthorizedException("This account has no role assigned. "
+                            + "Contact your administrator.");
+                });
+    }
+
+    /** Every role name, for the token's {@code roles} claim. */
+    private static java.util.Set<String> roleNamesOf(User user) {
+        return user.getRoles().stream()
+                .map(Role::getName)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
 }

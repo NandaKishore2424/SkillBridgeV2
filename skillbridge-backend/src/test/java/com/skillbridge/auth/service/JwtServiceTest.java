@@ -48,7 +48,7 @@ class JwtServiceTest {
         @Test
         void issues_a_token_that_verifies_and_carries_the_subject() {
             JwtService jwt = service(3600);
-            String token = jwt.generateAccessToken(user(42L, "a@b.test", 7L), "TRAINER");
+            String token = jwt.generateAccessToken(user(42L, "a@b.test", 7L), "TRAINER", java.util.Set.of("TRAINER"), false);
 
             assertTrue(jwt.isTokenValid(token));
             assertEquals(42L, jwt.getUserId(token));
@@ -59,7 +59,7 @@ class JwtServiceTest {
             // collegeId is null for SYSTEM_ADMIN. A null claim must not break
             // serialisation or parsing.
             JwtService jwt = service(3600);
-            String token = jwt.generateAccessToken(user(1L, "root@b.test", null), "SYSTEM_ADMIN");
+            String token = jwt.generateAccessToken(user(1L, "root@b.test", null), "SYSTEM_ADMIN", java.util.Set.of("SYSTEM_ADMIN"), false);
 
             assertTrue(jwt.isTokenValid(token));
             assertEquals(1L, jwt.getUserId(token));
@@ -76,7 +76,7 @@ class JwtServiceTest {
                     ("a-completely-different-key-of-sufficient-length-"
                             + "0123456789abcdef0123456789abcdef").getBytes());
             String token = new JwtService(foreign, 3600)
-                    .generateAccessToken(user(1L, "a@b.test", 1L), "STUDENT");
+                    .generateAccessToken(user(1L, "a@b.test", 1L), "STUDENT", java.util.Set.of("STUDENT"), false);
 
             assertFalse(service(3600).isTokenValid(token),
                     "a token from another issuer must not verify");
@@ -85,7 +85,7 @@ class JwtServiceTest {
         @Test
         void rejects_a_tampered_payload() {
             JwtService jwt = service(3600);
-            String token = jwt.generateAccessToken(user(1L, "a@b.test", 1L), "STUDENT");
+            String token = jwt.generateAccessToken(user(1L, "a@b.test", 1L), "STUDENT", java.util.Set.of("STUDENT"), false);
 
             // Flip a character in the payload segment; the signature no longer matches.
             String[] parts = token.split("\\.");
@@ -100,7 +100,7 @@ class JwtServiceTest {
         void rejects_an_expired_token() {
             // Negative TTL puts expiry in the past at the moment of issue.
             JwtService jwt = service(-60);
-            String token = jwt.generateAccessToken(user(1L, "a@b.test", 1L), "STUDENT");
+            String token = jwt.generateAccessToken(user(1L, "a@b.test", 1L), "STUDENT", java.util.Set.of("STUDENT"), false);
 
             assertFalse(jwt.isTokenValid(token));
         }
@@ -146,7 +146,7 @@ class JwtServiceTest {
             String plain = "this is a plain text secret that is comfortably long enough for HS256!";
             assertDoesNotThrow(() -> {
                 JwtService jwt = new JwtService(plain, 3600);
-                String token = jwt.generateAccessToken(user(5L, "a@b.test", 1L), "STUDENT");
+                String token = jwt.generateAccessToken(user(5L, "a@b.test", 1L), "STUDENT", java.util.Set.of("STUDENT"), false);
                 assertTrue(jwt.isTokenValid(token));
             });
         }
