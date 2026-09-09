@@ -140,6 +140,30 @@ what makes deactivating a user take effect immediately instead of at token
 expiry, an hour later. Trading it for a cached or claims-only check is a
 decision about that window, not a performance tweak, so it has not been made.
 
+**Investigated 2026-09-09, and it is already as cheap as one lookup gets.** The
+obvious suspicion was that it cost *two* statements rather than one: `roles` is
+an eager `@ManyToMany`, and eager does not promise a join — Hibernate resolves
+that collection with a second select when loading a page of users, which is what
+`@BatchSize(100)` on it is for. Measured with Hibernate's own statement counter,
+a single-entity load uses a join and costs **one statement**, with the roles
+included. A fetch-join variant was written, measured against it, found to change
+nothing, and removed rather than kept as a query that looks like an optimisation.
+
+So the remaining ~150 ms is one round trip and cannot be reduced by rewriting the
+query. The two ways to remove it are:
+
+- **Cache the user by id.** This is Phase 06's, and it is already specified there
+  — L2, 5 minute TTL, *"must invalidate on role change"* — so building a Caffeine
+  cache here now would be the wrong topology and would have to be undone.
+- **Trust the JWT's claims.** The token already carries `isActive`, `email`,
+  `role` and `collegeId`. This removes the round trip entirely and widens the
+  revocation window from immediate to the access-token TTL, currently one hour.
+  That is a security decision, not a tuning one.
+
+`AuthPathQueryCostTest` pins the count at one, so the cost cannot silently double
+before either of those happens — making `roles` lazy or adding a second lookup to
+the filter fails the build.
+
 ## 7. A caution about the measurements
 
 Throughput figures in this document are indicative, not a benchmark. The path is

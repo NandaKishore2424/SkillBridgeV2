@@ -55,6 +55,11 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
             }
 
             Long userId = jwtService.getUserId(token);
+            // One statement, including the roles: Hibernate resolves the eager
+            // @ManyToMany with a join for a single-entity load. Measured, because
+            // "eager" does not guarantee it -- AuthPathQueryCostTest fails if this
+            // ever becomes two, which on this path is ~150ms added to every
+            // authenticated request.
             User user = userRepository.findById(userId).orElse(null);
 
             if (user != null && Boolean.TRUE.equals(user.getIsActive())) {
