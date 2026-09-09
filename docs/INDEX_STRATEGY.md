@@ -97,11 +97,34 @@ In rough order of cost:
 2. **Rewrite as a `UNION`** of two single-table searches. Indexable, but does
    not compose with the Specification API that gives these endpoints their
    filtering.
-3. **A maintained search column** — `students.search_text` as a
-   `GENERATED ALWAYS AS (...) STORED` column over the entity's own text, plus
-   one GIN index, with email denormalised onto it. One index instead of five,
-   one predicate instead of an OR, and indexable. This is the design worth
-   having; it is a schema change and has not been made.
+3. **A maintained search column** — `students.search_text` plus one GIN index.
+   One index instead of five, one predicate instead of an OR, and indexable.
+   This is the design worth having; it is a schema change and has not been made.
+
+   > **It cannot be a plain generated column, which is how this was first
+   > written.** A `GENERATED ALWAYS AS (...) STORED` expression may only read
+   > columns of the same row, so it cannot reach `users.email`. Verified against
+   > this database on 2026-09-09:
+   >
+   > ```
+   > cross-table (subquery on users.email)  -> REJECTED:
+   >     cannot use subquery in column generation expression
+   > same-row (full_name || roll_number)    -> ALLOWED
+   > ```
+   >
+   > So including email needs one of:
+   >
+   > - **a trigger** on `students` *and* on `users`, since an email change must
+   >   rewrite the student's row — two triggers, and the second is the one
+   >   people forget;
+   > - **a stored copy** of email on `students`, kept in sync by the
+   >   application, with the staleness that implies;
+   > - **dropping email from the predicate** and keeping the generated column
+   >   for the student's own text, which *is* same-row and works today. This is
+   >   option 1 and option 3 combined, and it is the cheapest thing that is
+   >   actually indexable.
+   >
+   > Decide that before writing the migration; it changes the whole shape.
 
 ### What is NOT established
 
