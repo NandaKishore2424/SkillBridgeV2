@@ -17,8 +17,19 @@ import psycopg2
 from psycopg2 import pool
 from config import SUPABASE_DB_URL
 
-# Min 2 connections ready at all times; max 10 under heavy load
-# For our use case, 2 is plenty but this is the correct pattern
+# Min 2 connections ready at all times; max 2 under load.
+#
+# maxconn was 10. Measured 2026-09-09: Supabase fronts this project with
+# Supavisor, and the pooler allows exactly 15 server connections in total --
+# not 15 each. The backend's Hikari pool and this pool use the same pooler
+# host, port and role, so they draw on the same 15. At 10 here plus the
+# backend's 10 plus the ETL script's 1, the three of us claimed 21 against a
+# ceiling of 15, and whoever asked last would have waited or failed.
+#
+# The backend is the user-facing claimant and takes 12; this service is
+# best-effort background work, so it takes 2 -- which the comment above already
+# said was plenty -- and the ETL script's single connection makes 15.
+# See docs/CONNECTION_POOL.md.
 _connection_pool: pool.ThreadedConnectionPool | None = None
 
 
@@ -31,10 +42,10 @@ def initialize_pool() -> None:
     print("[DB] Initializing PostgreSQL connection pool...")
     _connection_pool = psycopg2.pool.ThreadedConnectionPool(
         minconn=2,
-        maxconn=10,
+        maxconn=2,
         dsn=SUPABASE_DB_URL
     )
-    print("[DB] ✓ Connection pool ready (2 warm connections to Supabase)")
+    print("[DB] ✓ Connection pool ready (2 connections; the shared Supavisor ceiling is 15)")
 
 
 def get_connection():

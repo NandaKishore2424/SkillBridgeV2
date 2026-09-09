@@ -221,8 +221,10 @@ public class StudentService {
         student.setUpdatedAt(LocalDateTime.now());
         Student updated = studentRepository.save(student);
 
-        // After saving, notify the AI service asynchronously via RabbitMQ.
-        // This runs AFTER the transaction commits so the AI service reads fresh data.
+        // Notify the AI service. AIEventPublisher defers the send until this
+        // transaction commits and runs it on another thread, so the AI service
+        // reads committed data and this method does not hold a database
+        // connection across the AMQP round trip.
         aiEventPublisher.publishProfileUpdated(updated.getId(), updated.getCollege().getId());
 
         return mapToDTO(updated);

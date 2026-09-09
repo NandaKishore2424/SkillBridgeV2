@@ -8,6 +8,19 @@
 # first question is always "which queries?", and answering it should not require
 # editing config and re-running.
 spring:
+  datasource:
+    hikari:
+      # The main pool is fixed at 12 -- this application's share of the 15
+      # server connections Supabase's pooler allows the whole project (see
+      # docs/CONNECTION_POOL.md). The tests must not inherit that: a test run
+      # started while the application is up would ask for 12 more, 24 against a
+      # ceiling of 15, and the failures read as flaky tests rather than as a
+      # connection ceiling.
+      #
+      # The integration tests are sequential, so three is generous.
+      minimum-idle: 1
+      maximum-pool-size: 3
+
   jpa:
     properties:
       hibernate:

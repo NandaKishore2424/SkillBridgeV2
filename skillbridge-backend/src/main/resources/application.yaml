@@ -37,11 +37,54 @@ spring:
       # Retire connections well inside the pooler's idle window rather than
       # Hikari's 30-minute default.
       max-lifetime: 900000        # 15m
+      # Inert while minimum-idle == maximum-pool-size (a fixed-size pool never
+      # retires an idle connection). It applies again if DB_POOL_MIN is lowered.
       idle-timeout: 300000        # 5m
-      minimum-idle: 2
-      maximum-pool-size: 10
-      connection-timeout: 30000   # 30s
-      validation-timeout: 5000    # 5s
+
+      # ---- Sizing. Measured 2026-09-09; see docs/CONNECTION_POOL.md ----------
+      # The ceiling is not this application's choice. Supabase fronts the
+      # database with Supavisor, and this project's pooler allows exactly 15
+      # server connections: configured at 30, given a 48-second load with 26
+      # requests queued, hikaricp.connections.active never once exceeded 15, and
+      # pg_stat_activity agreed. Anything above 15 here is unreachable
+      # configuration -- Hikari would queue rather than grow, while advertising
+      # capacity that cannot exist.
+      #
+      # Those 15 are shared. skillbridge-ai-service and the ETL pipeline use the
+      # same pooler host, port and role. Their configured maximums were 10 and 1,
+      # which with this pool's previous 10 claimed 21 against a ceiling of 15 --
+      # already oversubscribed by 40%.
+      #
+      # 12 is this service's share: it is the only latency-critical, user-facing
+      # claimant, and 3 are left for the AI service (best effort, its own code
+      # says 2 is plenty) and the ETL script (1, single connection).
+      #
+      # Fixed size on purpose -- minimum-idle equals maximum-pool-size. Creating
+      # a connection to the pooler measured a 1171 ms mean: TCP, TLS, Supavisor
+      # auth and Postgres auth, each a round trip to ap-northeast-2. Letting the
+      # pool grow on the request path puts that second-plus in a user's latency,
+      # so the pool is warm before anyone asks.
+      minimum-idle: ${DB_POOL_MIN:12}
+      maximum-pool-size: ${DB_POOL_MAX:12}
+
+      # Shed load rather than queue behind an exhausted pool: 30 seconds of
+      # waiting is 30 seconds of a held Tomcat thread, which turns a slow
+      # service into an unresponsive one.
+      #
+      # Not the 3000 ms the phase doc suggests. Connection creation measured a
+      # 1171 ms mean here, so a 3-second budget leaves under two creation times
+      # of headroom, and a request arriving during warm-up or while Hikari
+      # replaces a retired connection would fail rather than wait. 5000 is four
+      # times the measured creation cost and still six times tighter than the
+      # 30 s it replaces.
+      connection-timeout: 5000
+      validation-timeout: 3000    # must stay under connection-timeout
+
+      # A connection out of the pool for 20 s has been leaked, not used: the
+      # slowest single checkout observed under deliberate overload was 4.5 s.
+      # This only logs -- it never fails a request -- so a false positive costs
+      # a log line, and the alternative is finding leaks by running out.
+      leak-detection-threshold: 20000
 
       # Name the pool so the Micrometer gauges are labelled, and name the JDBC
       # connections so they are attributable on the server. Without
@@ -54,6 +97,27 @@ spring:
       pool-name: SkillBridgeHikari
       data-source-properties:
         ApplicationName: skillbridge-backend
+        # Collapse a batch of INSERTs into one multi-row statement. With every
+        # round trip costing ~150 ms to ap-northeast-2, the batch size Hibernate
+        # is configured for below is only worth having if the driver sends it as
+        # one statement.
+        reWriteBatchedInserts: true
+        # Server-side prepared statements after 5 executions, cached so the
+        # server does not re-plan. Saves a parse/plan round trip on every
+        # repeated query, which at this latency is the cost that matters.
+        #
+        # SAFE ONLY IN SESSION MODE. This connects to the pooler on port 5432,
+        # which is Supavisor's session mode: one client connection owns one
+        # server connection, so a prepared statement stays where it was made.
+        # Port 6543 is transaction mode, where a connection is handed to a
+        # different client between statements and named prepared statements
+        # break. Changing that port without removing these two lines is a
+        # one-character change that fails at runtime, not at startup.
+        prepareThreshold: 5
+        preparedStatementCacheQueries: 256
+        preparedStatementCacheSizeMiB: 5
+        # Stream large result sets rather than materialising them in the heap.
+        defaultRowFetchSize: 500
 
   rabbitmq:
     addresses: ${AMQP_URL}

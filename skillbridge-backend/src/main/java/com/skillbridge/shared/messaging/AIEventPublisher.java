@@ -1,11 +1,16 @@
 package com.skillbridge.shared.messaging;
 
 import com.skillbridge.common.config.RabbitMQConfig;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * AIEventPublisher — the ONLY class in the entire application allowed to send
@@ -18,13 +23,22 @@ import org.springframework.stereotype.Component;
  *      testable without any messaging infrastructure.
  *
  * Usage: Inject this component anywhere and call a descriptive publish method.
+ *
+ * <p><b>Events are sent after the calling transaction commits, on another
+ * thread.</b> See {@link #send} for why all three of those words matter.
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class AIEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
+    private final Executor executor;
+
+    public AIEventPublisher(RabbitTemplate rabbitTemplate,
+                            @Qualifier("aiEventExecutor") Executor executor) {
+        this.rabbitTemplate = rabbitTemplate;
+        this.executor = executor;
+    }
 
     /**
      * Fires a SKILL_UPDATED event when a student adds or updates a skill.
@@ -52,15 +66,68 @@ public class AIEventPublisher {
     }
 
     /**
-     * Internal send method with bulletproof error handling.
+     * Defers the publish until the calling transaction has committed, and runs
+     * it on another thread.
      *
-     * Design Decision: We wrap the send in try-catch and ONLY log the error
-     * instead of re-throwing. This is intentional — a failure to publish an
-     * AI event should NEVER cause the main student API request to fail.
-     * The student saved their skill; that's the critical operation. AI analysis
-     * is a "best-effort" background enhancement, not a hard requirement.
+     * <p>Every caller of this class is a {@code @Transactional} service method,
+     * so publishing inline had three problems, and the comment at one call site
+     * ("This runs AFTER the transaction commits so the AI service reads fresh
+     * data") described behaviour the code did not have:
+     *
+     * <ol>
+     *   <li><b>The event could describe a change that never happened.</b> The
+     *       publish went out mid-transaction; if the transaction then rolled
+     *       back, the AI service had already been told about a skill the
+     *       database does not contain.</li>
+     *   <li><b>The AI service could read stale data.</b> It reacts by querying
+     *       the database. Sent before commit, that read races the commit and can
+     *       observe the pre-update row — the exact failure the call-site comment
+     *       claimed was impossible.</li>
+     *   <li><b>It held a database connection across a network call.</b> A
+     *       connection is checked out for the life of the transaction; an AMQP
+     *       round trip inside it adds the broker's latency to the time the
+     *       connection is unavailable to anyone else. That is the most common
+     *       cause of pool exhaustion, and this pool has 5 connections against a
+     *       server whose ceiling is 60 shared with two other services.</li>
+     * </ol>
+     *
+     * <p>{@code afterCommit} alone fixes (1) and (2) but not (3): Spring runs
+     * that callback in {@code triggerAfterCommit}, which is before
+     * {@code cleanupAfterCompletion} returns the connection to the pool. So the
+     * publish is also handed to {@code aiEventExecutor}, which takes it off the
+     * committing thread entirely.
+     *
+     * <p>With no transaction active the event is sent inline, so callers
+     * outside a transaction still work.
+     *
+     * <p>Errors are logged and swallowed, never rethrown — a failure to publish
+     * an AI event must not fail the student's request. The student saved their
+     * skill; that is the critical operation. AI analysis is best-effort.
      */
     private void send(AIEvent event) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    dispatch(event);
+                }
+            });
+        } else {
+            dispatch(event);
+        }
+    }
+
+    /** Hands the publish to the executor, falling back to inline on rejection. */
+    private void dispatch(AIEvent event) {
+        try {
+            executor.execute(() -> doSend(event));
+        } catch (RejectedExecutionException e) {   // TaskRejectedException extends this
+            log.error("[AIEventPublisher] Executor rejected event, dropping it. Event: {}, Error: {}",
+                    event, e.getMessage());
+        }
+    }
+
+    private void doSend(AIEvent event) {
         try {
             rabbitTemplate.convertAndSend(
                     RabbitMQConfig.EXCHANGE_NAME,
