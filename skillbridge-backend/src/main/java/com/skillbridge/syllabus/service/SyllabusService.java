@@ -11,6 +11,7 @@ import com.skillbridge.syllabus.repository.SyllabusSubmoduleRepository;
 import com.skillbridge.syllabus.repository.SyllabusTopicRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,10 +21,24 @@ import java.util.stream.Collectors;
 import com.skillbridge.common.exception.BusinessRuleException;
 import com.skillbridge.common.exception.ConflictException;
 import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.common.cache.L1CacheConfig;
 import com.skillbridge.common.tenant.TenantGuard;
 
 /**
- * Service for managing batch curriculum (modules, sub-modules, and topics)
+ * Service for managing batch curriculum (modules, sub-modules, and topics).
+ *
+ * <p><b>Every write here evicts the whole curriculum cache, not one batch's
+ * entry.</b> Most of these methods are addressed by module, sub-module or topic
+ * id and never see a batch id, so a targeted eviction would mean resolving one —
+ * an extra read on every write, and a fresh way to be subtly wrong. Curricula are
+ * authored by hand, so writes are rare and over-evicting costs the other batches
+ * one ~450 ms read each. Under-evicting costs a student a curriculum that is
+ * fifteen minutes out of date with nothing reporting a problem.
+ *
+ * <p>{@code CacheRulesTest} fails the build if a write method here is added
+ * without {@code @CacheEvict}, because that is the failure nobody would notice.
+ * The read is deliberately <em>not</em> cached on this class — see
+ * {@link #getCurriculumByBatchId} and {@link CurriculumReader}.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,6 +49,7 @@ public class SyllabusService {
     private final SyllabusSubmoduleRepository submoduleRepository;
     private final SyllabusTopicRepository topicRepository;
     private final BatchRepository batchRepository;
+    private final CurriculumReader curriculumReader;
 
     // ===================================================================
     // CURRICULUM (Full 3-level structure)
@@ -42,31 +58,23 @@ public class SyllabusService {
     /**
      * Get complete curriculum for a batch (modules -> submodules -> topics)
      */
+    /**
+     * The curriculum for a batch: tenant check here, assembly in
+     * {@link CurriculumReader}, which is cached.
+     *
+     * <p><b>The split is load-bearing.</b> {@code requireBatch} is the tenant
+     * check, and it has to run on every call including a cache hit. Annotating
+     * this method {@code @Cacheable} would have cached the check away: on a hit
+     * the body never runs, so a trainer from another college asking for this
+     * batch id would be handed the tree rather than a 404. Batch ids are
+     * globally unique, so the key would have looked perfectly safe.
+     */
     @Transactional(readOnly = true)
     public List<SyllabusModuleDTO> getCurriculumByBatchId(Long batchId) {
         log.info("Fetching curriculum for batch {}", batchId);
         requireBatch(batchId);
 
-        List<SyllabusModule> modules = moduleRepository.findByBatchIdWithSubmodulesAndTopics(batchId);
-
-        // Second query: initialise every sub-module's topics at once. Walking
-        // the tree without this is one query per sub-module -- 8 modules cost
-        // 18 statements where 2 cost 6. It cannot be folded into the query
-        // above because both associations are Lists and Hibernate rejects two
-        // collection fetches in one query. The result is ignored on purpose:
-        // the point is the side effect on the persistence context, which leaves
-        // the mappers below able to read getTopics() for free.
-        List<Long> submoduleIds = modules.stream()
-                .flatMap(m -> m.getSubmodules().stream())
-                .map(SyllabusSubmodule::getId)
-                .toList();
-        if (!submoduleIds.isEmpty()) {
-            submoduleRepository.fetchTopicsFor(submoduleIds);
-        }
-
-        return modules.stream()
-                .map(this::convertToModuleDTO)
-                .collect(Collectors.toList());
+        return curriculumReader.byBatchId(batchId);
     }
 
     // ===================================================================
@@ -94,6 +102,7 @@ public class SyllabusService {
      * {@link com.skillbridge.common.tenant.TenantGuard} check explicitly -- but
      * defence in depth is the point of having both.
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public SyllabusModuleDTO createModule(Long batchId, CreateModuleRequest request) {
         log.info("Creating module '{}' for batch {}", request.getName(), batchId);
@@ -127,12 +136,13 @@ public class SyllabusService {
         SyllabusModule savedModule = moduleRepository.save(module);
         log.info("Created module {} with {} sub-modules", savedModule.getId(), savedModule.getSubmodules().size());
 
-        return convertToModuleDTO(savedModule);
+        return SyllabusDtoMapper.toModuleDto(savedModule);
     }
 
     /**
      * Update a module
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public SyllabusModuleDTO updateModule(Long moduleId, UpdateModuleRequest request) {
         log.info("Updating module {}", moduleId);
@@ -164,12 +174,13 @@ public class SyllabusService {
         SyllabusModule updatedModule = moduleRepository.save(module);
         log.info("Updated module {}", moduleId);
 
-        return convertToModuleDTO(updatedModule);
+        return SyllabusDtoMapper.toModuleDto(updatedModule);
     }
 
     /**
      * Delete a module (will cascade delete all sub-modules and topics)
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public void deleteModule(Long moduleId) {
         log.info("Deleting module {}", moduleId);
@@ -189,6 +200,7 @@ public class SyllabusService {
     /**
      * Create a sub-module under a module
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public SyllabusSubmoduleDTO createSubmodule(Long moduleId, CreateSubmoduleRequest request) {
         log.info("Creating sub-module '{}' for module {}", request.getName(), moduleId);
@@ -205,12 +217,13 @@ public class SyllabusService {
 
         log.info("Created sub-module {} with {} topics", savedSubmodule.getId(), savedSubmodule.getTopics().size());
 
-        return convertToSubmoduleDTO(savedSubmodule);
+        return SyllabusDtoMapper.toSubmoduleDto(savedSubmodule);
     }
 
     /**
      * Update a sub-module
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public SyllabusSubmoduleDTO updateSubmodule(Long submoduleId, UpdateSubmoduleRequest request) {
         log.info("Updating sub-module {}", submoduleId);
@@ -245,12 +258,13 @@ public class SyllabusService {
         SyllabusSubmodule updatedSubmodule = submoduleRepository.save(submodule);
         log.info("Updated sub-module {}", submoduleId);
 
-        return convertToSubmoduleDTO(updatedSubmodule);
+        return SyllabusDtoMapper.toSubmoduleDto(updatedSubmodule);
     }
 
     /**
      * Delete a sub-module (will cascade delete all topics)
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public void deleteSubmodule(Long submoduleId) {
         log.info("Deleting sub-module {}", submoduleId);
@@ -270,6 +284,7 @@ public class SyllabusService {
     /**
      * Add a topic to a sub-module
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public SyllabusTopicDTO addTopicToSubmodule(Long submoduleId, CreateTopicRequest request) {
         log.info("Adding topic '{}' to sub-module {}", request.getName(), submoduleId);
@@ -287,12 +302,13 @@ public class SyllabusService {
         SyllabusTopic savedTopic = topicRepository.save(topic);
         log.info("Added topic {} to sub-module {}", savedTopic.getId(), submoduleId);
 
-        return convertToTopicDTO(savedTopic);
+        return SyllabusDtoMapper.toTopicDto(savedTopic);
     }
 
     /**
      * Update a topic
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public SyllabusTopicDTO updateTopic(Long topicId, UpdateTopicRequest request) {
         log.info("Updating topic {}", topicId);
@@ -312,12 +328,13 @@ public class SyllabusService {
         SyllabusTopic updatedTopic = topicRepository.save(topic);
         log.info("Updated topic {}", topicId);
 
-        return convertToTopicDTO(updatedTopic);
+        return SyllabusDtoMapper.toTopicDto(updatedTopic);
     }
 
     /**
      * Delete a topic
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public void deleteTopic(Long topicId) {
         log.info("Deleting topic {}", topicId);
@@ -333,6 +350,7 @@ public class SyllabusService {
     /**
      * Toggle topic completion status
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public SyllabusTopicDTO toggleTopicCompletion(Long topicId) {
         log.info("Toggling completion for topic {}", topicId);
@@ -344,7 +362,7 @@ public class SyllabusService {
 
         log.info("Toggled topic {} completion to: {}", topicId, updatedTopic.getIsCompleted());
 
-        return convertToTopicDTO(updatedTopic);
+        return SyllabusDtoMapper.toTopicDto(updatedTopic);
     }
 
     // ===================================================================
@@ -384,70 +402,6 @@ public class SyllabusService {
     // DTO Converters
     // ===================================================================
 
-    private SyllabusModuleDTO convertToModuleDTO(SyllabusModule module) {
-        List<SyllabusSubmoduleDTO> submoduleDTOs = module.getSubmodules() != null
-                ? module.getSubmodules().stream()
-                        .map(this::convertToSubmoduleDTO)
-                        .collect(Collectors.toList())
-                : new ArrayList<>();
-
-        int totalTopics = submoduleDTOs.stream()
-                .mapToInt(SyllabusSubmoduleDTO::getTopicsCount)
-                .sum();
-
-        int completedTopics = submoduleDTOs.stream()
-                .mapToInt(SyllabusSubmoduleDTO::getCompletedTopicsCount)
-                .sum();
-
-        return SyllabusModuleDTO.builder()
-                .id(module.getId())
-                .name(module.getName())
-                .description(module.getDescription())
-                .displayOrder(module.getDisplayOrder())
-                .startDate(module.getStartDate())
-                .endDate(module.getEndDate())
-                .submodules(submoduleDTOs)
-                .submodulesCount(submoduleDTOs.size())
-                .totalTopicsCount(totalTopics)
-                .completedTopicsCount(completedTopics)
-                .build();
-    }
-
-    private SyllabusSubmoduleDTO convertToSubmoduleDTO(SyllabusSubmodule submodule) {
-        List<SyllabusTopicDTO> topicDTOs = submodule.getTopics() != null
-                ? submodule.getTopics().stream()
-                        .map(this::convertToTopicDTO)
-                        .collect(Collectors.toList())
-                : new ArrayList<>();
-
-        int completedCount = (int) topicDTOs.stream()
-                .filter(SyllabusTopicDTO::getIsCompleted)
-                .count();
-
-        return SyllabusSubmoduleDTO.builder()
-                .id(submodule.getId())
-                .name(submodule.getName())
-                .description(submodule.getDescription())
-                .displayOrder(submodule.getDisplayOrder())
-                .startDate(submodule.getStartDate())
-                .endDate(submodule.getEndDate())
-                .weekNumber(submodule.getWeekNumber())
-                .topics(topicDTOs)
-                .topicsCount(topicDTOs.size())
-                .completedTopicsCount(completedCount)
-                .build();
-    }
-
-    private SyllabusTopicDTO convertToTopicDTO(SyllabusTopic topic) {
-        return SyllabusTopicDTO.builder()
-                .id(topic.getId())
-                .name(topic.getName())
-                .description(topic.getDescription())
-                .displayOrder(topic.getDisplayOrder())
-                .isCompleted(topic.getIsCompleted())
-                .completedAt(topic.getCompletedAt())
-                .build();
-    }
 
 
     /**
@@ -468,6 +422,7 @@ public class SyllabusService {
      * batch. Dates are copied, since they are usually adjusted afterwards
      * anyway and having them present is more useful than nulls.
      */
+    @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public List<SyllabusModuleDTO> copyCurriculum(Long targetBatchId, Long sourceBatchId) {
         if (targetBatchId.equals(sourceBatchId)) {

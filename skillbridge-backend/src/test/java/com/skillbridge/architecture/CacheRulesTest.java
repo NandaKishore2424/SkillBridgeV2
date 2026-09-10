@@ -125,6 +125,29 @@ class CacheRulesTest {
     }
 
     @Test
+    @DisplayName("every syllabus write evicts the curriculum cache")
+    void everySyllabusWriteEvicts() {
+        ArchRule rule = methods()
+                .that().areDeclaredInClassesThat()
+                .haveFullyQualifiedName("com.skillbridge.syllabus.service.SyllabusService")
+                .and().arePublic()
+                .and(new com.tngtech.archunit.base.DescribedPredicate<JavaMethod>("are writes") {
+                    @Override
+                    public boolean test(JavaMethod method) {
+                        org.springframework.transaction.annotation.Transactional tx =
+                                method.reflect().getAnnotation(
+                                        org.springframework.transaction.annotation.Transactional.class);
+                        return tx != null && !tx.readOnly();
+                    }
+                })
+                .should().beAnnotatedWith(org.springframework.cache.annotation.CacheEvict.class)
+                .because("""
+                        a curriculum write that does not evict leaves every student and                         trainer on that batch reading a syllabus fifteen minutes out of                         date, and nothing reports it -- the endpoint answers 200 with the                         tree as it was. Most of these methods are addressed by module,                         sub-module or topic id and never see a batch id, which is why the                         eviction is allEntries and why forgetting one is easy.""");
+
+        rule.check(production);
+    }
+
+    @Test
     @DisplayName("refreshAfterWrite cannot be used here, and that is why it is absent")
     void refreshAfterWriteNeedsALoaderThatAnnotationCachingCannotSupply() {
         // Phase 06 § 2.1 asks for refreshAfterWrite so one thread reloads while

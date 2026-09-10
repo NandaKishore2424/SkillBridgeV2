@@ -3,9 +3,9 @@
 What this application caches, what it deliberately does not, and the measurement
 behind each decision.
 
-**Status: one of the three entries is built.** Active colleges is cached at L1
-and measured below; the curriculum tree and dashboard stats are decided and not
-yet implemented. There is no Redis dependency and § 7 says why.
+**Status: two of the three entries are built.** Active colleges and the
+curriculum tree per batch are cached at L1 and measured below; dashboard stats is
+decided and not yet implemented. There is no Redis dependency and § 7 says why.
 
 Sections 1–6 are Phase 06 Task 1 — the decision — and were written before any of
 it was built, because half of what the phase plan proposed caching turned out to
@@ -106,7 +106,7 @@ not belong in this table.
 | Data | Tier | TTL | Invalidation trigger | Measured justification |
 |---|---|---|---|---|
 | **Active colleges** — `GET /colleges/active` ✅ built | L1 | 30 m | Any write to `colleges`: create, status change, soft delete | 1 statement, 154 ms, **1 row**, and the only unauthenticated list on the platform. Read once per registration-page load by anyone at all, which also makes it the one key an anonymous flood would land on. Highest value per unit of risk in the table: global data, no tenant in the key, and a single row to hold. |
-| **Curriculum tree per batch** — `GET /batches/{id}/syllabus` ⏳ | L1, keyed by batch | 15 m | Any write under `SyllabusService` for that batch — module, sub-module or topic create/update/delete/reorder | 3 statements, flat regardless of tree size (`QueryEfficiencyTest`, `docs/PERFORMANCE_BUDGET.md`), ~450 ms. Read by every student and every trainer who opens the batch; written only when a trainer edits the syllabus. The read/write ratio is the best in the application. |
+| **Curriculum tree per batch** — `GET /batches/{id}/syllabus` ✅ built | L1, keyed by batch | 15 m | Any write under `SyllabusService` for that batch — module, sub-module or topic create/update/delete/reorder | 3 statements, flat regardless of tree size (`QueryEfficiencyTest`, `docs/PERFORMANCE_BUDGET.md`), ~450 ms. Read by every student and every trainer who opens the batch; written only when a trainer edits the syllabus. The read/write ratio is the best in the application. |
 | **Dashboard stats** — student and trainer ⏳ | L1, keyed by user | 1 m | TTL only | 2 statements each, flat. A minute of staleness on a count is invisible; a minute of staleness on anything else in this table would not be. Per-user keys, so `maximumSize` is the bound that matters, not the TTL. |
 
 Three entries. That is the honest output of measuring nine.
@@ -128,6 +128,61 @@ the hit rate is a number rather than an argument — the property § 7 insists o
 > Cold-key timings drift by 1.6× between two runs a minute apart here. Gotcha 8:
 > this is a shared free-tier instance. The ratio survives that; the absolute
 > numbers do not.
+
+### The curriculum tree, and the trap in it
+
+A warm read of a batch's curriculum costs **1 statement instead of 3**: the two
+tree queries are gone and the tenant check remains. That last part is the whole
+design.
+
+Measured on the running application, all three in the same minute so they are
+comparable to each other:
+
+| Read | Statements | Latency |
+|---|---|---|
+| `/colleges/active`, cached | 0 | 2.9–3.9 ms |
+| `/batches/1/syllabus`, cached | 1 | 523–864 ms |
+| `/auth/me`, uncached | 3 | 1215–1975 ms |
+
+Roughly 500–650 ms per statement, so the curriculum read drops from about two
+seconds to about seven hundred milliseconds and **everything left is the
+authorisation read**. Cache the check too and it would join the first row.
+
+> Those per-statement numbers are three times this morning's 150–220 ms, on the
+> same code and the same database, four hours apart. Gotcha 8 again, and a useful
+> demonstration of it: the *ratios* between the three rows are the finding, the
+> milliseconds are weather.
+
+`SyllabusService.getCurriculumByBatchId` called `requireBatch` — the tenant
+check — and then assembled the tree, in one method. **Annotating that method
+`@Cacheable` caches the check away.** On a hit the body never runs, so
+`requireBatch` never runs, and a trainer from another college asking for the same
+batch id is handed the curriculum with a 200. Nothing about the annotation looks
+wrong: batch ids are globally unique, so the key genuinely cannot collide. The
+leak is the skipped authorisation, and it is invisible at the call site.
+
+So the check stays in the caller and only the assembly is cached, in
+`CurriculumReader`. It has to be a *separate bean*, not a private method —
+Spring's caching is proxy-based, and a call from one method of a class to another
+never leaves the object, so `@Cacheable` on a self-invoked method is silently
+inert.
+
+`CurriculumCacheTest.aWarmCacheStillRefusesAnotherCollege` is the test for this,
+and it was confirmed to fail against the obvious implementation: with
+`@Cacheable` on `getCurriculumByBatchId`, the second college's trainer gets the
+tree instead of a 404.
+
+> **A cache hit is a code path that skips your method body.** Anything that body
+> did — authorisation, tenant filtering, an audit record, a rate-limit decrement —
+> stops happening on every hit. Ask what else the method was doing before caching
+> it, not just what it returned.
+
+Eviction is `allEntries` rather than per batch, on all eleven writes. Most of
+those methods are addressed by module, sub-module or topic id and never see a
+batch id, so a targeted eviction would mean an extra read on every write and a
+fresh way to be subtly wrong. Curricula are authored by hand: writes are rare,
+over-evicting costs the other batches one ~450 ms read each, and under-evicting
+is a student reading a syllabus that is fifteen minutes out of date.
 
 ---
 
