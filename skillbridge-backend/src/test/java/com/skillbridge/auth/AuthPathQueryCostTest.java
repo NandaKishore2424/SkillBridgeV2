@@ -18,13 +18,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Authenticating a request must stay at one round trip.
  *
- * <p>{@code TokenAuthenticationFilter} loads the user on <b>every authenticated
- * request</b> — every page, every poll — to read {@code isActive} and the roles.
- * Against a database in another region a statement is a round trip of roughly
- * 150 ms, so this one lookup is a floor under the latency of everything the
- * application serves, and a second statement here would double it everywhere at
- * once. It is one of the two connection checkouts a request now makes
- * (docs/CONNECTION_POOL.md § 6).
+ * <p><b>Corrected 2026-09-10.</b> This used to say the filter loads the user on
+ * every authenticated request. That was true when it was written and stopped
+ * being true on 2026-09-09, when {@code TokenAuthenticationFilter} started
+ * building the principal from the token's claims. The lookup this test measures
+ * now runs on two paths rather than all of them: the filter's fallback for
+ * tokens issued before that change, and {@code AuthService.describeCurrentUser}
+ * behind {@code GET /auth/me}.
+ *
+ * <p>It is still worth an exact assertion. Against a database in another region a
+ * statement is a round trip of roughly 150 ms — measured again on 2026-09-10 at
+ * 142–268 ms — so a second statement here doubles the cost of every path that
+ * still takes it. See docs/CONNECTION_POOL.md § 6 and docs/CACHING_STRATEGY.md
+ * § 2, which is where the claim that this endpoint is hot was finally checked
+ * against its callers.
  *
  * <p><b>That it is currently one statement is measured, not assumed.</b>
  * {@code roles} is an eager {@code @ManyToMany}, and eager does not by itself
