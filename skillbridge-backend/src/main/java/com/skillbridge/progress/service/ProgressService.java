@@ -195,12 +195,35 @@ public class ProgressService {
     }
 
     /** Every student's row for one topic — the grading grid. */
-    public Page<TopicProgressDTO> getGradingGrid(Long topicId, Pageable pageable) {
+    public Page<GradingGridRowDTO> getGradingGrid(Long topicId, Pageable pageable) {
         SyllabusTopic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Topic", topicId));
 
         return progressRepository.findGradingGridForTopic(topic.getId(), pageable)
-                .map(this::toTopicDto);
+                .map(ProgressService::toGridRow);
+    }
+
+    /**
+     * A grid row, named by its student.
+     *
+     * <p>This used to map to {@link TopicProgressDTO}, which carries the topic
+     * and not the student — so every row of the grid came back identical apart
+     * from {@code progressId}. The query has always fetched the student; only
+     * the mapping dropped it.
+     */
+    private static GradingGridRowDTO toGridRow(TopicProgress p) {
+        return GradingGridRowDTO.builder()
+                .progressId(p.getId())
+                .studentId(p.getStudent().getId())
+                .studentName(p.getStudent().getFullName())
+                .rollNumber(p.getStudent().getRollNumber())
+                .status(p.getStatus())
+                .score(p.getScore())
+                .comment(p.getComment())
+                .gradedByTrainerName(p.getUpdatedBy() == null ? null : p.getUpdatedBy().getFullName())
+                .completedAt(p.getCompletedAt())
+                .updatedAt(p.getUpdatedAt())
+                .build();
     }
 
     // ------------------------------------------------------------------

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/shared/components/ui/accordion';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Badge } from '@/shared/components/ui/badge';
-import { Pencil, Trash2, Plus, Calendar } from 'lucide-react';
+import { Pencil, Trash2, Plus, Calendar, ClipboardCheck } from 'lucide-react';
 import { syllabusApi, type SyllabusModule, type SyllabusSubmodule, type SyllabusTopic } from '@/api/batchManagement';
 import { useToast } from '@/shared/hooks/use-toast';
 import EditModuleDialog from './EditModuleDialog';
@@ -369,6 +371,12 @@ interface TopicRowProps {
 }
 
 function TopicRow({ topic, onToggle, onDelete }: TopicRowProps) {
+    const navigate = useNavigate();
+    const { user } = useAuth();
+    // Only trainers may save a grade -- the bulk endpoint is @PreAuthorize
+    // hasRole('TRAINER'). Showing this to an admin would open a grid they can
+    // read and cannot submit, which is worse than not offering it.
+    const canGrade = user?.role === 'TRAINER';
     return (
         <div className="flex items-center justify-between p-2 rounded-md hover:bg-accent/50 transition-colors">
             <div className="flex items-center gap-3 flex-1">
@@ -391,6 +399,17 @@ function TopicRow({ topic, onToggle, onDelete }: TopicRowProps) {
                 </label>
             </div>
             <div className="flex items-center gap-1">
+                {canGrade && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => navigate(`/trainer/topics/${topic.id}/grade`)}
+                    >
+                        <ClipboardCheck className="h-3 w-3 mr-1" />
+                        Grade
+                    </Button>
+                )}
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
                     <Pencil className="h-3 w-3" />
                 </Button>

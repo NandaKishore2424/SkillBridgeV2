@@ -36,6 +36,7 @@ import { TrainerBatchesPage } from './pages/trainer/batches/TrainerBatchesPage'
 import { TrainerStudentsPage } from './pages/trainer/students/TrainerStudentsPage'
 import FeedbackManagement from './pages/trainer/FeedbackManagement'
 import BatchDetailsPage from './pages/trainer/BatchDetailsPage'
+import TopicGradingPage from './pages/trainer/grading/TopicGradingPage'
 
 // Student pages
 import { StudentDashboard } from './pages/student/dashboard/StudentDashboard'
@@ -210,6 +211,14 @@ function App() {
         element={
           <ProtectedRoute>
             <BatchDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trainer/topics/:topicId/grade"
+        element={
+          <ProtectedRoute>
+            <TopicGradingPage />
           </ProtectedRoute>
         }
       />

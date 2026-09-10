@@ -92,10 +92,23 @@ export const getStudentProgress = async (
   return response.data
 }
 
-export interface UpdateProgressRequest {
-  topicId: number
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'NEEDS_IMPROVEMENT'
-  feedback?: string
+export type ProgressStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'NEEDS_IMPROVEMENT'
+
+/**
+ * The body of PUT /trainer/topics/{topicId}/progress.
+ *
+ * This interface previously declared `topicId` and `feedback`, neither of which
+ * the backend reads: the topic is in the path, and the field is `comment`. It
+ * also omitted `studentId`, without which the request cannot say who is being
+ * graded. Nothing noticed because nothing called it — the drift check compares
+ * routes, not request shapes.
+ */
+export interface GradeTopicRequest {
+  studentId: number
+  status: ProgressStatus
+  /** 0-100. Omit for "assessed, no numeric score". */
+  score?: number
+  comment?: string
 }
 
 /**
@@ -108,8 +121,70 @@ export interface UpdateProgressRequest {
  */
 export const updateStudentProgress = async (
   topicId: number,
-  data: UpdateProgressRequest
+  data: GradeTopicRequest
 ): Promise<void> => {
   await apiClient.put(`/trainer/topics/${topicId}/progress`, data)
+}
+
+/** One student's row in the grading grid for a topic. */
+export interface GradingGridRow {
+  progressId: number
+  studentId: number
+  studentName: string
+  rollNumber: string
+  status: ProgressStatus
+  score: number | null
+  comment: string | null
+  gradedByTrainerName: string | null
+  completedAt: string | null
+  updatedAt: string | null
+}
+
+/** Every enrolled student's row for one topic, paged. */
+export const getGradingGrid = async (
+  topicId: number,
+  page = 0,
+  size = 50
+): Promise<PagedResponse<GradingGridRow>> => {
+  const response = await apiClient.get<PagedResponse<GradingGridRow>>(
+    `/trainer/topics/${topicId}/progress`,
+    { params: { page, size } }
+  )
+  return response.data
+}
+
+export interface BulkGradeRequest {
+  studentIds: number[]
+  status: ProgressStatus
+  score?: number
+  comment?: string
+}
+
+export interface BulkGradeResult {
+  topicId: number
+  topicName: string
+  requested: number
+  graded: number
+  skippedStudentIds: number[]
+  message: string
+}
+
+/**
+ * Grade several students on one topic in a single request.
+ *
+ * One request rather than one per student is the point: the server does it in
+ * one transaction, so a class either grades or does not, and a trainer marking
+ * thirty students does not fire thirty round trips at a database in another
+ * region.
+ */
+export const bulkGrade = async (
+  topicId: number,
+  data: BulkGradeRequest
+): Promise<BulkGradeResult> => {
+  const response = await apiClient.put<BulkGradeResult>(
+    `/trainer/topics/${topicId}/progress/bulk`,
+    data
+  )
+  return response.data
 }
 

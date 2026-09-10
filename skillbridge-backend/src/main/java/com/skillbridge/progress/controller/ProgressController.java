@@ -9,6 +9,7 @@ import com.skillbridge.progress.dto.BulkGradeRequest;
 import com.skillbridge.progress.dto.BulkGradeResultDTO;
 import com.skillbridge.progress.dto.GradeTopicRequest;
 import com.skillbridge.progress.dto.StudentProgressSummaryDTO;
+import com.skillbridge.progress.dto.GradingGridRowDTO;
 import com.skillbridge.progress.dto.TopicProgressDTO;
 import com.skillbridge.progress.service.ProgressService;
 import jakarta.validation.Valid;
@@ -94,7 +95,7 @@ public class ProgressController {
      */
     @GetMapping("/trainer/topics/{topicId}/progress")
     @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
-    public ResponseEntity<PagedResponse<TopicProgressDTO>> getGradingGrid(
+    public ResponseEntity<PagedResponse<GradingGridRowDTO>> getGradingGrid(
             @PathVariable Long topicId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
