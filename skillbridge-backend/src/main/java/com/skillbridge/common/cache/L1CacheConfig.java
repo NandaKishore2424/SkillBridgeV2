@@ -24,10 +24,21 @@ import java.time.Duration;
  * that day.
  *
  * <p><b>What is in here was measured, and most candidates did not survive.</b>
- * Phase 06 proposed nine; three are here. The three busiest rows it proposed —
+ * Phase 06 proposed nine; two are here. The three busiest rows it proposed —
  * role lookups, user-plus-roles by id, and the skill catalogue — turned out to
- * have no reader at all once authentication stopped reading the database. The
- * same document records the measurements and the four entries that were dropped.
+ * have no reader at all once authentication stopped reading the database.
+ *
+ * <p><b>Both survivors share one property, and it is the rule to apply to the
+ * next candidate: their key is shared between users.</b> The active-college list
+ * is the same for everybody, and a batch's curriculum is the same for every
+ * student and trainer on it, so one user's read warms it for the next. That is
+ * something a server cache can do and a browser cannot.
+ *
+ * <p>A per-user key cannot do it, and this frontend already caches per-user
+ * responses for five minutes with {@code refetchOnWindowFocus} off — five times
+ * the TTL a server-side dashboard-stats cache was going to have. That entry was
+ * dropped for that reason rather than built and left to run at a hit rate
+ * nobody would have looked at. {@code docs/CACHING_STRATEGY.md} § 5.
  *
  * <p><b>Two properties every entry here has to have</b>, because L1 hands out a
  * reference rather than a copy:
@@ -57,9 +68,6 @@ public class L1CacheConfig {
     /** A batch's curriculum tree, keyed by batch. */
     public static final String CURRICULUM = "l1:curriculum";
 
-    /** A student's or trainer's dashboard counts, keyed by user. */
-    public static final String DASHBOARD_STATS = "l1:dashboardStats";
-
     /**
      * Caches whose contents are the same for every tenant.
      *
@@ -87,7 +95,6 @@ public class L1CacheConfig {
         // every minute.
         register(manager, meterRegistry, ACTIVE_COLLEGES, Duration.ofMinutes(30), 64);
         register(manager, meterRegistry, CURRICULUM, Duration.ofMinutes(15), 500);
-        register(manager, meterRegistry, DASHBOARD_STATS, Duration.ofMinutes(1), 5_000);
 
         return manager;
     }

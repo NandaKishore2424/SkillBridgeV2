@@ -3,9 +3,11 @@
 What this application caches, what it deliberately does not, and the measurement
 behind each decision.
 
-**Status: two of the three entries are built.** Active colleges and the
-curriculum tree per batch are cached at L1 and measured below; dashboard stats is
-decided and not yet implemented. There is no Redis dependency and § 7 says why.
+**Status: two entries built, and the third withdrawn on evidence.** Active
+colleges and the curriculum tree per batch are cached at L1 and measured below.
+Dashboard stats was in this table and is not any more — see § 5, which is the
+most useful paragraph in this file. There is no Redis dependency and § 7 says
+why.
 
 Sections 1–6 are Phase 06 Task 1 — the decision — and were written before any of
 it was built, because half of what the phase plan proposed caching turned out to
@@ -107,9 +109,9 @@ not belong in this table.
 |---|---|---|---|---|
 | **Active colleges** — `GET /colleges/active` ✅ built | L1 | 30 m | Any write to `colleges`: create, status change, soft delete | 1 statement, 154 ms, **1 row**, and the only unauthenticated list on the platform. Read once per registration-page load by anyone at all, which also makes it the one key an anonymous flood would land on. Highest value per unit of risk in the table: global data, no tenant in the key, and a single row to hold. |
 | **Curriculum tree per batch** — `GET /batches/{id}/syllabus` ✅ built | L1, keyed by batch | 15 m | Any write under `SyllabusService` for that batch — module, sub-module or topic create/update/delete/reorder | 3 statements, flat regardless of tree size (`QueryEfficiencyTest`, `docs/PERFORMANCE_BUDGET.md`), ~450 ms. Read by every student and every trainer who opens the batch; written only when a trainer edits the syllabus. The read/write ratio is the best in the application. |
-| **Dashboard stats** — student and trainer ⏳ | L1, keyed by user | 1 m | TTL only | 2 statements each, flat. A minute of staleness on a count is invisible; a minute of staleness on anything else in this table would not be. Per-user keys, so `maximumSize` is the bound that matters, not the TTL. |
 
-Three entries. That is the honest output of measuring nine.
+Two entries. That is the honest output of measuring nine, and both share the
+property § 5 ends on: **their key is shared between users.**
 
 ### Measured after building the first one
 
@@ -197,6 +199,36 @@ entries that were *proposed* for caching and did not survive.
 | **Batch summary per college** | `GET /admin/batches` is 2 statements and flat, and it is paginated with search, status and sort filters. That is the cardinality explosion § 1.3 warns about: `(college, status, search, page, size, sort)` is thousands of keys each read about once. |
 | **User + roles by id**, **role lookups**, **`/auth/me`** | No reader on any hot path. See § 3. |
 | **Skill catalogue** | No reader at all. See § 3 and § 6. |
+
+### Dashboard stats: withdrawn after it was decided
+
+This entry was in § 4 — L1, keyed by user, one minute — and was removed before it
+was built. Two things came out of tracing it that the first pass had not:
+
+**Its invalidation trigger was not "TTL only".** Both numbers move when something
+else writes: a student's counts change on enrolment, on application and on every
+grading action, and grading happens in `ProgressService`, which knows a
+*student* id where this cache would be keyed by *user* id. Evicting properly
+means plumbing across three services; evicting `allEntries` on every grading
+action means the cache is empty for the whole of a trainer's grading session,
+which is the only time it is under load. Task 1's own rule applies: an entry that
+cannot name a workable trigger does not belong in the table.
+
+**The client already caches it, for five times as long.** This frontend
+configures React Query with `staleTime: 5 minutes` and `refetchOnWindowFocus:
+false`. A repeat of the same query by the same user inside five minutes never
+reaches the server. A server-side per-user cache with a one-minute TTL is
+therefore reachable only by a second tab, a second device, or a hard reload
+inside sixty seconds of the last one — it is nearly unreachable by construction,
+and it would have sat there at a hit rate nobody looked at.
+
+> **A server cache earns its place when its key is shared between users.** Active
+> colleges is the same list for everybody; a batch's curriculum is the same tree
+> for every student and trainer on it, so one person's read warms it for the next.
+> That is something a server can do and a browser cannot. A key that only one
+> user can ever hit is the client's job, and the client is usually already doing
+> it — check `staleTime` before adding a TTL behind it.
+
 
 ---
 

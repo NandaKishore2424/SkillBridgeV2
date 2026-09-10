@@ -175,8 +175,7 @@ class CacheRulesTest {
         // never-expiring, unmonitored cache under a name nobody will ever evict.
         java.util.Set<String> registered = java.util.Set.of(
                 L1CacheConfig.ACTIVE_COLLEGES,
-                L1CacheConfig.CURRICULUM,
-                L1CacheConfig.DASHBOARD_STATS);
+                L1CacheConfig.CURRICULUM);
 
         java.util.List<String> unknown = production.stream()
                 .flatMap(c -> c.getMethods().stream())
