@@ -1,9 +1,8 @@
 package com.skillbridge.college.controller;
 
 import com.skillbridge.college.dto.CollegeDTO;
-import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.college.service.CollegeDirectoryService;
 import com.skillbridge.common.dto.PagedResponse;
-import com.skillbridge.common.dto.Pagination;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 public class PublicCollegeController {
 
-    private final CollegeRepository collegeRepository;
+    private final CollegeDirectoryService collegeDirectory;
 
     /**
      * Active colleges, for the registration form's picker.
@@ -38,9 +37,7 @@ public class PublicCollegeController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         log.info("Fetching active colleges (public endpoint)");
-        return ResponseEntity.ok(PagedResponse.from(
-                collegeRepository.findByStatus("ACTIVE", Pagination.of(page, size)),
-                CollegeDTO::from));
+        return ResponseEntity.ok(collegeDirectory.activeColleges(page, size));
     }
 }
 

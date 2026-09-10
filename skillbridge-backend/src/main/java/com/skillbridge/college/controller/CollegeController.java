@@ -8,6 +8,7 @@ import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
 import com.skillbridge.college.service.CollegeAdminService;
+import com.skillbridge.college.service.CollegeDirectoryService;
 import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.common.exception.ResourceNotFoundException;
@@ -34,6 +35,11 @@ import java.util.Optional;
 public class CollegeController {
 
     private final CollegeRepository collegeRepository;
+    // Writes go through the directory service, which evicts the cached
+    // active-college list. Calling collegeRepository.save here directly
+    // would leave a deactivated college on the public registration form
+    // for up to thirty minutes; CollegeCacheEvictionTest fails on it.
+    private final CollegeDirectoryService collegeDirectory;
     private final CollegeAdminService collegeAdminService;
     private final CollegeAdminRepository collegeAdminRepository;
     private final StudentService studentService;
@@ -69,7 +75,7 @@ public class CollegeController {
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
     public ResponseEntity<CollegeDTO> createCollege(@RequestBody College college) {
         log.info("Creating college: {}", college.getName());
-        College savedCollege = collegeRepository.save(college);
+        College savedCollege = collegeDirectory.save(college);
         return ResponseEntity.ok(CollegeDTO.from(savedCollege));
     }
 
@@ -81,7 +87,7 @@ public class CollegeController {
             return ResponseEntity.notFound().build();
         }
         college.setId(id);
-        College updatedCollege = collegeRepository.save(college);
+        College updatedCollege = collegeDirectory.save(college);
         return ResponseEntity.ok(CollegeDTO.from(updatedCollege));
     }
 
@@ -98,7 +104,7 @@ public class CollegeController {
         }
         College college = collegeOpt.get();
         college.setStatus(request.status);
-        College updatedCollege = collegeRepository.save(college);
+        College updatedCollege = collegeDirectory.save(college);
         return ResponseEntity.ok(CollegeDTO.from(updatedCollege));
     }
 

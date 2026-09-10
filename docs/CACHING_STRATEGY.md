@@ -3,11 +3,13 @@
 What this application caches, what it deliberately does not, and the measurement
 behind each decision.
 
-**Nothing is cached today.** There is no `spring-boot-starter-cache`, no
-`@Cacheable` anywhere in `src/main`, and no Redis dependency or connection. This
-file is Phase 06 Task 1 — the decision — and it is deliberately separate from the
-implementation, because half of what the phase plan proposed caching turned out
-to have no reader at all.
+**Status: one of the three entries is built.** Active colleges is cached at L1
+and measured below; the curriculum tree and dashboard stats are decided and not
+yet implemented. There is no Redis dependency and § 7 says why.
+
+Sections 1–6 are Phase 06 Task 1 — the decision — and were written before any of
+it was built, because half of what the phase plan proposed caching turned out to
+have no reader at all.
 
 ---
 
@@ -103,11 +105,29 @@ not belong in this table.
 
 | Data | Tier | TTL | Invalidation trigger | Measured justification |
 |---|---|---|---|---|
-| **Active colleges** — `GET /colleges/active` | L1 | 30 m | Any write to `colleges`: create, status change, soft delete | 1 statement, 154 ms, **1 row**, and the only unauthenticated list on the platform. Read once per registration-page load by anyone at all, which also makes it the one key an anonymous flood would land on. Highest value per unit of risk in the table: global data, no tenant in the key, and a single row to hold. |
-| **Curriculum tree per batch** — `GET /batches/{id}/syllabus` | L1, keyed by batch | 15 m | Any write under `SyllabusService` for that batch — module, sub-module or topic create/update/delete/reorder | 3 statements, flat regardless of tree size (`QueryEfficiencyTest`, `docs/PERFORMANCE_BUDGET.md`), ~450 ms. Read by every student and every trainer who opens the batch; written only when a trainer edits the syllabus. The read/write ratio is the best in the application. |
-| **Dashboard stats** — student and trainer | L1, keyed by user | 1 m | TTL only | 2 statements each, flat. A minute of staleness on a count is invisible; a minute of staleness on anything else in this table would not be. Per-user keys, so `maximumSize` is the bound that matters, not the TTL. |
+| **Active colleges** — `GET /colleges/active` ✅ built | L1 | 30 m | Any write to `colleges`: create, status change, soft delete | 1 statement, 154 ms, **1 row**, and the only unauthenticated list on the platform. Read once per registration-page load by anyone at all, which also makes it the one key an anonymous flood would land on. Highest value per unit of risk in the table: global data, no tenant in the key, and a single row to hold. |
+| **Curriculum tree per batch** — `GET /batches/{id}/syllabus` ⏳ | L1, keyed by batch | 15 m | Any write under `SyllabusService` for that batch — module, sub-module or topic create/update/delete/reorder | 3 statements, flat regardless of tree size (`QueryEfficiencyTest`, `docs/PERFORMANCE_BUDGET.md`), ~450 ms. Read by every student and every trainer who opens the batch; written only when a trainer edits the syllabus. The read/write ratio is the best in the application. |
+| **Dashboard stats** — student and trainer ⏳ | L1, keyed by user | 1 m | TTL only | 2 statements each, flat. A minute of staleness on a count is invisible; a minute of staleness on anything else in this table would not be. Per-user keys, so `maximumSize` is the bound that matters, not the TTL. |
 
 Three entries. That is the honest output of measuring nine.
+
+### Measured after building the first one
+
+`GET /colleges/active`, against the running application and the live database:
+
+| | |
+|---|---|
+| Cold key, warm JVM | 527 / 330 ms |
+| Warm key | 3.8 / 3.0 / 4.1 ms |
+| First request after startup | 731 ms — connection creation, not the query |
+
+Roughly **100×**, and it is the round trip that goes away rather than any query
+work. `cache.gets` on the actuator carries `hit` and `miss` tags per cache, so
+the hit rate is a number rather than an argument — the property § 7 insists on.
+
+> Cold-key timings drift by 1.6× between two runs a minute apart here. Gotcha 8:
+> this is a shared free-tier instance. The ratio survives that; the absolute
+> numbers do not.
 
 ---
 
