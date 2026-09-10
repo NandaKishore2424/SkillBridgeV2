@@ -52,7 +52,8 @@ class GradingGridTest {
     void seed() {
         // One batch, three students, one module -- enough that a grid with
         // indistinguishable rows is visibly wrong.
-        fixture = new TenantFixture(jdbc, COLLEGE_CODE).seed(1, 3, 1);
+        fixture = new TenantFixture(jdbc, COLLEGE_CODE);
+        fixture.seed(1, 3, 1);
         topicId = jdbc.queryForObject("""
                 SELECT t.id FROM syllabus_topics t
                 JOIN syllabus_submodules sm ON sm.id = t.submodule_id

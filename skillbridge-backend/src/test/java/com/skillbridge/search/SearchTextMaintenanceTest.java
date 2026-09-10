@@ -60,7 +60,8 @@ class SearchTextMaintenanceTest {
 
     @BeforeEach
     void seed() {
-        fixture = new TenantFixture(jdbc, COLLEGE_CODE).seed(1, 3);
+        fixture = new TenantFixture(jdbc, COLLEGE_CODE);
+        fixture.seed(1, 3);
     }
 
     @AfterEach

@@ -53,7 +53,8 @@ class ClaimsBasedAuthenticationTest {
 
     @BeforeEach
     void seed() {
-        fixture = new TenantFixture(jdbc, COLLEGE_CODE).seed(0, 0);
+        fixture = new TenantFixture(jdbc, COLLEGE_CODE);
+        fixture.seed(0, 0);
         Long roleId = jdbc.queryForObject("SELECT id FROM roles WHERE name = 'COLLEGE_ADMIN'", Long.class);
         jdbc.update("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
                 fixture.adminUserId, roleId);

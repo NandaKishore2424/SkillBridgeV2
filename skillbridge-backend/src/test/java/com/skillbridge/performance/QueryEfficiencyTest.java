@@ -72,6 +72,7 @@ class QueryEfficiencyTest {
     @Autowired private TrainerDashboardService trainerDashboardService;
     @Autowired private StudentDashboardService studentDashboardService;
     @Autowired private SyllabusService syllabusService;
+    @Autowired private org.springframework.cache.CacheManager cacheManager;
 
     private TenantFixture small;
     private TenantFixture large;
@@ -91,8 +92,10 @@ class QueryEfficiencyTest {
         // large tenant is bigger in every dimension the endpoints walk; going
         // bigger only buys round trips to a remote database, and this fixture
         // was once heavy enough to make the whole suite flaky.
-        small = new TenantFixture(jdbc, SMALL_CODE).seed(2, 2, 2);
-        large = new TenantFixture(jdbc, LARGE_CODE).seed(8, 6, 6);
+        small = new TenantFixture(jdbc, SMALL_CODE);
+        small.seed(2, 2, 2);
+        large = new TenantFixture(jdbc, LARGE_CODE);
+        large.seed(8, 6, 6);
     }
 
     @AfterAll
@@ -162,13 +165,26 @@ class QueryEfficiencyTest {
                 () -> studentDashboardService.getStudentBatches(large.studentUserIds.get(0), of(0, 20)));
     }
 
+    /**
+     * This one reads through a cache now, so it clears it first.
+     *
+     * <p>Without that the measurement quietly stops being a measurement. A warm
+     * key costs 1 statement rather than 3, and this test asserts that the count
+     * does not <em>grow</em> — so 1 against 1 passes just as happily as 3 against
+     * 3, and the N+1 guard on the curriculum tree would evaporate the first time
+     * something warmed the key before it. The cache is the right answer in
+     * production and the wrong instrument here: what this test exists to watch is
+     * the path to the database.
+     */
     @Test
     @DisplayName("GET /batches/{id}/syllabus — bounded regardless of tree size")
     void syllabusTree() {
         try (var detector = new InMemoryPaginationDetector()) {
+            cacheManager.getCache(com.skillbridge.common.cache.L1CacheConfig.CURRICULUM).clear();
             asCollegeAdmin(small.collegeId);
             var smallCount = queries.countQueries(
                     () -> syllabusService.getCurriculumByBatchId(small.batchIds.get(0)));
+            cacheManager.getCache(com.skillbridge.common.cache.L1CacheConfig.CURRICULUM).clear();
             asCollegeAdmin(large.collegeId);
             var largeCount = queries.countQueries(
                     () -> syllabusService.getCurriculumByBatchId(large.batchIds.get(0)));

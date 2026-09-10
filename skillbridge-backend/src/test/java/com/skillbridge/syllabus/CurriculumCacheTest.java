@@ -63,8 +63,10 @@ class CurriculumCacheTest {
 
     @BeforeEach
     void seed() {
-        owner = new TenantFixture(jdbc, OWNER).seed(1, 1, 2);
-        stranger = new TenantFixture(jdbc, STRANGER).seed(0, 0);
+        owner = new TenantFixture(jdbc, OWNER);
+        owner.seed(1, 1, 2);
+        stranger = new TenantFixture(jdbc, STRANGER);
+        stranger.seed(0, 0);
         batchId = owner.batchIds.get(0);
         clearCache();
         asTrainerOf(owner);

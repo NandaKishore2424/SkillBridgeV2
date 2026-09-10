@@ -61,7 +61,7 @@ public class CollegeDirectoryService {
      *
      * <p>The returned object is shared by every caller. Nothing may mutate it.
      */
-    @Cacheable(cacheNames = L1CacheConfig.ACTIVE_COLLEGES, key = "#page + ':' + #size")
+    @Cacheable(cacheNames = L1CacheConfig.ACTIVE_COLLEGES, key = "#page + ':' + #size", sync = true)
     @Transactional(readOnly = true)
     public PagedResponse<CollegeDTO> activeColleges(int page, int size) {
         log.debug("Cache miss: reading active colleges page {} size {}", page, size);

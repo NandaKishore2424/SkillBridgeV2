@@ -17,6 +17,20 @@ import java.util.List;
  * <p>Everything is scoped to a college code, so teardown is exact — a test that
  * leans on ambient data passes for reasons unrelated to the code, and this
  * suite runs against a database with real rows in it.
+ *
+ * <p><b>Assign the field before calling {@link #seed}, not in one expression.</b>
+ *
+ * <pre>{@code
+ * fixture = new TenantFixture(jdbc, CODE);   // not fixture = new ...seed(...)
+ * fixture.seed(1, 3);
+ * }</pre>
+ *
+ * <p>{@code seed} inserts as it goes, so a failure partway through leaves rows
+ * behind. Chained into one expression the field is still null when that happens,
+ * the {@code @AfterEach} throws {@code NullPointerException} instead of cleaning
+ * up, and the rows stay — in a live database with no staging copy. Observed on
+ * 2026-09-10 when the link dropped during a fixture's own opening
+ * {@code DELETE}.
  */
 public class TenantFixture {
 

@@ -56,7 +56,7 @@ class CurriculumReader {
      * <p>The returned list is shared by every caller on a hit. Nothing may mutate
      * it or anything inside it.
      */
-    @Cacheable(cacheNames = L1CacheConfig.CURRICULUM, key = "#batchId")
+    @Cacheable(cacheNames = L1CacheConfig.CURRICULUM, key = "#batchId", sync = true)
     @Transactional(readOnly = true)
     public List<SyllabusModuleDTO> byBatchId(Long batchId) {
         log.debug("Cache miss: assembling curriculum for batch {}", batchId);

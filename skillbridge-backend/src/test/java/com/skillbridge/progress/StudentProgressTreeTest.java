@@ -60,7 +60,8 @@ class StudentProgressTreeTest {
     /** Two modules, so the fixture has siblings at every level: 2 x 2 x 2 topics. */
     @BeforeEach
     void seed() {
-        fixture = new TenantFixture(jdbc, COLLEGE_CODE).seed(1, 2, 2);
+        fixture = new TenantFixture(jdbc, COLLEGE_CODE);
+        fixture.seed(1, 2, 2);
         batchId = fixture.batchIds.get(0);
         studentId = fixture.studentIds.get(0);
         studentUserId = fixture.studentUserIds.get(0);

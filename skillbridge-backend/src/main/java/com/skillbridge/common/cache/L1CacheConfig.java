@@ -53,8 +53,38 @@ import java.time.Duration;
  * </ol>
  */
 @Configuration
-@EnableCaching
+@EnableCaching(order = L1CacheConfig.CACHE_ADVISOR_ORDER)
 public class L1CacheConfig {
+
+    /**
+     * Outside the transaction advisor, which {@link
+     * com.skillbridge.common.tenant.TransactionConfig} pins at 100. Lower value
+     * = outermost.
+     *
+     * <p><b>Measured, not assumed.</b> At the default both advisors sit at
+     * {@code Ordered.LOWEST_PRECEDENCE} and the tie resolved with the
+     * transaction outermost, which meant <b>a cache hit still opened a Hibernate
+     * session and checked out a connection</b> — three warm hits produced three
+     * sessions and zero statements. The cache was saving the round trips for the
+     * queries and none for the connection, on a project that spent Phase 05
+     * taking {@code GET /admin/students} from 5.00 checkouts to 1.00.
+     *
+     * <p>It also quietly capped the thundering herd: callers queued for a
+     * connection <em>before</em> consulting the cache, so the pool serialised
+     * them and a 200-caller stampede on a cold key produced 2 loads rather than
+     * the number a real pool would have allowed. A limiter you did not intend is
+     * not a limiter you can keep.
+     *
+     * <p>Two further consequences, both improvements: the value is now written to
+     * the cache <em>after</em> the transaction commits rather than inside it, and
+     * a {@code @CacheEvict} on a write fires after commit for the same reason.
+     *
+     * <p>Still comfortably inside Spring Security's method interceptors, which
+     * order themselves near {@code Integer.MIN_VALUE} — a cache that ran outside
+     * authorisation would serve a hit to a caller who was never checked, which is
+     * the same defect {@code CurriculumReader} exists to avoid one level down.
+     */
+    public static final int CACHE_ADVISOR_ORDER = 50;
 
     /**
      * Active colleges, for the registration form's picker.

@@ -55,7 +55,8 @@ class CollegeDirectoryCacheTest {
     void seed() {
         // No batches or students -- this test only needs the college row, which
         // TenantFixture creates ACTIVE.
-        fixture = new TenantFixture(jdbc, COLLEGE_CODE).seed(0, 0);
+        fixture = new TenantFixture(jdbc, COLLEGE_CODE);
+        fixture.seed(0, 0);
         clearCache();
     }
 

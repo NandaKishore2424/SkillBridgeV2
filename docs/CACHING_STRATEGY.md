@@ -230,6 +230,49 @@ and it would have sat there at a hit rate nobody looked at.
 > it — check `staleTime` before adding a TTL behind it.
 
 
+### Two things a statement count could not see
+
+Both were found after the entries above were built and measured, and both change
+what those numbers mean.
+
+**A cache hit was still opening a transaction.** A warm curriculum read reported
+0 statements and looked finished. It was also opening a Hibernate session and
+checking out a connection every time — three warm hits, three sessions, zero
+SQL — because the cache advisor sat *inside* the transaction advisor. The two
+were at the same default order and the tie resolved the wrong way. On this
+project that is not a rounding error: Phase 05's work was measured in connection
+checkouts against a pooler that allows fifteen in total, and a cache that saves
+the queries but not the checkout gives half of it back. Both advisor orders are
+now explicit numbers — `L1CacheConfig.CACHE_ADVISOR_ORDER` at 50, outside
+`TransactionConfig.TRANSACTION_ADVISOR_ORDER` at 100 — so the relationship is
+stated rather than inherited from a tie. Caching stays well inside Spring
+Security's method interceptors, which order near `Integer.MIN_VALUE`; a cache
+outside authorisation would serve a hit to a caller nobody checked.
+
+**Plain `@Cacheable` has no stampede protection.** Spring's interception is
+look-up, invoke, put — three steps, no lock — so every concurrent caller on a
+cold key misses and every one loads. `sync = true` routes through
+`Cache.get(key, Callable)`, which Caffeine implements as an atomic per-key
+compute: one caller loads, the rest block on that key and take its answer. Both
+cached reads now carry it.
+
+The order the evidence arrived in is the lesson:
+
+| What was running | 200 callers on a cold key |
+|---|---|
+| No `sync`, caching inside the transaction | 4 statements — 2 loads, four runs running |
+| No `sync`, caching outside the transaction | **pool exhausted** — `CannotCreateTransactionException`, two runs out of two |
+| `sync = true`, caching outside the transaction | 2 statements, three runs out of three |
+
+The first row is the trap. It reads as "the stampede is mild here, leave it" —
+and it was mild only because callers were queuing for a connection before they
+reached the cache, so the pool was throttling the herd. **A limiter you did not
+intend is not a limiter you can keep**, and fixing the connection problem is
+precisely what removes it. The two changes had to land together; the first alone
+would have been a regression dressed as an optimisation.
+
+---
+
 ---
 
 ## 6. Deferred, with the trigger that revives them
