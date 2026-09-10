@@ -111,6 +111,16 @@ export const syllabusApi = {
         apiClient.delete(`/syllabus/topics/${topicId}`),
 
     // Toggle topic completion
+    /**
+     * @deprecated Sunset 2026-12-31. Flips a batch-wide "is this done" boolean,
+     * which is a second source of truth alongside per-student topic_progress and
+     * records neither who decided nor for whom. Mark a topic done for everyone
+     * from the trainer's Grade screen instead: select all, status Completed,
+     * which writes an attributed record per student in one request.
+     *
+     * Nothing calls this. It is kept only so the deprecation is visible here
+     * rather than discovered when the endpoint is removed.
+     */
     toggleTopicCompletion: (topicId: number) =>
         apiClient.post(`/syllabus/topics/${topicId}/toggle-completion`),
 

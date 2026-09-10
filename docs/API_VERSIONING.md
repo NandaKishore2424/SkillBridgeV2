@@ -74,10 +74,36 @@ deprecation and removing the endpoint the same month is not a deprecation.
 |---|---|---|---|
 | `GET /api/v1/students/{id}` | 2026-09-06 | 2026-12-31 | `GET /api/v1/admin/students/{id}` |
 | `GET /api/v1/trainers/{id}` | 2026-09-06 | 2026-12-31 | `GET /api/v1/admin/trainers/{id}` |
+| `POST /api/v1/syllabus/topics/{id}/toggle-completion` | 2026-09-10 | 2026-12-31 | `PUT /api/v1/trainer/topics/{id}/progress/bulk` |
 
-Both are exact duplicates of the admin endpoint, and both shipped with a role
-guard that allowed `STUDENT`. The guards were tightened on the day they were
-deprecated rather than at sunset.
+The first two are exact duplicates of the admin endpoint, and both shipped with
+a role guard that allowed `STUDENT`. The guards were tightened on the day they
+were deprecated rather than at sunset.
+
+### The toggle, and what has to go with it
+
+`toggle-completion` is not a duplicate — it is a **second source of truth**. It
+flips one boolean on `syllabus_topics` meaning "done for the whole batch", while
+`topic_progress` records the same thing per student. The two disagree the moment
+either is used and nothing reconciles them; the boolean also records neither who
+decided nor for whom.
+
+Marking a topic done for everyone is still supported, and is now honest about
+what it writes: the trainer's Grade screen selects every student and submits one
+bulk grade, which leaves an attributed record each.
+
+**At sunset, three things go, not one:**
+
+1. the endpoint and `SyllabusService.toggleTopicCompletion`;
+2. the `syllabus_topics.is_completed` column, plus the `completedTopicsCount`
+   and `completedTopicsCount`-derived percentages computed from it — those are
+   the batch-wide numbers the syllabus tree still shows, and they are the same
+   stale source wearing a different hat;
+3. `syllabusApi.toggleTopicCompletion` in the frontend, which is already
+   uncalled and kept only so the deprecation is visible at the call site.
+
+Removing (1) without (2) leaves the column with no writer and the tree still
+reading it — a progress bar that can only ever say 0%.
 
 ## The contract itself
 

@@ -4,7 +4,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { Button } from '@/shared/components/ui/button';
-import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Badge } from '@/shared/components/ui/badge';
 import { Pencil, Trash2, Plus, Calendar, ClipboardCheck } from 'lucide-react';
 import { syllabusApi, type SyllabusModule, type SyllabusSubmodule, type SyllabusTopic } from '@/api/batchManagement';
@@ -46,24 +45,6 @@ export default function ModuleAccordion({ module, batchId, onDelete }: ModuleAcc
         return '';
     };
 
-    const toggleCompletionMutation = useMutation({
-        mutationFn: syllabusApi.toggleTopicCompletion,
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['syllabus', batchId] });
-            toast({
-                title: 'Topic updated',
-                description: 'Topic completion status has been updated.',
-            });
-        },
-        onError: () => {
-            toast({
-                title: 'Error',
-                description: 'Failed to update topic. Please try again.',
-                variant: 'destructive',
-            });
-        },
-    });
-
     const deleteTopicMutation = useMutation({
         mutationFn: syllabusApi.deleteTopic,
         onSuccess: () => {
@@ -99,10 +80,6 @@ export default function ModuleAccordion({ module, batchId, onDelete }: ModuleAcc
             });
         },
     });
-
-    const handleToggleTopic = (topicId: number) => {
-        toggleCompletionMutation.mutate(topicId);
-    };
 
     const handleDeleteTopic = (topicId: number) => {
         if (confirm('Are you sure you want to delete this topic?')) {
@@ -189,7 +166,6 @@ export default function ModuleAccordion({ module, batchId, onDelete }: ModuleAcc
                                     key={submodule.id}
                                     submodule={submodule}
                                     batchId={batchId}
-                                    onToggleTopic={handleToggleTopic}
                                     onDeleteTopic={handleDeleteTopic}
                                     onDeleteSubmodule={() => handleDeleteSubmodule(submodule.id)}
                                 />
@@ -224,7 +200,6 @@ export default function ModuleAccordion({ module, batchId, onDelete }: ModuleAcc
 // Sub-component for rendering a sub-module
 interface SubmoduleAccordionProps {
     submodule: SyllabusSubmodule;
-    onToggleTopic: (topicId: number) => void;
     onDeleteTopic: (topicId: number) => void;
     onDeleteSubmodule: () => void;
     batchId: number;
@@ -232,7 +207,6 @@ interface SubmoduleAccordionProps {
 
 function SubmoduleAccordion({
     submodule,
-    onToggleTopic,
     onDeleteTopic,
     onDeleteSubmodule,
     batchId
@@ -333,7 +307,6 @@ function SubmoduleAccordion({
                             <TopicRow
                                 key={topic.id}
                                 topic={topic}
-                                onToggle={() => onToggleTopic(topic.id)}
                                 onDelete={() => onDeleteTopic(topic.id)}
                             />
                         ))}
@@ -366,11 +339,10 @@ function SubmoduleAccordion({
 // Sub-component for rendering a topic
 interface TopicRowProps {
     topic: SyllabusTopic;
-    onToggle: () => void;
     onDelete: () => void;
 }
 
-function TopicRow({ topic, onToggle, onDelete }: TopicRowProps) {
+function TopicRow({ topic, onDelete }: TopicRowProps) {
     const navigate = useNavigate();
     const { user } = useAuth();
     // Only trainers may save a grade -- the bulk endpoint is @PreAuthorize
@@ -379,24 +351,29 @@ function TopicRow({ topic, onToggle, onDelete }: TopicRowProps) {
     const canGrade = user?.role === 'TRAINER';
     return (
         <div className="flex items-center justify-between p-2 rounded-md hover:bg-accent/50 transition-colors">
+            {/*
+              * No completion checkbox here any more. It called
+              * POST /syllabus/topics/{id}/toggle-completion, which flips one
+              * boolean meaning "done for the whole batch" -- a second source of
+              * truth alongside per-student topic_progress, recording neither who
+              * decided nor for whom. The two disagreed the moment either was
+              * used, and nothing reconciled them.
+              *
+              * Marking a topic done for everyone is still possible and is now
+              * honest about it: Grade -> select all -> Completed, which writes a
+              * per-student record each. The endpoint is deprecated with a sunset
+              * of 2026-12-31.
+              */}
             <div className="flex items-center gap-3 flex-1">
-                <Checkbox
-                    checked={topic.isCompleted}
-                    onCheckedChange={onToggle}
-                    id={`topic-${topic.id}`}
-                />
-                <label
-                    htmlFor={`topic-${topic.id}`}
-                    className={`text-sm cursor-pointer flex-1 ${topic.isCompleted ? 'line-through text-muted-foreground' : ''
-                        }`}
-                >
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" aria-hidden />
+                <div className="text-sm flex-1">
                     {topic.name}
                     {topic.description && (
                         <span className="block text-xs text-muted-foreground mt-1">
                             {topic.description}
                         </span>
                     )}
-                </label>
+                </div>
             </div>
             <div className="flex items-center gap-1">
                 {canGrade && (

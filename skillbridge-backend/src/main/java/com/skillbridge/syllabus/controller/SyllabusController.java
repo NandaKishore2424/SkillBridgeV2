@@ -1,5 +1,6 @@
 package com.skillbridge.syllabus.controller;
 
+import com.skillbridge.common.api.DeprecatedEndpoint;
 import com.skillbridge.syllabus.dto.*;
 import com.skillbridge.syllabus.service.SyllabusService;
 import jakarta.validation.Valid;
@@ -218,11 +219,33 @@ public class SyllabusController {
     }
 
     /**
-     * Toggle topic completion
-     * POST /api/v1/syllabus/topics/{topicId}/toggle-completion
+     * Toggle topic completion for the <em>whole batch</em>.
+     *
+     * <p><b>Deprecated: this is a second source of truth for "is this done".</b>
+     * It flips one boolean on {@code syllabus_topics}, which says the topic is
+     * finished for everybody at once. Phase 04 introduced {@code topic_progress},
+     * which records it per student, and the two disagree the moment anybody uses
+     * either — a topic can read "completed" here while every student on the
+     * batch is still {@code PENDING}, and nothing reconciles them.
+     *
+     * <p>It also records nothing: no student, no trainer, no score, no comment,
+     * no audit trail of who decided.
+     *
+     * <p><b>Use the grading grid instead.</b> {@code PUT
+     * /api/v1/trainer/topics/{topicId}/progress/bulk} with every enrolled
+     * student is the same outcome — the topic marked done for the batch — with
+     * one source of truth and an attributed record per student. The trainer UI
+     * does exactly that from the topic's Grade screen, where "select all" plus
+     * "Completed" replaces this toggle.
      */
     @PostMapping("/syllabus/topics/{topicId}/toggle-completion")
     @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
+    @DeprecatedEndpoint(
+            since = "2026-09-10",
+            sunset = "2026-12-31",
+            replacement = "/api/v1/trainer/topics/{topicId}/progress/bulk",
+            reason = "Batch-wide completion is a second source of truth alongside "
+                    + "per-student topic_progress, and records neither who graded nor whom.")
     public ResponseEntity<SyllabusTopicDTO> toggleTopicCompletion(@PathVariable Long topicId) {
         log.info("API: Toggle completion for topic {}", topicId);
         SyllabusTopicDTO topic = syllabusService.toggleTopicCompletion(topicId);
