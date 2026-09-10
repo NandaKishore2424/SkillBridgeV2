@@ -24,6 +24,7 @@ import {
   PlusCircle,
   Menu,
   MessageSquare,
+  TrendingUp,
 } from 'lucide-react'
 
 // Icon mapping for navigation items
@@ -37,7 +38,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Trainers: Users,
   Students: GraduationCap,
   'My Batches': BookOpen,
-  'My Progress': LayoutDashboard,
+  'My Progress': TrendingUp,
   Placements: Briefcase,
 }
 
@@ -114,6 +115,11 @@ const sidebarConfig: SidebarConfig = {
       title: 'Dashboard',
       href: '/student/dashboard',
       icon: LayoutDashboard,
+    },
+    {
+      title: 'My Progress',
+      href: '/student/progress',
+      icon: TrendingUp,
     },
     {
       title: 'Feedback',

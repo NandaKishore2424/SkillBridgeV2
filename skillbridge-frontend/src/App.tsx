@@ -42,6 +42,7 @@ import TopicGradingPage from './pages/trainer/grading/TopicGradingPage'
 import { StudentDashboard } from './pages/student/dashboard/StudentDashboard'
 import StudentFeedback from './pages/student/StudentFeedback'
 import { ProfileSetup } from './pages/student/ProfileSetup'
+import StudentProgress from './pages/student/progress/StudentProgress'
 
 function App() {
   return (
@@ -248,6 +249,14 @@ function App() {
         element={
           <ProtectedRoute>
             <StudentDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/progress"
+        element={
+          <ProtectedRoute>
+            <StudentProgress />
           </ProtectedRoute>
         }
       />

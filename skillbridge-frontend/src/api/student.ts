@@ -47,11 +47,14 @@ export interface StudentBatch extends Batch {
   }
 }
 
+/** The four outcomes a trainer can record. Shared with the grading screen. */
+export type ProgressStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'NEEDS_IMPROVEMENT'
+
 export interface StudentProgressTopic {
   id: number
   title: string
   description?: string
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'NEEDS_IMPROVEMENT'
+  status: ProgressStatus
   feedback?: string
   updatedAt?: string
 }
@@ -113,6 +116,14 @@ export const applyToBatch = async (batchId: number): Promise<void> => {
 
 // ==================== Progress Tracking ====================
 
+/**
+ * The flat per-topic list, from the older `/progress` endpoint.
+ *
+ * Prefer {@link getMyProgressDetail}. This one loses the curriculum structure
+ * -- a bare array of topics with no module or sub-module around them -- and it
+ * carries no score and no grading trainer. The backend keeps it for the
+ * contract it already published; nothing in this app calls it.
+ */
 export const getMyProgress = async (batchId: number): Promise<{
   batchId: number
   batchName: string
@@ -123,6 +134,91 @@ export const getMyProgress = async (batchId: number): Promise<{
     batchName: string
     topics: StudentProgressTopic[]
   }>(`/student/batches/${batchId}/progress`)
+  return response.data
+}
+
+// ==================== Progress Detail (curriculum tree) ====================
+
+/**
+ * The shapes below mirror `BatchProgressDTO` and the DTOs under it.
+ *
+ * The server returns progress already nested as the curriculum -- module,
+ * sub-module, topic -- so the client renders it rather than regrouping a flat
+ * list. Each level carries its own rollup, which is why `weightedPercent`
+ * appears three times: a module's percentage is not the average of its
+ * sub-modules' when they hold different numbers of topics.
+ */
+export interface TopicProgressDetail {
+  progressId: number
+  topicId: number
+  topicName: string
+  topicDescription: string | null
+  displayOrder: number | null
+  status: ProgressStatus
+  score: number | null
+  comment: string | null
+  gradedByTrainerId: number | null
+  gradedByTrainerName: string | null
+  startedAt: string | null
+  completedAt: string | null
+  updatedAt: string | null
+}
+
+export interface SubmoduleProgressDetail {
+  submoduleId: number
+  submoduleName: string
+  displayOrder: number | null
+  weekNumber: number | null
+  topicsTotal: number
+  topicsCompleted: number
+  weightedPercent: number
+  topics: TopicProgressDetail[]
+}
+
+export interface ModuleProgressDetail {
+  moduleId: number
+  moduleName: string
+  displayOrder: number | null
+  startDate: string | null
+  endDate: string | null
+  topicsTotal: number
+  topicsCompleted: number
+  weightedPercent: number
+  submodules: SubmoduleProgressDetail[]
+}
+
+export interface BatchProgressDetail {
+  batchId: number
+  batchName: string
+  studentId: number
+  studentName: string
+  topicsTotal: number
+  topicsCompleted: number
+  topicsInProgress: number
+  topicsNeedsWork: number
+  topicsPending: number
+  /** Weighted, not completed/total -- partly-done work counts for something. */
+  weightedPercent: number
+  averageScore: number | null
+  lastActivityAt: string | null
+  modules: ModuleProgressDetail[]
+}
+
+/**
+ * The signed-in student's curriculum and status for one batch.
+ *
+ * Deliberately not paged. The response is a whole curriculum, and a page of a
+ * tree is not a tree -- cutting it at twenty rows would drop modules, not just
+ * topics. It is bounded by the syllabus rather than by anything that
+ * accumulates, so it stays the size a trainer wrote.
+ *
+ * There is no student id in the path: it comes from the token, so there is no
+ * id for one student to swap for another's.
+ */
+export const getMyProgressDetail = async (batchId: number): Promise<BatchProgressDetail> => {
+  const response = await apiClient.get<BatchProgressDetail>(
+    `/student/batches/${batchId}/progress/detail`,
+  )
   return response.data
 }
 
