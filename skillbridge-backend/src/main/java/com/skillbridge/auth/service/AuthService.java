@@ -134,7 +134,7 @@ public class AuthService {
         return AuthResponse.builder()
             .accessToken(accessToken)
             .refreshToken(refreshToken)
-            .expiresIn(3600L)
+            .expiresIn(jwtService.accessTokenTtlSeconds())
                 .user(userDto)
                 .build();
     }
@@ -188,7 +188,7 @@ public class AuthService {
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
-                .expiresIn(3600L)
+                .expiresIn(jwtService.accessTokenTtlSeconds())
                 .user(userDto)
                 .build();
     }
@@ -308,7 +308,7 @@ public class AuthService {
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .expiresIn(3600L)
+                .expiresIn(jwtService.accessTokenTtlSeconds())
                 .user(userDto)
                 .build();
     }

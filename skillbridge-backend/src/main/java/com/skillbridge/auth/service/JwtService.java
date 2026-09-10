@@ -50,6 +50,24 @@ public class JwtService {
     }
 
     /**
+     * How long an access token this service issues stays valid.
+     *
+     * <p>Exists so {@code AuthResponse.expiresIn} can report the real number.
+     * It carried a hard-coded {@code 3600L} at all three issuing sites, which
+     * was right until the TTL was cut to 900 on 2026-09-09 and wrong by four
+     * times afterwards -- and wrong in the direction that matters, since a
+     * client scheduling a proactive refresh from it would wake up forty-five
+     * minutes after its token had already expired.
+     *
+     * <p>Since that change this number is also the revocation window: the
+     * filter trusts the token's claims rather than re-reading the user, so a
+     * deactivated account keeps working until its access token runs out.
+     */
+    public long accessTokenTtlSeconds() {
+        return accessTokenTtlSeconds;
+    }
+
+    /**
      * Issues an access token carrying everything authorisation needs.
      *
      * <p><b>These claims are authoritative.</b> Since 2026-09-09

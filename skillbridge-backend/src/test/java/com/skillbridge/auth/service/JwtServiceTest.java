@@ -42,6 +42,52 @@ class JwtServiceTest {
     }
 
     @Nested
+    @DisplayName("the advertised lifetime")
+    class AdvertisedLifetime {
+
+        /**
+         * {@code AuthResponse.expiresIn} told every client 3600 while the token
+         * lived 900.
+         *
+         * <p>The literal was correct when it was written and wrong from the
+         * moment the TTL was cut on 2026-09-09 — and wrong in the direction that
+         * matters, since a client scheduling a proactive refresh from it wakes up
+         * forty-five minutes after its token has already expired. Nothing failed,
+         * because this app refreshes reactively on a 401; the number was simply
+         * published and untrue.
+         *
+         * <p>900 rather than the 3600 default deliberately: at the default this
+         * assertion would have passed against the bug.
+         */
+        @Test
+        void the_number_reported_to_clients_is_the_number_the_token_actually_gets() {
+            JwtService jwt = service(900);
+
+            io.jsonwebtoken.Claims claims = jwt.claims(jwt.generateAccessToken(
+                    user(42L, "a@b.test", 7L), "TRAINER", java.util.Set.of("TRAINER"), false));
+
+            long actualLifetime =
+                    (claims.getExpiration().getTime() - claims.getIssuedAt().getTime()) / 1000;
+
+            assertEquals(900, jwt.accessTokenTtlSeconds());
+            assertEquals(jwt.accessTokenTtlSeconds(), actualLifetime,
+                    "expiresIn is built from this accessor, so a client is told exactly "
+                            + "as long as the token really has");
+        }
+
+        /** No caller may reintroduce the literal the accessor exists to replace. */
+        @Test
+        void no_issuing_site_hard_codes_a_lifetime() throws Exception {
+            String source = java.nio.file.Files.readString(
+                    java.nio.file.Path.of("src/main/java/com/skillbridge/auth/service/AuthService.java"));
+
+            assertFalse(source.matches("(?s).*\\.expiresIn\\(\\s*\\d.*"),
+                    "AuthService hands expiresIn a numeric literal again — it duplicates "
+                            + "jwt.accessTokenTtlSeconds and will drift from it silently");
+        }
+    }
+
+    @Nested
     @DisplayName("round trip")
     class RoundTrip {
 
