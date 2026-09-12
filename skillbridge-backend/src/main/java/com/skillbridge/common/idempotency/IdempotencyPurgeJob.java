@@ -30,6 +30,7 @@ import org.springframework.stereotype.Component;
 public class IdempotencyPurgeJob {
 
     private final IdempotencyService idempotencyService;
+    private final com.skillbridge.common.scheduling.SingleRunGuard singleRun;
 
     /**
      * Nightly at 03:20, off the hour for the same reason the enrollment job is:
@@ -39,8 +40,14 @@ public class IdempotencyPurgeJob {
     @Scheduled(cron = "0 20 3 * * *")
     public void purgeExpiredKeys() {
         try {
-            int deleted = idempotencyService.purgeExpired();
-            log.debug("Idempotency purge finished; removed {} expired keys", deleted);
+            // One instance, not all of them. The delete is idempotent, so two
+            // runs are survivable -- but two instances deleting the same rows at
+            // the same moment is contention on a table the request path writes
+            // to, for no benefit.
+            singleRun.runExclusively("idempotency-purge", () -> {
+                int deleted = idempotencyService.purgeExpired();
+                log.debug("Idempotency purge finished; removed {} expired keys", deleted);
+            });
         } catch (Exception ex) {
             // Spring's default error handler drops a throwing @Scheduled method
             // silently, so the failure is logged here explicitly.
