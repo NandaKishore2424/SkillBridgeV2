@@ -48,6 +48,7 @@ public class StudentService {
     private final StudentProjectRepository studentProjectRepository;
     private final BatchRepository batchRepository;
     private final RoleRepository roleRepository;
+    private final com.skillbridge.auth.service.TokenRevocationService tokenRevocation;
     private final PasswordEncoder passwordEncoder;
     private final AIEventPublisher aiEventPublisher; // injected for async AI notifications
 
@@ -495,6 +496,15 @@ public class StudentService {
         user.setIsActive(isActive);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+
+        // Deactivation has to take effect now. The request path reads the
+        // token's claims rather than the user, so without this the account keeps
+        // working until its access token expires.
+        if (isActive) {
+            tokenRevocation.restore(user.getId());
+        } else {
+            tokenRevocation.revoke(user.getId());
+        }
     }
 
     /** Single-student mapping. Issues two extra queries; see {@link #mapPage}. */

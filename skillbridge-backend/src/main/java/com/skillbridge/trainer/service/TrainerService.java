@@ -44,6 +44,7 @@ public class TrainerService {
     private final UserRepository userRepository;
     private final CollegeRepository collegeRepository;
     private final RoleRepository roleRepository;
+    private final com.skillbridge.auth.service.TokenRevocationService tokenRevocation;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
@@ -194,6 +195,15 @@ public class TrainerService {
         user.setIsActive(isActive);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+
+        // Deactivation has to take effect now. The request path reads the
+        // token's claims rather than the user, so without this the account keeps
+        // working until its access token expires.
+        if (isActive) {
+            tokenRevocation.restore(user.getId());
+        } else {
+            tokenRevocation.revoke(user.getId());
+        }
     }
 
     /**

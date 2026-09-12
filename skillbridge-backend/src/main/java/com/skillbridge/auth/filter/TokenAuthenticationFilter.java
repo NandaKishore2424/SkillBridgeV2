@@ -8,6 +8,7 @@ import java.util.Collection;
 import io.jsonwebtoken.Claims;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.auth.service.JwtService;
+import com.skillbridge.auth.service.TokenRevocationService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,6 +36,7 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
     private final UserRepository userRepository;
     private final JwtService jwtService;
+    private final TokenRevocationService tokenRevocation;
 
     @Override
     protected void doFilterInternal(
@@ -59,6 +61,17 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
             }
 
             AuthenticatedUser principal = principalFrom(token);
+
+            // Deactivation has to bite now, not when the token expires. The
+            // claims say isActive because they were true when the token was
+            // issued; this asks whether the account has been deactivated since.
+            // An in-process lookup, so it adds no statement and no connection --
+            // which is the whole reason the principal is built from claims.
+            if (principal != null && tokenRevocation.isRevoked(principal.getId(), issuedAt(token))) {
+                log.info("Refused a token issued before user {} was deactivated", principal.getId());
+                filterChain.doFilter(request, response);
+                return;
+            }
 
             if (principal != null && principal.isActive()) {
                 UsernamePasswordAuthenticationToken authentication =
@@ -106,6 +119,12 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
      * so such a token takes the old database path instead. Every token reissues
      * within one TTL, after which this branch stops being reached.
      */
+    /** The token's {@code iat}, or null if it carries none. */
+    private java.time.Instant issuedAt(String token) {
+        java.util.Date issued = jwtService.claims(token).getIssuedAt();
+        return issued == null ? null : issued.toInstant();
+    }
+
     @SuppressWarnings("unchecked")
     private AuthenticatedUser principalFrom(String token) {
         Claims claims = jwtService.claims(token);

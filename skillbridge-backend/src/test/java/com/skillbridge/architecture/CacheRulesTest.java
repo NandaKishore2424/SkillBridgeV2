@@ -148,6 +148,52 @@ class CacheRulesTest {
     }
 
     @Test
+    @DisplayName("every method that deactivates an account also revokes its tokens")
+    void deactivationRevokes() {
+        ArchRule rule = methods()
+                .that(new com.tngtech.archunit.base.DescribedPredicate<JavaMethod>(
+                        "set User.isActive") {
+                    @Override
+                    public boolean test(JavaMethod method) {
+                        return method.getMethodCallsFromSelf().stream().anyMatch(call ->
+                                call.getTarget().getOwner().isAssignableTo(
+                                        com.skillbridge.auth.entity.User.class)
+                                        && call.getTarget().getName().equals("setIsActive"));
+                    }
+                })
+                .should(alsoCall("com.skillbridge.auth.service.TokenRevocationService", "revoke"))
+                .because("""
+                        the request path reads the token's claims, not the user, so an                         account deactivated without revoking keeps working until its                         access token expires. Nothing fails and nothing logs -- the                         deactivated user simply carries on for up to fifteen minutes.""");
+
+        rule.check(production);
+    }
+
+    /**
+     * Names the method, not just the class.
+     *
+     * <p>The first version of this rule asked only whether the owning class was
+     * called at all, and stayed green when {@code revoke} was deleted from a
+     * deactivation path — the surviving {@code restore} on the reactivation
+     * branch satisfied it. A rule that passes against the bug it names is worse
+     * than no rule, because it is read as coverage.
+     */
+    private static ArchCondition<JavaMethod> alsoCall(String ownerFqn, String methodName) {
+        return new ArchCondition<>("also call " + ownerFqn + "." + methodName) {
+            @Override
+            public void check(JavaMethod method, ConditionEvents events) {
+                boolean calls = method.getMethodCallsFromSelf().stream().anyMatch(call ->
+                        call.getTarget().getOwner().getName().equals(ownerFqn)
+                                && call.getTarget().getName().equals(methodName));
+                if (!calls) {
+                    events.add(SimpleConditionEvent.violated(method,
+                            method.getFullName() + " changes User.isActive without calling "
+                                    + ownerFqn + "." + methodName));
+                }
+            }
+        };
+    }
+
+    @Test
     @DisplayName("refreshAfterWrite cannot be used here, and that is why it is absent")
     void refreshAfterWriteNeedsALoaderThatAnnotationCachingCannotSupply() {
         // Phase 06 § 2.1 asks for refreshAfterWrite so one thread reloads while

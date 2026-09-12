@@ -50,6 +50,7 @@ public class SoftDeleteService {
     private final CompanyRepository companyRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final UserRepository userRepository;
+    private final com.skillbridge.auth.service.TokenRevocationService tokenRevocation;
 
     @Transactional
     public void deleteBatch(Long batchId, Long actorId) {
@@ -142,6 +143,10 @@ public class SoftDeleteService {
             u.setIsActive(false);
             u.setUpdatedAt(LocalDateTime.now());
             userRepository.save(u);
+            // Same reason as the status endpoints: the request path reads the
+            // token's claims, so a soft-deleted account would otherwise keep
+            // working until its access token expired.
+            tokenRevocation.revoke(u.getId());
         });
     }
 }
