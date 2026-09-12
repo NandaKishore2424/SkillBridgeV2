@@ -7,6 +7,15 @@
 # What this profile adds is visibility. When a query-count assertion fails, the
 # first question is always "which queries?", and answering it should not require
 # editing config and re-running.
+# The integration tests sign in over and over; AUTHENTICATION allows five
+# attempts a minute on purpose. With the limiter live they were throttled 32
+# times in one run, one class took 381 seconds, and the cascade surfaced as
+# "Unable to determine Dialect without JDBC metadata" -- connection starvation
+# wearing the costume of a flaky link. The filter stays in the chain; only its
+# limits are lifted. RateLimitingFilterTest exercises those directly.
+rateLimit:
+  enabled: false
+
 spring:
   datasource:
     hikari:
@@ -20,6 +29,18 @@ spring:
       # The integration tests are sequential, so three is generous.
       minimum-idle: 1
       maximum-pool-size: 3
+
+      # Twenty seconds, against five in production, and the difference is
+      # deliberate. Production wants to fail fast so a user is not left waiting;
+      # a test run wants to survive a slow link, because the alternative is a red
+      # suite that says nothing about the code. Opening a connection to
+      # ap-northeast-2 measured 1171 ms when the pool was sized (see
+      # docs/CONNECTION_POOL.md) and 300-2600 ms on 2026-09-10 while the
+      # free-tier instance was throttled -- at which point five seconds is not
+      # much more than one attempt, and the failures arrive as
+      # "Unable to determine Dialect without JDBC metadata", which reads like a
+      # driver fault rather than a slow network.
+      connection-timeout: 20000
 
   jpa:
     properties:

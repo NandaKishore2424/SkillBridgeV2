@@ -2,6 +2,7 @@ package com.skillbridge.common.config;
 
 import com.skillbridge.auth.filter.PasswordChangeRequiredFilter;
 import com.skillbridge.auth.filter.TokenAuthenticationFilter;
+import com.skillbridge.common.observability.UserContextLogFilter;
 import com.skillbridge.common.throttle.RateLimitingFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,15 +29,18 @@ public class SecurityConfig {
     private final TokenAuthenticationFilter tokenAuthenticationFilter;
     private final PasswordChangeRequiredFilter passwordChangeRequiredFilter;
     private final RateLimitingFilter rateLimitingFilter;
+    private final UserContextLogFilter userContextLogFilter;
 
     public SecurityConfig(
             TokenAuthenticationFilter tokenAuthenticationFilter,
             PasswordChangeRequiredFilter passwordChangeRequiredFilter,
-            RateLimitingFilter rateLimitingFilter
+            RateLimitingFilter rateLimitingFilter,
+            UserContextLogFilter userContextLogFilter
     ) {
         this.tokenAuthenticationFilter = tokenAuthenticationFilter;
         this.passwordChangeRequiredFilter = passwordChangeRequiredFilter;
         this.rateLimitingFilter = rateLimitingFilter;
+        this.userContextLogFilter = userContextLogFilter;
     }
 
     @Bean
@@ -70,9 +74,18 @@ public class SecurityConfig {
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
-            .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            // After authentication, not before. Rate limiting keys by user id,
+            // and before this filter runs there is no principal -- which is how
+            // the original came to key on the raw token and reset every user's
+            // limit on every refresh. An unauthenticated request simply has no
+            // principal here and falls back to its address.
+            .addFilterAfter(rateLimitingFilter, TokenAuthenticationFilter.class)
             .addFilterAfter(passwordChangeRequiredFilter, TokenAuthenticationFilter.class)
+            // Also after authentication, for the same reason: it copies the
+            // caller's identity into the logging context, and ahead of
+            // TokenAuthenticationFilter there is no identity to copy.
+            .addFilterAfter(userContextLogFilter, TokenAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/colleges/active").permitAll() // Public endpoint for registration
