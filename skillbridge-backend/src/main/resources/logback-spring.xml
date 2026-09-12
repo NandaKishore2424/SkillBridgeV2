@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Two shapes of log, chosen by profile.
+
+  Human readable on `local`, because JSON in a terminal is unreadable and the
+  person reading it is sitting in front of it. JSON everywhere else, because
+  nobody reads those with their eyes: a log aggregator queries fields, and
+  grepping a formatted line for a user id is how you end up unable to answer
+  "what else did that request do".
+
+  The correlation id is in both. On `local` it is the bracketed value after the
+  level; everywhere else it is the `traceId` field, put there by
+  CorrelationIdFilter.
+
+  See docs/LOGGING.md.
+-->
+<configuration>
+
+    <!--
+      Redaction runs on the message itself, so it applies to both shapes below
+      rather than to whichever one somebody remembered. %msg and %m are remapped,
+      so an existing pattern gets the redacting version without anyone having to
+      know it exists.
+    -->
+    <conversionRule conversionWord="msg"
+                    class="com.skillbridge.common.observability.CredentialRedactingConverter"/>
+    <conversionRule conversionWord="m"
+                    class="com.skillbridge.common.observability.CredentialRedactingConverter"/>
+
+    <springProfile name="local,test">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) [%X{traceId:-}] %cyan(%logger{25}) - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!local &amp; !test">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp><fieldName>@timestamp</fieldName></timestamp>
+                    <logLevel/>
+                    <loggerName><shortenedLoggerNameLength>36</shortenedLoggerNameLength></loggerName>
+                    <threadName/>
+                    <!-- The redacting converter, not the raw message. -->
+                    <pattern><pattern>{"message":"%msg"}</pattern></pattern>
+                    <!-- traceId, userId, collegeId, httpMethod, path -->
+                    <mdc/>
+                    <stackTrace>
+                        <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                            <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                            <!--
+                              Framework frames are never the bug and crowd out the
+                              frames that are.
+                            -->
+                            <exclude>^org\.springframework\.(aop|cglib)\..*</exclude>
+                            <exclude>^java\.util\.concurrent\..*</exclude>
+                            <!--
+                              Java prints the wrapper first and buries the real
+                              cause forty frames down. Invert it.
+                            -->
+                            <rootCauseFirst>true</rootCauseFirst>
+                        </throwableConverter>
+                    </stackTrace>
+                    <pattern>
+                        <pattern>{"service":"skillbridge-backend","env":"${ENVIRONMENT:-unknown}"}</pattern>
+                    </pattern>
+                </providers>
+            </encoder>
+        </appender>
+
+        <!--
+          Logging must not sit on a request's critical path.
+
+          discardingThreshold 0 means never drop, even when the queue is full:
+          the line explaining an incident is exactly the line a full queue would
+          throw away, because the queue fills precisely when things are going
+          wrong. The cost is back pressure, which is the right trade here.
+        -->
+        <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+            <appender-ref ref="JSON"/>
+            <queueSize>2048</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <neverBlock>false</neverBlock>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="ASYNC"/>
+        </root>
+    </springProfile>
+
+</configuration>

@@ -69,6 +69,13 @@
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
+		<!-- Structured logging. JSON off the local profile, so a log aggregator
+		     can query fields instead of parsing a line format. -->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>8.0</version>
+		</dependency>
 		<!-- L1 cache. Caffeine rather than the starter's default simple
 		     ConcurrentHashMap manager, which has neither eviction nor
 		     statistics: an unbounded cache is a memory leak with a nice name,
