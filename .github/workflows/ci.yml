@@ -99,4 +99,20 @@ jobs:
         # references in tsconfig.json and --noEmit silently checks almost
         # nothing here. A previous session reported "typecheck clean" from
         # --noEmit while the build had 117 errors.
+        #
+        # This also type-checks the test files, because tsconfig.app.json
+        # includes all of `src`. That is deliberate: it caught an unused import
+        # in a test on the first run, and it means a test cannot rot into
+        # something that no longer compiles while the suite still passes.
         run: npm run build
+
+      # The frontend had no test runner at all until 2026-09-13. Every guarantee
+      # came from tsc and the drift script, neither of which can tell you that
+      # concurrent 401s log the user out.
+      #
+      # The coverage threshold is a ratchet set just under what is measured, not
+      # the 70% Phase 11 asks for. It stops coverage falling; it does not claim
+      # the frontend is well covered. See vitest.config.ts.
+      - name: Test
+        working-directory: skillbridge-frontend
+        run: npm run test:coverage

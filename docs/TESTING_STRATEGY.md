@@ -8,13 +8,14 @@
 
 ## The shape, as measured
 
-| Tier | Classes | Tests | Runtime | Needs | Command |
+| Tier | Files | Tests | Runtime | Needs | Command |
 |---|---|---|---|---|---|
-| **Fast** — unit + architecture | 17 | 108 | **4.9 s** | nothing | `mvn test` |
-| **Integration** — Spring + real Postgres | 20 | 64 | **~50 s** | Docker | `mvn verify` |
+| **Backend fast** — unit + architecture | 17 | 108 | **4.9 s** | nothing | `mvn test` |
+| **Backend integration** — Spring + real Postgres | 20 | 64 | **~50 s** | Docker | `mvn verify` |
+| **Frontend** — hooks, auth, component | 4 | 22 | **2.5 s** | nothing | `npm test` |
 
-**172 tests, 0 skipped, 55 seconds end to end**, measured 2026-09-13. All of it
-runs in CI.
+**194 tests, 0 skipped, under a minute end to end**, measured 2026-09-13. All of
+it runs in CI.
 
 The integration tier used to run against the live Supabase database and took
 **10 m 38 s** for the same 64 tests — 11× longer, because the time was Spring
@@ -165,6 +166,73 @@ python3 -c "import socket,time; t=time.perf_counter(); socket.create_connection(
 
 ---
 
+## The frontend
+
+It had **no test runner at all** until 2026-09-13 — no Vitest, no Testing
+Library, no test files. Every guarantee came from `tsc` and
+`scripts/check-api-drift.sh`, neither of which can tell you that concurrent 401s
+log the user out.
+
+Vitest + jsdom + Testing Library + MSW. **MSW intercepts at the network layer**,
+so a test exercises the real axios instance and its interceptors. Mocking the
+`api/` modules instead would skip exactly the code that has broken here.
+`onUnhandledRequest: 'error'` is set, so an unstubbed endpoint names itself at
+the moment it is called rather than surfacing later as a timeout.
+
+The 22 tests are chosen by what has actually gone wrong, not by what is easy to
+render:
+
+| Test | Guards |
+|---|---|
+| `AuthContext.refresh.test.tsx` | concurrent 401s cause **one** refresh, and nobody gets logged out |
+| `idempotency.test.ts` | the key identifies one filled-in form, not one HTTP call |
+| `useDebouncedValue.test.ts` | a debounce, not a throttle — no intermediate value reaches the server |
+| `StudentsList.test.tsx` | the admin search reaches the server instead of filtering the page on screen |
+
+### The test that is worth copying
+
+`StudentsList` has six tests. **Five of them pass with the bug reintroduced.**
+
+The bug is the one this project already shipped: a search box filtering the array
+already on screen, so a match on page 3 is invisible from page 1. It is nearly
+untestable by looking at the rendered list, because a client-side filter and a
+server-side one produce the same DOM for the normal case — you type, rows
+disappear, the ones left match.
+
+The sixth test does this instead: it asks the server for `priya` and has the
+server answer with a student whose every visible field says `Arjun Kumar` /
+`SBU001`. That is not contrived — a real server matches on the email column,
+which this table does not display. A component that filters client-side drops
+that row and shows an empty table.
+
+> **When the correct and the broken implementation render the same thing, assert
+> on the thing only one of them can do.** Here that is "render a row that does
+> not match what I typed". No knowledge of the component's internals, and no
+> client-side filter can survive it.
+
+Confirmed by reintroducing the filter: exactly that one test went red, and the
+other five stayed green.
+
+### Coverage is a ratchet, not a target
+
+13.4% of lines. Phase 11 asks for 70%. The threshold in `vitest.config.ts` is set
+just under what is measured, so coverage cannot fall without failing the build
+and each batch of tests raises the floor.
+
+Setting 70% today would mean a red build with no route to green except deleting
+the threshold, and a threshold everyone deletes is worse than no threshold. It is
+also worth saying plainly: **do not read 13% as "the frontend is 13% tested", and
+do not read a future 70% as "done".** These files are mostly JSX, and a test that
+renders a page without asserting anything specific moves the number a long way
+while proving almost nothing.
+
+`npm run build` type-checks the test files too, because `tsconfig.app.json`
+includes all of `src`. That is deliberate — it caught an unused import on the
+first run, and it means a test cannot rot into something that no longer compiles
+while the suite still passes.
+
+---
+
 ## Adding a test: which tier?
 
 ```
@@ -219,6 +287,11 @@ Everything added in this phase was broken before being trusted:
 | `check-test-budget.sh` zero-skip | a skipped `<testcase>` injected | red, naming the class |
 | `check-test-budget.sh` staleness | a real five-day-old `target/` | red |
 | `verify-schema-baseline.sh` | dropped index, narrowed unique, lost `NOT NULL` | red on all three |
+| `AuthContext.refresh.test.tsx` | single-flight guard removed | red on 3 of 4, including "does not log the user out" |
+| `idempotency.test.ts` | key minted per call instead of per form | red on 4 of 6 |
+| `useDebouncedValue.test.ts` | `clearTimeout` cleanup removed (debounce → throttle) | red, an intermediate `'dat'` leaked |
+| `StudentsList.test.tsx` | client-side filter reintroduced | red on 1 of 6 — the one designed for it |
+| the coverage ratchet | threshold raised to 99% | red |
 | `verify-schema-baseline.sh` end to end | run against a real sabotaged reference database | red, naming both changes and their direction |
 
 Running that last one is what found a bug in the script itself. It waited on
@@ -235,9 +308,9 @@ already, which is why the Java side never saw it.
 
 ```bash
 cd skillbridge-backend && ./mvnw -B clean test   # fast tier: 108, expect 0 skipped
-./scripts/check-test-budget.sh                   # budget + zero-skip
+cd .. && ./scripts/check-test-budget.sh          # budget + zero-skip
 ./scripts/check-api-drift.sh                     # expect 0 phantoms
-cd skillbridge-frontend && npm run build
+cd skillbridge-frontend && npm run build && npm test   # 22, ~2.5s
 ```
 
 Everything, including the integration tier. Needs Docker; needs nothing else,
