@@ -26,6 +26,7 @@ import config
 import database
 import embedder
 from skill_analyzer import analyze_skill_gap
+import ai_event_contract as contract
 
 
 # ─── Lifecycle Management ──────────────────────────────────────────────────────
@@ -83,13 +84,16 @@ def _process_rabbitmq_message(payload: dict) -> None:
     This is the dispatcher — it reads the `eventType` field from the Java 
     AIEvent record and calls the appropriate function.
     """
-    event_type = payload.get("eventType", "UNKNOWN")
-    student_id = payload.get("studentId")
-    metadata = payload.get("metadata", {})
+    event_type = payload.get(contract.FIELD_EVENT_TYPE, "UNKNOWN")
+    student_id = payload.get(contract.FIELD_STUDENT_ID)
+    # NOT payload.get("metadata", {}): a default applies only to a MISSING key,
+    # so an explicit null came back as None and .get() below raised
+    # AttributeError. See ai_event_contract.metadata_of.
+    metadata = contract.metadata_of(payload)
 
     print(f"[AMQP] Processing event: type={event_type}, studentId={student_id}")
 
-    if event_type in ("SKILL_UPDATED", "PROFILE_UPDATED"):
+    if event_type in contract.HANDLED_EVENT_TYPES:
         # Extract the student's skills from the metadata sent by Java
         # Java's AIEventPublisher puts skillId/skillName in metadata
         student_skills = metadata.get("skills", [])

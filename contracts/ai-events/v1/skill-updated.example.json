@@ -1,0 +1,6 @@
+{
+  "eventType": "SKILL_UPDATED",
+  "studentId": 31,
+  "collegeId": 1,
+  "metadata": { "skillId": 7 }
+}

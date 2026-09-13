@@ -168,6 +168,23 @@
 			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!--
+			JSON Schema validation, for the Java half of the AI event contract.
+
+			contracts/ai-events/v1/ai-event.schema.json is the single definition
+			of the message the backend publishes and the Python AI service
+			consumes. AiEventContractTest validates what the publisher actually
+			sends against that file; tests/test_ai_event_contract.py validates the
+			consumer against the same file. Neither language can change the wire
+			format alone.
+		-->
+		<dependency>
+			<groupId>com.networknt</groupId>
+			<artifactId>json-schema-validator</artifactId>
+			<version>1.5.4</version>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>com.opencsv</groupId>
 			<artifactId>opencsv</artifactId>

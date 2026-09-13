@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillbridge.local/contracts/ai-events/v1/ai-event.schema.json",
+  "title": "AIEvent",
+  "description": "The message the Java backend publishes to RabbitMQ and the Python AI service consumes. This file is the single definition of that wire format: both sides are tested against it, so neither can change it alone. Produced by com.skillbridge.shared.messaging.AIEvent; consumed by skillbridge-ai-service/main.py::_process_rabbitmq_message.",
+  "type": "object",
+  "required": ["eventType", "studentId", "collegeId"],
+  "additionalProperties": false,
+  "properties": {
+    "eventType": {
+      "description": "Which handler runs. The consumer dispatches on this exact string and skips anything it does not recognise, so adding a value here without adding a handler means the event is acknowledged and discarded.",
+      "type": "string",
+      "enum": ["SKILL_UPDATED", "PROFILE_UPDATED"]
+    },
+    "studentId": {
+      "description": "The student this event is about.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "collegeId": {
+      "description": "Tenant discriminator. NOTE: the Python consumer does not currently read this field, so AI analysis is not tenant-scoped. It is required here because the producer always sends it and scoping the consumer is Phase 12 work; dropping it from the wire now would make that harder.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "metadata": {
+      "description": "Optional per-event detail. MUST be an object or null, never a scalar. The consumer calls .get() on it, so a bare number raises AttributeError, the message is nacked with requeue=false, and the event is discarded -- which is exactly what SKILL_UPDATED did before this contract existed.",
+      "type": ["object", "null"],
+      "properties": {
+        "skillId": {
+          "description": "Set by SKILL_UPDATED: which skill changed.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "skills": {
+          "description": "Optional pre-resolved skill names. When absent the consumer falls back to reading them from the database.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

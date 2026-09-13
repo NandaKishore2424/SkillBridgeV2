@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 
@@ -49,7 +50,21 @@ public class AIEventPublisher {
      * @param skillId    which specific skill was added/updated
      */
     public void publishSkillUpdated(Long studentId, Long collegeId, Long skillId) {
-        AIEvent event = new AIEvent("SKILL_UPDATED", studentId, collegeId, skillId);
+        // A MAP, not the bare Long this used to send.
+        //
+        // `metadata` is typed Object, so `skillId` serialised as a JSON number.
+        // The consumer does `metadata.get("skills", [])`, which on a number
+        // raises AttributeError, and _rabbitmq_callback nacks with
+        // requeue=false. There is no dead-letter queue, so every SKILL_UPDATED
+        // event ever published was discarded with a stack trace on stdout.
+        // Nothing failed loudly because publishing is fire-and-forget and the
+        // consumer prints rather than alerts.
+        //
+        // contracts/ai-events/v1/ai-event.schema.json now says metadata is an
+        // object or null, and AiEventContractTest fails the build if this
+        // stops being true.
+        AIEvent event = new AIEvent("SKILL_UPDATED", studentId, collegeId,
+                Map.of("skillId", skillId));
         send(event);
     }
 
