@@ -4,7 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.EnumerablePropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Points the integration tier at a throwaway PostgreSQL instead of the live
@@ -89,25 +90,53 @@ public class PostgresContainerInitializer
             log.info("skillbridge.test.db=live -- integration tests will use application-local.yaml");
             return;
         }
+        context.getEnvironment().getPropertySources().addFirst(new LazyContainerProperties());
+    }
 
-        PostgreSQLContainer<?> pg = startOnce();
+    /**
+     * Supplies the datasource properties, starting the container on first ask.
+     *
+     * <p>This initializer is registered for <i>every</i> test context, and most
+     * slice tests do not want a database: {@code @WebMvcTest} excludes the
+     * datasource auto-configuration entirely, so nothing in such a context ever
+     * resolves {@code spring.datasource.url}. Starting the container eagerly
+     * would add a container start to every web-slice test and put a database
+     * behind tests written specifically to prove they do not need one.
+     *
+     * <p>So the values are behind a supplier. Ask for one and the container
+     * starts; never ask and it never does.
+     */
+    private static final class LazyContainerProperties extends EnumerablePropertySource<Object> {
 
-        Map<String, Object> overrides = new LinkedHashMap<>();
-        overrides.put("spring.datasource.url", pg.getJdbcUrl());
-        overrides.put("spring.datasource.username", pg.getUsername());
-        overrides.put("spring.datasource.password", pg.getPassword());
-        overrides.put("spring.datasource.driver-class-name", pg.getDriverClassName());
-        // The 3-connection cap in application-test.yaml exists to stay under the
-        // Supabase pooler's 15. A local container has no such ceiling, but the
-        // tier is sequential so nothing here needs more.
-        overrides.put("spring.datasource.hikari.maximum-pool-size", 5);
-        // Local: a connection opens in single-digit milliseconds rather than the
-        // 1171 ms measured to ap-northeast-2, so the 20 s allowance for a
-        // throttled link is no longer buying anything.
-        overrides.put("spring.datasource.hikari.connection-timeout", 5000);
+        private static final Map<String, Function<PostgreSQLContainer<?>, Object>> VALUES =
+                new LinkedHashMap<>(Map.of(
+                        "spring.datasource.url", PostgreSQLContainer::getJdbcUrl,
+                        "spring.datasource.username", PostgreSQLContainer::getUsername,
+                        "spring.datasource.password", PostgreSQLContainer::getPassword,
+                        "spring.datasource.driver-class-name", PostgreSQLContainer::getDriverClassName,
+                        // The 3-connection cap in application-test.yaml exists to
+                        // stay under the Supabase pooler's 15. A local container
+                        // has no such ceiling; the tier is sequential regardless.
+                        "spring.datasource.hikari.maximum-pool-size", pg -> 5,
+                        // Local connections open in single-digit milliseconds
+                        // rather than the 1171 ms measured to ap-northeast-2, so
+                        // the 20 s allowance for a throttled link buys nothing.
+                        "spring.datasource.hikari.connection-timeout", pg -> 5000));
 
-        context.getEnvironment().getPropertySources()
-                .addFirst(new MapPropertySource("testcontainers-postgres", overrides));
+        LazyContainerProperties() {
+            super("testcontainers-postgres", new Object());
+        }
+
+        @Override
+        public String[] getPropertyNames() {
+            return VALUES.keySet().toArray(String[]::new);
+        }
+
+        @Override
+        public Object getProperty(String name) {
+            Function<PostgreSQLContainer<?>, Object> value = VALUES.get(name);
+            return value == null ? null : value.apply(startOnce());
+        }
     }
 
     private static boolean usingLiveDatabase() {
