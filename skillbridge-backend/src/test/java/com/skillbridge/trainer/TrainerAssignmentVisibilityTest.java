@@ -5,12 +5,12 @@ import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.security.AuthenticatedUser;
 import com.skillbridge.batch.service.BatchAssignmentService;
 import com.skillbridge.common.exception.ForbiddenException;
+import com.skillbridge.testsupport.IntegrationTest;
 import com.skillbridge.trainer.service.TrainerDashboardService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -46,8 +46,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * one thing this file does.
  */
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class TrainerAssignmentVisibilityTest {
 
     private static final String COLLEGE_CODE = "TRNVISIBILITY";

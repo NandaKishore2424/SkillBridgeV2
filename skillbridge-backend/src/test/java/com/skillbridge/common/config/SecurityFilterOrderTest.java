@@ -2,10 +2,10 @@ package com.skillbridge.common.config;
 
 import com.skillbridge.auth.filter.TokenAuthenticationFilter;
 import com.skillbridge.common.throttle.RateLimitingFilter;
+import com.skillbridge.testsupport.IntegrationTest;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.web.FilterChainProxy;
@@ -32,8 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code RateLimitingFilterTest} covers directly.
  */
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class SecurityFilterOrderTest {
 
     @Autowired private FilterChainProxy springSecurityFilterChain;

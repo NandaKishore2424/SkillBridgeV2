@@ -3,12 +3,12 @@ package com.skillbridge.idempotency;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.UserRepository;
 import com.skillbridge.auth.service.JwtService;
+import com.skillbridge.testsupport.IntegrationTest;
 import com.skillbridge.testsupport.TenantFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -42,8 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * create twice leaves two identical rows and nothing to tell them apart.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class IdempotencyContractTest {
 
     private static final String COLLEGE_CODE = "IDEMPOTENT";

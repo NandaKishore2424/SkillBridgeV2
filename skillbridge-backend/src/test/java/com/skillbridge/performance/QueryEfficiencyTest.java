@@ -8,6 +8,7 @@ import com.skillbridge.student.controller.StudentAdminController;
 import com.skillbridge.student.service.StudentDashboardService;
 import com.skillbridge.syllabus.service.SyllabusService;
 import com.skillbridge.testsupport.InMemoryPaginationDetector;
+import com.skillbridge.testsupport.IntegrationTest;
 import com.skillbridge.testsupport.QueryCountAssertion;
 import com.skillbridge.testsupport.TenantFixture;
 import com.skillbridge.trainer.service.TrainerDashboardService;
@@ -16,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -55,8 +55,7 @@ import static com.skillbridge.common.dto.Pagination.of;
  */
 @SpringBootTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class QueryEfficiencyTest {
 
     private static final String SMALL_CODE = "PERFSMALL";

@@ -1,5 +1,6 @@
 package com.skillbridge.trainer;
 
+import com.skillbridge.testsupport.IntegrationTest;
 import com.skillbridge.trainer.dto.TrainerBatchDTO;
 import com.skillbridge.trainer.dto.TrainerStudentDTO;
 import com.skillbridge.trainer.service.TrainerDashboardService;
@@ -7,7 +8,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
@@ -36,8 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * on one row and proves nothing about the second page.
  */
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class TrainerDashboardPaginationTest {
 
     private static final String COLLEGE_CODE = "TRNPAGETEST";

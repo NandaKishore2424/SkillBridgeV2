@@ -1,7 +1,7 @@
 package com.skillbridge;
 
+import com.skillbridge.testsupport.IntegrationTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
@@ -24,8 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * integration layer.
  */
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class SkillbridgeBackendApplicationTests {
 
     @Test

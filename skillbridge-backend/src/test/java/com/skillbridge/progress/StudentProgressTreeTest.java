@@ -7,12 +7,12 @@ import com.skillbridge.progress.dto.ModuleProgressDTO;
 import com.skillbridge.progress.dto.SubmoduleProgressDTO;
 import com.skillbridge.progress.dto.TopicProgressDTO;
 import com.skillbridge.progress.service.ProgressService;
+import com.skillbridge.testsupport.IntegrationTest;
 import com.skillbridge.testsupport.TenantFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -43,8 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * any particular number being right in isolation.
  */
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class StudentProgressTreeTest {
 
     private static final String COLLEGE_CODE = "PROGRESSTREE";

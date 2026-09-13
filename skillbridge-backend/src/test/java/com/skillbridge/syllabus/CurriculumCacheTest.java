@@ -8,13 +8,13 @@ import com.skillbridge.common.exception.ResourceNotFoundException;
 import com.skillbridge.syllabus.dto.CreateModuleRequest;
 import com.skillbridge.syllabus.dto.SyllabusModuleDTO;
 import com.skillbridge.syllabus.service.SyllabusService;
+import com.skillbridge.testsupport.IntegrationTest;
 import com.skillbridge.testsupport.QueryCountAssertion;
 import com.skillbridge.testsupport.TenantFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
@@ -45,8 +45,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * implementation, which is the whole point of writing it.
  */
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class CurriculumCacheTest {
 
     private static final String OWNER = "CURRICOWNER";

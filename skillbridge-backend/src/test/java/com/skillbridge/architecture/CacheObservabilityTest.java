@@ -1,11 +1,11 @@
 package com.skillbridge.architecture;
 
 import com.skillbridge.common.cache.L1CacheConfig;
+import com.skillbridge.testsupport.IntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -31,8 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * in a dashboard nobody is looking at yet.
  */
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class CacheObservabilityTest {
 
     @Autowired private MeterRegistry registry;

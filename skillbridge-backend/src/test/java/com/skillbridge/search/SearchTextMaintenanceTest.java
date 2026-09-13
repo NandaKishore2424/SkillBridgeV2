@@ -3,12 +3,12 @@ package com.skillbridge.search;
 import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.student.dto.StudentDTO;
 import com.skillbridge.student.service.StudentService;
+import com.skillbridge.testsupport.IntegrationTest;
 import com.skillbridge.testsupport.TenantFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
@@ -44,8 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * searches for the new value.
  */
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class SearchTextMaintenanceTest {
 
     private static final String COLLEGE_CODE = "SEARCHTEXT";

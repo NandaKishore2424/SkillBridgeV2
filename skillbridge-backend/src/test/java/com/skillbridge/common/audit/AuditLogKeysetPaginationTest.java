@@ -2,11 +2,11 @@ package com.skillbridge.common.audit;
 
 import com.skillbridge.common.dto.Cursor;
 import com.skillbridge.common.dto.CursorPage;
+import com.skillbridge.testsupport.IntegrationTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
@@ -36,8 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * not the edge.
  */
 @SpringBootTest
-@EnabledIfEnvironmentVariable(named = "DATABASE_URL", matches = ".+",
-        disabledReason = "needs a PostgreSQL instance; set DATABASE_URL to run")
+@IntegrationTest
 class AuditLogKeysetPaginationTest {
 
     /** Marks the fixture rows so teardown never touches real audit history. */

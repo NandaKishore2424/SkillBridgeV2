@@ -175,6 +175,27 @@
 
 				`local` stays first: it carries the datasource. `test` only overrides.
 			-->
+			<!--
+				THE TWO TIERS.
+
+				`mvn test`   -> Surefire  -> everything except the `integration` group.
+				`mvn verify` -> Failsafe  -> the `integration` group as well.
+
+				The split exists because the suite used to make this decision for
+				itself. Eighteen classes carried
+				`@EnabledIfEnvironmentVariable(named = "DATABASE_URL")`, and with no
+				such variable `mvn test` reported "Tests run: 169, Skipped: 64" and
+				BUILD SUCCESS in 6.4 seconds. CI ran exactly that on every push. The
+				tenant filter, token revocation, idempotency and the query-count
+				budget were never executed there and the build was green throughout.
+
+				A test that decides for itself whether to run turns a missing
+				dependency into a passing build. So the build decides instead: the
+				fast tier always runs in full and is expected to skip nothing, and
+				the integration tier fails when it cannot reach a database rather
+				than passing empty. `SuiteTieringTest` fails the build if a test
+				starts gating itself again.
+			-->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
@@ -182,7 +203,48 @@
 					<systemPropertyVariables>
 						<spring.profiles.active>local,test</spring.profiles.active>
 					</systemPropertyVariables>
+					<excludedGroups>integration</excludedGroups>
+					<!--
+						A fast tier that skips something is a fast tier that is lying
+						about its coverage, which is the whole defect this split
+						exists to close. Nothing in it is conditional, so anything
+						skipped is a mistake and the build should say so.
+					-->
+					<failIfNoTests>true</failIfNoTests>
 				</configuration>
+			</plugin>
+			<!--
+				Failsafe runs the integration tier. Two deliberate settings:
+
+				`<includes>` overrides the default `**/*IT.java`, because these
+				classes are named `*Test` and renaming eighteen of them would break
+				every reference in the docs and the session log for no gain.
+
+				`<skipAfterFailureCount>` is absent on purpose: a connection failure
+				in one class usually means the pooler is exhausted (gotcha 13) and
+				the rest will fail too, but which ones fail is the diagnostic.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<spring.profiles.active>local,test</spring.profiles.active>
+					</systemPropertyVariables>
+					<groups>integration</groups>
+					<includes>
+						<include>**/*Test.java</include>
+						<include>**/*Tests.java</include>
+					</includes>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
