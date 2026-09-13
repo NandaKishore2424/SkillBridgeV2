@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.ArrayList;
@@ -110,15 +111,15 @@ class SuiteTieringTest {
     }
 
     @Test
-    @DisplayName("every @SpringBootTest is tagged @IntegrationTest")
-    void springContextTestsAreTaggedIntegration() {
+    @DisplayName("every test that needs a database is tagged @IntegrationTest")
+    void databaseBackedTestsAreTaggedIntegration() {
         List<String> violations = new ArrayList<>();
 
         for (JavaClass c : testClasses()) {
-            if (c.isAnnotatedWith(SpringBootTest.class) && !c.isAnnotatedWith(IntegrationTest.class)) {
+            if (needsDatabase(c) && !c.isAnnotatedWith(IntegrationTest.class)) {
                 violations.add(c.getName()
-                        + " starts a Spring context but is not tagged @IntegrationTest, so it "
-                        + "would run in the fast tier and reach for a database that is not "
+                        + " loads a context with a datasource but is not tagged @IntegrationTest, "
+                        + "so it would run in the fast tier and reach for a database that is not "
                         + "there.");
             }
         }
@@ -137,16 +138,30 @@ class SuiteTieringTest {
             if (TAGGED_WITHOUT_CONTEXT.contains(c.getFullName())) {
                 continue;
             }
-            if (c.isAnnotatedWith(IntegrationTest.class) && !c.isAnnotatedWith(SpringBootTest.class)) {
+            if (c.isAnnotatedWith(IntegrationTest.class) && !needsDatabase(c)) {
                 violations.add(c.getName()
-                        + " is tagged @IntegrationTest but starts no Spring context. The tag "
-                        + "removes it from the fast tier for nothing.");
+                        + " is tagged @IntegrationTest but loads no context with a datasource. "
+                        + "The tag removes it from the fast tier for nothing.");
             }
         }
 
         assertThat(violations)
                 .as("the tag must mean `needs a database`, or it becomes a way to hide a test")
                 .isEmpty();
+    }
+
+    /**
+     * Whether this class loads a context that will want a datasource.
+     *
+     * <p>{@code @WebMvcTest} is deliberately absent: it excludes the datasource
+     * auto-configuration, so a controller slice belongs in the fast tier and the
+     * lazy container initializer never starts anything for it. Adding a slice
+     * annotation that *does* touch the database ({@code @JdbcTest},
+     * {@code @DataR2dbcTest}) means adding it here, or it silently runs in the
+     * fast tier.
+     */
+    private static boolean needsDatabase(JavaClass c) {
+        return c.isAnnotatedWith(SpringBootTest.class) || c.isAnnotatedWith(DataJpaTest.class);
     }
 
     /** Test classes only: anything whose simple name ends in Test. */
