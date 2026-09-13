@@ -50,23 +50,34 @@ jobs:
       - name: Fast tier budget and zero-skip
         run: ./scripts/check-test-budget.sh
 
-  # THE INTEGRATION TIER IS NOT RUN HERE, AND ITS ABSENCE IS THE POINT.
-  #
-  # `mvn verify` runs the 64 tests that need a real PostgreSQL with pgvector,
-  # pg_trgm, generated columns and advisory locks. There is nowhere in this
-  # workflow to get one: the only database is the live Supabase project, whose
-  # pooler allows the whole project 15 connections and whose credentials are not
-  # in CI. Pointing CI at it would have every push compete with the running
-  # application for those 15 (gotcha 13) and write test rows into live data.
-  #
-  # So the job is absent rather than present-and-empty. A missing job is visible
-  # in the checks list; a green job that skipped everything is not, which is the
-  # failure this whole split exists to close. Do not "fix" this by adding the
-  # tier back with a self-disabling gate.
-  #
-  # What unblocks it: db/schema/baseline.sql, added 2026-09-13, makes a matching
-  # throwaway PostgreSQL buildable for the first time. Phase 11 Task 4 moves the
-  # tier onto Testcontainers seeded from it, and this job becomes real.
+  integration:
+    name: Backend integration tier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: maven
+
+      # The 64 tests that need a real PostgreSQL. Until 2026-09-13 they could
+      # not run here at all: they need pgvector, pg_trgm, generated columns and
+      # partial GIN indexes, H2 has none of those, and the only database that
+      # did was the live Supabase project -- whose pooler allows this whole
+      # project 15 connections and whose credentials are not in CI.
+      #
+      # What unblocked it was not Testcontainers. It was having a schema at all.
+      # Flyway was removed on 2026-09-06 and the schema then existed in exactly
+      # one place: inside the live database. db/schema/baseline.sql is that
+      # schema, captured and diff-verified against live (551 catalogue objects,
+      # identical digests on live and on pgvector/pgvector:pg17), and
+      # PostgresContainerInitializer builds each run's database from it.
+      #
+      # Docker is available on ubuntu-latest, so Testcontainers needs no setup.
+      - name: Integration tier
+        working-directory: skillbridge-backend
+        run: ./mvnw -B clean verify
 
   frontend:
     name: Frontend build

@@ -143,6 +143,31 @@
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!--
+			Testcontainers. Spring Boot's parent manages the version, so none is
+			declared here.
+
+			This became possible on 2026-09-13 and not before. The integration tier
+			needs a PostgreSQL with pgvector, pg_trgm, generated columns and partial
+			GIN indexes. H2 has none of them, and a green tick from H2 would prove
+			less than no tick at all. Building a matching container needed a schema,
+			and after Flyway was removed the schema existed only inside the live
+			Supabase project. db/schema/baseline.sql is that schema, and it
+			reproduces live's catalogue exactly: 551 objects, digest
+			31ef5166e257821574abad4853b7bdad, on live and on a fresh
+			pgvector/pgvector:pg17 alike.
+		-->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>com.opencsv</groupId>
 			<artifactId>opencsv</artifactId>

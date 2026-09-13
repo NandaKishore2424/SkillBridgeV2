@@ -1,8 +1,16 @@
 # Profile for the integration tests.
 #
-# The datasource is NOT set here: tests run against whatever application-local
-# provides, gated on DATABASE_URL being set. That gate is deliberate -- without
-# it the integration tests skip silently and a green run proves nothing.
+# The datasource is NOT set here. As of 2026-09-13 it comes from
+# PostgresContainerInitializer, which starts a pgvector/pgvector:pg17 container
+# and builds it from db/schema/baseline.sql. Set SKILLBRIDGE_TEST_DB=live to run
+# against application-local.yaml instead.
+#
+# This block used to say the datasource came from application-local "gated on
+# DATABASE_URL being set", and that "the gate is deliberate -- without it the
+# integration tests skip silently and a green run proves nothing." The gate was
+# the thing producing exactly that: with no DATABASE_URL, CI ran `mvn test` and
+# reported "Tests run: 169, Skipped: 64, BUILD SUCCESS" on every push. The tests
+# are now tiered by the build instead, and they run in CI.
 #
 # What this profile adds is visibility. When a query-count assertion fails, the
 # first question is always "which queries?", and answering it should not require

@@ -42,6 +42,9 @@ class AuditLogKeysetPaginationTest {
     /** Marks the fixture rows so teardown never touches real audit history. */
     private static final String FIXTURE_ACTION = "KEYSET_PAGINATION_TEST";
 
+    /** The fixture's own college, so the seek has a tenant that exists. */
+    private static final String FIXTURE_COLLEGE_CODE = "KEYSETPAGTEST";
+
     /** Well past any real row, so the fixture is always the newest thing. */
     private static final LocalDateTime TIED_AT = LocalDateTime.of(2099, 1, 1, 12, 0, 0);
 
@@ -59,7 +62,7 @@ class AuditLogKeysetPaginationTest {
     @BeforeEach
     void seed() {
         removeFixture();
-        collegeId = jdbc.queryForObject("SELECT min(id) FROM colleges", Long.class);
+        collegeId = seedCollege();
 
         // All fifteen share one timestamp. With PAGE_SIZE 4 they span four page
         // boundaries, so a cursor that cannot break the tie has four chances to
@@ -79,6 +82,32 @@ class AuditLogKeysetPaginationTest {
 
     private void removeFixture() {
         jdbc.update("DELETE FROM audit_log WHERE action = ?", FIXTURE_ACTION);
+        jdbc.update("DELETE FROM colleges WHERE code = ?", FIXTURE_COLLEGE_CODE);
+    }
+
+    /**
+     * The fixture's own college.
+     *
+     * <p>This used to be {@code SELECT min(id) FROM colleges} — borrowing
+     * whichever tenant happened to be first. Against live that always resolved
+     * to something; against an empty database it resolves to {@code NULL}, the
+     * fifteen rows are written with a null {@code college_id}, and
+     * {@code seekByCollegeAndAction} matches none of them. The test then fails
+     * with "Expected size: 15 but was: 0", which reads like a broken cursor and
+     * is really a missing tenant.
+     *
+     * <p>Seeding its own is both the fix and the stronger test: the rows now
+     * belong to a college that contains nothing else, so the seek is walking the
+     * fixture and only the fixture.
+     */
+    private Long seedCollege() {
+        jdbc.update("""
+                INSERT INTO colleges (name, code, email, phone, address, status, created_at, updated_at)
+                VALUES ('Keyset Pagination Test College', ?, 'keyset@example.invalid',
+                        '0000000000', 'n/a', 'ACTIVE', now(), now())
+                """, FIXTURE_COLLEGE_CODE);
+        return jdbc.queryForObject(
+                "SELECT id FROM colleges WHERE code = ?", Long.class, FIXTURE_COLLEGE_CODE);
     }
 
     @Test

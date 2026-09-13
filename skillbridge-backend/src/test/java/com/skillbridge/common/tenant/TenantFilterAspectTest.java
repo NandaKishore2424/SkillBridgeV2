@@ -50,15 +50,25 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ul>
  *
  * <p>It needs at least two colleges with batches to mean anything, so it creates
- * its own second college and removes it afterwards. Depending on whatever
- * happens to be in the database would make it pass vacuously on a single-tenant
+ * <b>both</b> of them and removes them afterwards. Depending on whatever happens
+ * to be in the database would make it pass vacuously on a single-tenant
  * instance — which is the state the original bug hid in.
+ *
+ * <p>It used to create only one and borrow the other from whatever was already
+ * there, while this comment claimed it was self-sufficient. Against the live
+ * database that was invisible: there was always a second college with batches.
+ * The first run against an empty container failed with <i>"needs batches in at
+ * least two colleges to prove scoping; found 1"</i> — its own precondition,
+ * which had never once been the thing it was measuring. <b>A test that asserts
+ * its precondition still has to establish it</b>, or the assertion only says
+ * what the database happened to contain.
  */
 @SpringBootTest
 @IntegrationTest
 class TenantFilterAspectTest {
 
-    private static final String FIXTURE_CODE = "TNTFILTERTEST";
+    private static final String FIXTURE_CODE_A = "TNTFILTERTESTA";
+    private static final String FIXTURE_CODE_B = "TNTFILTERTESTB";
 
     @Autowired
     private TenantScopedProbe probe;
@@ -67,27 +77,38 @@ class TenantFilterAspectTest {
     private JdbcTemplate jdbc;
 
     /**
-     * A throwaway second college with one batch.
+     * Two throwaway colleges, each with one batch.
+     *
+     * <p><b>Both</b>, not one. Scoping cannot be demonstrated with a single
+     * tenant: a filtered query and an unfiltered one return the same rows, and
+     * the test passes either way. Creating only one and letting the database
+     * supply the other is how this test came to depend on live data while its
+     * own comment said it did not.
      *
      * <p>Written with JDBC rather than the repositories on purpose: the entities
      * carry {@code @SQLRestriction} and a tenant filter, and a fixture that has
      * to dodge the very mechanisms under test is not a fixture worth trusting.
      */
     @BeforeEach
-    void createSecondCollege() {
+    void createTwoColleges() {
         removeFixture();
+        seedCollegeWithBatch(FIXTURE_CODE_A);
+        seedCollegeWithBatch(FIXTURE_CODE_B);
+    }
+
+    private void seedCollegeWithBatch(String code) {
         jdbc.update("""
                 INSERT INTO colleges (name, code, email, phone, address, status, created_at, updated_at)
-                VALUES ('Tenant Filter Test College', ?, 'tenant-filter@example.invalid',
+                VALUES ('Tenant Filter Test College ' || ?, ?, 'tenant-filter@example.invalid',
                         '0000000000', 'n/a', 'ACTIVE', now(), now())
-                """, FIXTURE_CODE);
+                """, code, code);
         jdbc.update("""
                 INSERT INTO batches (college_id, name, description, status,
                                      start_date, end_date, created_at, updated_at, version)
                 SELECT id, 'Tenant Filter Test Batch', 'fixture', 'UPCOMING',
                        CURRENT_DATE, CURRENT_DATE + 30, now(), now(), 0
                 FROM colleges WHERE code = ?
-                """, FIXTURE_CODE);
+                """, code);
     }
 
     @AfterEach
@@ -97,40 +118,55 @@ class TenantFilterAspectTest {
     }
 
     private void removeFixture() {
-        jdbc.update("DELETE FROM batches WHERE college_id IN (SELECT id FROM colleges WHERE code = ?)",
-                FIXTURE_CODE);
-        jdbc.update("DELETE FROM colleges WHERE code = ?", FIXTURE_CODE);
+        for (String code : new String[]{FIXTURE_CODE_A, FIXTURE_CODE_B}) {
+            jdbc.update("DELETE FROM batches WHERE college_id IN (SELECT id FROM colleges WHERE code = ?)",
+                    code);
+            jdbc.update("DELETE FROM colleges WHERE code = ?", code);
+        }
+    }
+
+    /** The college ids this test created, in insertion order. */
+    private List<Long> fixtureCollegeIds() {
+        return jdbc.queryForList(
+                "SELECT id FROM colleges WHERE code IN (?, ?) ORDER BY id",
+                Long.class, FIXTURE_CODE_A, FIXTURE_CODE_B);
     }
 
     @Test
     @DisplayName("a college-scoped caller sees only their own college's batches")
     void filterScopesAnUnqualifiedQuery() {
+        List<Long> fixtures = fixtureCollegeIds();
+        assertThat(fixtures)
+                .as("the fixture must create both colleges itself; borrowing one from the "
+                        + "database is how this test used to pass vacuously")
+                .hasSize(2);
+        Long mine = fixtures.get(0);
+        Long theirs = fixtures.get(1);
+
         authenticateAs(null, "SYSTEM_ADMIN");
-        List<Long> allColleges = probe.collegeIdsOfAllBatches();
+        assertThat(probe.collegeIdsOfAllBatches())
+                .as("unscoped, both fixture colleges' batches are visible")
+                .contains(mine, theirs);
 
-        long distinct = allColleges.stream().distinct().count();
-        assertThat(distinct)
-                .as("needs batches in at least two colleges to prove scoping; found %d", distinct)
-                .isGreaterThanOrEqualTo(2);
-
-        // Scope to a college that is NOT the fixture, so the assertion proves the
-        // fixture's batch was excluded rather than that it was the only match.
-        Long mine = allColleges.get(0);
         authenticateAs(mine, "COLLEGE_ADMIN");
 
         assertThat(probe.collegeIdsOfAllBatches())
                 .as("findAll() has no college predicate, so anything here came through the filter")
                 .isNotEmpty()
-                .containsOnly(mine);
+                .containsOnly(mine)
+                .doesNotContain(theirs);
     }
 
     @Test
     @DisplayName("a SYSTEM_ADMIN is deliberately unscoped")
     void systemAdminSeesEveryCollege() {
+        List<Long> fixtures = fixtureCollegeIds();
+        assertThat(fixtures).hasSize(2);
+
         authenticateAs(null, "SYSTEM_ADMIN");
-        assertThat(probe.collegeIdsOfAllBatches().stream().distinct().count())
+        assertThat(probe.collegeIdsOfAllBatches())
                 .as("a system admin must not be tenant-filtered")
-                .isGreaterThanOrEqualTo(2);
+                .contains(fixtures.get(0), fixtures.get(1));
     }
 
     private void authenticateAs(Long collegeId, String roleName) {

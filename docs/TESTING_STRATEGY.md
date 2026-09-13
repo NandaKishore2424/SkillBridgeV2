@@ -11,13 +11,16 @@
 | Tier | Classes | Tests | Runtime | Needs | Command |
 |---|---|---|---|---|---|
 | **Fast** — unit + architecture | 17 | 108 | **4.9 s** | nothing | `mvn test` |
-| **Integration** — Spring + real Postgres | 20 | 64 | **~10 min** | live database, broker | `mvn verify` |
+| **Integration** — Spring + real Postgres | 20 | 64 | **~50 s** | Docker | `mvn verify` |
 
-Both measured on 2026-09-13: `mvn verify` end to end was **10 m 38 s**, of which
-the fast tier is five seconds. The integration tier's time is dominated by
-Spring context starts against a database in `ap-northeast-2` — a single
-`@SpringBootTest` costs 5–46 s to boot — so **that number measures the link, not
-the code**, and it is not worth optimising until the tier runs locally.
+**172 tests, 0 skipped, 55 seconds end to end**, measured 2026-09-13. All of it
+runs in CI.
+
+The integration tier used to run against the live Supabase database and took
+**10 m 38 s** for the same 64 tests — 11× longer, because the time was Spring
+contexts booting against `ap-northeast-2`, 5–46 s each. That number measured the
+link, not the code. It also produced one transport-level flake per run, needed
+credentials CI does not have, and wrote rows into production data.
 
 Budget for the fast tier is **30 s**, enforced by `scripts/check-test-budget.sh`
 and wired into CI. At 4.9 s there is room; the budget exists to notice the day
@@ -71,52 +74,94 @@ human notices, rather than *green having tested nothing*, which nobody does.
 
 ---
 
-## Why the integration tier is not in CI yet
+## How the integration tier gets its database
 
 `mvn verify` needs a real PostgreSQL with `pgvector`, `pg_trgm`, generated
 columns, partial GIN indexes and advisory locks. H2 has none of those, and a
 green tick from H2 would prove less than no tick at all.
 
-Until 2026-09-13 there was nowhere to get one: Flyway had been removed, and the
-schema existed only inside the live Supabase project — there was not one
-`CREATE TABLE` statement in the repository. `db/schema/baseline.sql` closes that,
-and Phase 11 Task 4 moves the tier onto Testcontainers seeded from it.
+Until 2026-09-13 there was nowhere to get one, and the blocker was not
+Testcontainers — it was that there was no schema to build from. Flyway had been
+removed and the schema existed only inside the live Supabase project; there was
+not one `CREATE TABLE` statement in the repository.
 
-Pointing CI at the live database instead is not an option and should not be
-attempted: the pooler allows this whole project 15 connections, the running
-application already holds 12 of them, and every push would write test rows into
-production data.
+`db/schema/baseline.sql` is that schema, captured and diff-verified against live.
+`PostgresContainerInitializer` starts one `pgvector/pgvector:pg17` container per
+JVM and builds each run's database from the baseline plus
+`db/schema/reference-data.sql` (the four `roles` rows, which are reference data
+rather than fixture). It is registered through `src/test/resources/META-INF/spring.factories`,
+so no test class has to know it exists.
+
+The container is deliberately **not** `withReuse(true)`. Reuse leaves a container
+holding the previous run's rows, and a test that passes because of data another
+test left behind is the exact failure this tier exists to catch.
+
+To run against the live database instead — occasionally useful for confirming a
+schema change landed — set `SKILLBRIDGE_TEST_DB=live`. Do it knowing that it
+writes to production data and competes with the running application for the
+pooler's 15 connections.
 
 ---
 
-## The integration tier is not reliably green, and that is a property of where it runs
+## What moving to a clean database exposed
 
-The first full `mvn verify` after the split ran **64 integration tests, 0
-skipped, 1 error** — `SearchTextMaintenanceTest.findableByEmail`. The same class
-passed on retry with nothing changed.
+The first run of the integration tier against an empty container failed **4 of
+64 tests**, in two classes. None of them was a container problem. All four were
+tests that had been quietly reading whatever the live database happened to
+contain.
 
-It was not the code. Every root cause in the stack was transport-level:
+**`TenantFilterAspectTest`** asserts its own precondition — *"needs batches in at
+least two colleges to prove scoping"* — and then failed it, finding 1. Its
+fixture created one college and borrowed the second from the database. Its class
+comment meanwhile said, in as many words, that it creates its own second college
+*"because depending on whatever happens to be in the database would make it pass
+vacuously on a single-tenant instance — which is the state the original bug hid
+in."* The comment described the right design. The code was one college short,
+and against live nothing ever revealed the difference.
+
+> **A test that asserts its precondition still has to establish it.** Otherwise
+> the assertion is not a guard, it is a description of what the database happened
+> to contain that day.
+
+**`AuditLogKeysetPaginationTest`** took its tenant from
+`SELECT min(id) FROM colleges`. On an empty database that is `NULL`, so fifteen
+rows were written with a null `college_id` and the scoped seek matched none of
+them. It failed with *"Expected size: 15 but was: 0"* — which reads like a broken
+cursor and was really a missing tenant.
+
+Both now seed what they need. Both are stronger for it: the tenant test names the
+two colleges it created and asserts the other one is *excluded*, and the audit
+test walks a college that contains nothing but its own fixture.
+
+**The general form:** a suite that has only ever run against one populated
+database cannot tell you which of its tests depend on that database. Running it
+once against an empty one is the cheapest possible audit, and it found four in a
+single run here.
+
+### The flakiness that is now gone
+
+Before the move, the first full `mvn verify` against live ran 64 tests with one
+error in `SearchTextMaintenanceTest`, which passed on retry with nothing changed.
+Every root cause was transport-level:
 
 ```
 Caused by: java.net.SocketException: Connection reset
 Caused by: org.postgresql.util.PSQLException: An I/O error occurred while sending to the backend.
-Caused by: java.sql.SQLException: Connection is closed
 ```
 
 That is gotcha 10, and the tell is that the root causes are `Connection reset`
-and `I/O error` rather than an assertion. Before believing a red integration
-run, check:
+rather than an assertion. One flake per ten-minute run is not something you can
+gate a merge on: it teaches people to re-run until green, which is how a real
+failure gets re-run away. Running locally removes the network from the question
+entirely.
+
+If you do run with `SKILLBRIDGE_TEST_DB=live` and see a wide red suite, check the
+link before the code:
 
 ```bash
 grep "Caused by:" target/failsafe-reports/*.txt | sort | uniq -c
 python3 -c "import socket,time; t=time.perf_counter(); socket.create_connection(('aws-1-ap-northeast-2.pooler.supabase.com',5432),timeout=8).close(); print(f'{(time.perf_counter()-t)*1000:.0f} ms')"
 ```
-
-**One transport error per ten-minute run is not a suite you can gate a merge
-on.** This is the strongest argument for Task 4: a tier that is flaky for
-reasons unrelated to the code teaches people to re-run it until it is green,
-which is how a real failure gets re-run away. Moving it onto a local container
-removes the network from the equation entirely.
 
 ---
 
@@ -186,12 +231,21 @@ cd skillbridge-backend && ./mvnw -B clean test   # fast tier: 108, expect 0 skip
 cd skillbridge-frontend && npm run build
 ```
 
-The integration tier, when you have the database to yourself:
+Everything, including the integration tier. Needs Docker; needs nothing else,
+and in particular no longer needs the application stopped or the database to
+yourself:
+
+```bash
+cd skillbridge-backend && ./mvnw -B clean verify   # 172 tests, ~55s, 0 skipped
+```
+
+Against the live database instead, which writes to production data and competes
+with the running application for the pooler's 15 connections:
 
 ```bash
 for p in $(lsof -ti:8080); do kill -9 $p; done   # gotcha 13: it wins, you lose
 docker start skillbridge-rabbit
-cd skillbridge-backend && ./mvnw -B verify
+cd skillbridge-backend && SKILLBRIDGE_TEST_DB=live ./mvnw -B clean verify
 ```
 
 `pkill -f "spring-boot:run"` does **not** free port 8080 — it kills the Maven
