@@ -52,12 +52,34 @@ docker run -d --name "$CONTAINER" \
     -e POSTGRES_PASSWORD=verify -e POSTGRES_DB=verify \
     "$IMAGE" >/dev/null
 
-for _ in $(seq 1 60); do
-    docker exec "$CONTAINER" pg_isready -U postgres >/dev/null 2>&1 && break
+# Readiness is not `pg_isready`, and assuming it was cost a confusing failure.
+#
+# The official postgres entrypoint starts a TEMPORARY server on a unix socket to
+# run initdb and the init scripts, shuts it down, and only then starts the real
+# one. `pg_isready` answers yes during that temporary phase, so a loop that
+# stops at the first yes connects to a server that is about to stop, and the
+# next command dies with:
+#
+#     FATAL:  the database system is shutting down
+#
+# which reads like the container crashed. Requiring several consecutive
+# successes spaced a second apart steps over the shutdown window: the temporary
+# server does not stay up that long.
+ready=0
+for _ in $(seq 1 90); do
+    if docker exec "$CONTAINER" psql -U postgres -tAc 'SELECT 1' >/dev/null 2>&1; then
+        ready=$(( ready + 1 ))
+        (( ready >= 3 )) && break
+    else
+        ready=0
+    fi
     sleep 1
 done
-docker exec "$CONTAINER" pg_isready -U postgres >/dev/null 2>&1 \
-    || { echo "container never became ready" >&2; exit 1; }
+if (( ready < 3 )); then
+    echo "container never became ready" >&2
+    docker logs --tail 20 "$CONTAINER" >&2 || true
+    exit 1
+fi
 
 echo "==> applying db/schema/baseline.sql"
 docker exec "$CONTAINER" psql -U postgres -q -c "CREATE DATABASE baseline;" >/dev/null

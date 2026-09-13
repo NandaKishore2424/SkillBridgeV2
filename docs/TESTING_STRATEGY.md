@@ -219,6 +219,15 @@ Everything added in this phase was broken before being trusted:
 | `check-test-budget.sh` zero-skip | a skipped `<testcase>` injected | red, naming the class |
 | `check-test-budget.sh` staleness | a real five-day-old `target/` | red |
 | `verify-schema-baseline.sh` | dropped index, narrowed unique, lost `NOT NULL` | red on all three |
+| `verify-schema-baseline.sh` end to end | run against a real sabotaged reference database | red, naming both changes and their direction |
+
+Running that last one is what found a bug in the script itself. It waited on
+`pg_isready`, which answers yes while the postgres entrypoint's **temporary**
+init server is up — the one it shuts down before starting the real server. The
+script connected in that window and died with `FATAL: the database system is
+shutting down`, which reads like a crashed container. It now requires three
+consecutive successful queries a second apart. Testcontainers gets this right
+already, which is why the Java side never saw it.
 
 ---
 
