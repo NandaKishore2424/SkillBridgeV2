@@ -29,7 +29,8 @@ def _require_env(key: str) -> str:
 # committed to git in the first place: the value works, so nobody notices it is
 # there. Missing config must fail at boot, which is exactly what _require_env does.
 AMQP_URL: str = _require_env("AMQP_URL")
-RABBITMQ_QUEUE: str = "ai.analysis.queue"
+# Queue and exchange names live in ai_event_contract.py, checked against
+# contracts/amqp/topology.json. The backend declares them; this service only connects.
 
 # ─── Supabase / PostgreSQL ──────────────────────────────────────────────────────
 SUPABASE_DB_URL: str = _require_env("SUPABASE_DB_URL")

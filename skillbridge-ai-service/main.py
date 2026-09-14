@@ -51,7 +51,12 @@ async def lifespan(app: FastAPI):
     # 3. Start the RabbitMQ consumer in a background thread. It reconnects on its
     #    own for as long as the service runs; /health reports whether it is up.
     global _consumer
-    _consumer = ResilientConsumer(config.RABBITMQ_QUEUE, _handle_delivery, _connect)
+    _consumer = ResilientConsumer(
+        contract.AI_ANALYSIS_QUEUE, _handle_delivery, _connect,
+        retry_exchange=contract.RETRY_EXCHANGE,
+        retry_queues=contract.RETRY_TIER_QUEUES,
+        attempt_header=contract.RETRY_ATTEMPT_HEADER,
+    )
     consumer_thread = threading.Thread(target=_consumer.run_forever, name="amqp-consumer", daemon=True)
     consumer_thread.start()
     print("[AMQP] RabbitMQ consumer thread started")
@@ -174,26 +179,26 @@ def _handle_delivery(body: bytes, properties) -> Outcome:
     """
     Decide what one delivery deserves. ResilientConsumer does the acking.
 
-    Unparseable and unknown messages are DISCARDed: they can never succeed, and
-    retrying them only holds up the messages behind. Anything that raises while
-    being processed -- a database error, a model failure -- propagates, and the
-    consumer treats that as RETRY. Until Phase 09 Task 2 declares a dead-letter
-    exchange, RETRY is still discarded by the broker; see resilient_consumer.py.
+    Unparseable and unknown messages are DEAD_LETTERed into the DLQ: they can
+    never succeed, retrying them only holds up the messages behind, and dropping
+    them would hide the problem. Anything that raises while being processed -- a
+    database error, a model failure -- propagates, and the consumer schedules it
+    on the next retry tier (5s, 30s, 5m), then dead-letters it.
     """
     try:
         payload = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        print(f"[AMQP] ✗ Unparseable message body, discarding: {e}")
-        return Outcome.DISCARD
+        print(f"[AMQP] ✗ Unparseable message body, dead-lettering: {e}")
+        return Outcome.DEAD_LETTER
 
     if not isinstance(payload, dict):
-        print("[AMQP] ✗ Message body is not a JSON object, discarding")
-        return Outcome.DISCARD
+        print("[AMQP] ✗ Message body is not a JSON object, dead-lettering")
+        return Outcome.DEAD_LETTER
 
     event_type = payload.get(contract.FIELD_EVENT_TYPE)
     if event_type not in contract.HANDLED_EVENT_TYPES:
-        print(f"[AMQP] ⚠ Unknown event type '{event_type}' — no handler registered. Discarding.")
-        return Outcome.DISCARD
+        print(f"[AMQP] ⚠ Unknown event type '{event_type}' — no handler registered. Dead-lettering.")
+        return Outcome.DEAD_LETTER
 
     _process_rabbitmq_message(payload)
     return Outcome.PROCESSED
@@ -211,12 +216,18 @@ def _connect():
     parameters.heartbeat = 30
     parameters.blocked_connection_timeout = 60
     connection = pika.BlockingConnection(parameters)
-    # The backend declares this queue too; declaring it here as well means a
-    # fresh broker works in either start order. Task 2 replaces this with the
-    # full topology, and the arguments must then match on both sides.
-    declare = connection.channel()
-    declare.queue_declare(queue=config.RABBITMQ_QUEUE, durable=True)
-    declare.close()
+    # PASSIVE: check the queue exists, declare nothing. The backend's
+    # RabbitMQConfig owns the topology, and a second declarer would have to match
+    # every quorum argument exactly or fail with PRECONDITION_FAILED. If the
+    # backend has not started yet this raises, ResilientConsumer backs off and
+    # retries, and /health reports 503 meanwhile -- which is the truth.
+    try:
+        check = connection.channel()
+        check.queue_declare(queue=contract.AI_ANALYSIS_QUEUE, passive=True)
+        check.close()
+    except Exception:
+        connection.close()
+        raise
     return connection
 
 

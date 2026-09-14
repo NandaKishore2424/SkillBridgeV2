@@ -1,5 +1,6 @@
 package com.skillbridge.shared.messaging.outbox;
 
+import com.skillbridge.common.config.RabbitMQConfig;
 import com.skillbridge.testsupport.IntegrationTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,7 +64,7 @@ class OutboxWriterTransactionTest {
     @DisplayName("a committed transaction leaves exactly one PENDING event")
     void commitWritesTheEvent() {
         UUID eventId = tx.execute(status ->
-                writer.write(MARKER, 42L, "SKILL_UPDATED", "ai.analysis.route", Map.of("skillId", 7)));
+                writer.write(MARKER, 42L, "SKILL_UPDATED", RabbitMQConfig.SKILL_UPDATED_KEY, Map.of("skillId", 7)));
 
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT event_id, event_type, routing_key, status, attempts, payload::text AS payload "
@@ -73,7 +74,7 @@ class OutboxWriterTransactionTest {
         Map<String, Object> row = rows.get(0);
         assertThat(row.get("event_id")).isEqualTo(eventId);
         assertThat(row.get("event_type")).isEqualTo("SKILL_UPDATED");
-        assertThat(row.get("routing_key")).isEqualTo("ai.analysis.route");
+        assertThat(row.get("routing_key")).isEqualTo(RabbitMQConfig.SKILL_UPDATED_KEY);
         assertThat(row.get("status")).isEqualTo("PENDING");
         assertThat(row.get("attempts")).isEqualTo(0);
         assertThat((String) row.get("payload")).contains("\"skillId\"").contains("7");
@@ -87,7 +88,7 @@ class OutboxWriterTransactionTest {
         // the event. The pre-2026-09-09 version published mid-transaction and would
         // have announced this change to the AI service before it was undone.
         tx.executeWithoutResult(status -> {
-            writer.write(MARKER, 42L, "SKILL_UPDATED", "ai.analysis.route", Map.of("skillId", 7));
+            writer.write(MARKER, 42L, "SKILL_UPDATED", RabbitMQConfig.SKILL_UPDATED_KEY, Map.of("skillId", 7));
             status.setRollbackOnly();
         });
 
@@ -102,7 +103,7 @@ class OutboxWriterTransactionTest {
         // MANDATORY. A standalone insert would commit whether or not any business
         // change did -- the dual-write problem again, wearing a different hat.
         assertThatThrownBy(() ->
-                writer.write(MARKER, 42L, "SKILL_UPDATED", "ai.analysis.route", Map.of("skillId", 7)))
+                writer.write(MARKER, 42L, "SKILL_UPDATED", RabbitMQConfig.SKILL_UPDATED_KEY, Map.of("skillId", 7)))
                 .isInstanceOf(IllegalTransactionStateException.class);
 
         Integer count = jdbc.queryForObject(
@@ -115,7 +116,7 @@ class OutboxWriterTransactionTest {
     void traceIdIsCarried() {
         MDC.put("traceId", "trace-abc-123");
 
-        tx.execute(status -> writer.write(MARKER, 42L, "PROFILE_UPDATED", "ai.analysis.route", Map.of()));
+        tx.execute(status -> writer.write(MARKER, 42L, "PROFILE_UPDATED", RabbitMQConfig.SKILL_UPDATED_KEY, Map.of()));
 
         String headers = jdbc.queryForObject(
                 "SELECT headers::text FROM outbox_events WHERE aggregate_type = ?", String.class, MARKER);

@@ -43,13 +43,13 @@ public class AIEventPublisher {
     public void publishSkillUpdated(Long studentId, Long collegeId, Long skillId) {
         // metadata is an object, never the bare Long it once was: the consumer
         // calls .get() on it. See AiEventContractTest.
-        outbox.write(AGGREGATE, studentId, "SKILL_UPDATED", RabbitMQConfig.ROUTING_KEY,
+        outbox.write(AGGREGATE, studentId, "SKILL_UPDATED", RabbitMQConfig.SKILL_UPDATED_KEY,
                 new AIEvent("SKILL_UPDATED", studentId, collegeId, Map.of("skillId", skillId)));
     }
 
     /** A student changed profile fields that feed the AI analysis. */
     public void publishProfileUpdated(Long studentId, Long collegeId) {
-        outbox.write(AGGREGATE, studentId, "PROFILE_UPDATED", RabbitMQConfig.ROUTING_KEY,
+        outbox.write(AGGREGATE, studentId, "PROFILE_UPDATED", RabbitMQConfig.PROFILE_UPDATED_KEY,
                 new AIEvent("PROFILE_UPDATED", studentId, collegeId, null));
     }
 }

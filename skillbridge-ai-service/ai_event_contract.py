@@ -53,3 +53,36 @@ def metadata_of(payload: dict) -> dict:
     """
     value = payload.get(FIELD_METADATA)
     return value if isinstance(value, dict) else {}
+
+
+# ---------------------------------------------------------------------------
+# AMQP topology, as named in contracts/amqp/topology.json.
+#
+# The backend's RabbitMQConfig DECLARES all of this; this service only connects
+# to it. Two declarers would have to agree on every argument, and a disagreement
+# is a PRECONDITION_FAILED that closes the channel. tests/test_amqp_topology_contract.py
+# checks these constants against the contract file, as the Java side does.
+# ---------------------------------------------------------------------------
+EVENTS_EXCHANGE = "skillbridge.events"
+RETRY_EXCHANGE = "skillbridge.retry"
+DEAD_LETTER_EXCHANGE = "skillbridge.dlx"
+AI_ANALYSIS_QUEUE = "skillbridge.ai.analysis"
+DEAD_LETTER_QUEUE = "skillbridge.dlq"
+
+#: Delay queues in escalation order. A message on its Nth retry goes to the Nth
+#: tier; after the last one it is dead-lettered instead.
+RETRY_TIER_QUEUES = (
+    "skillbridge.ai.analysis.retry.5s",
+    "skillbridge.ai.analysis.retry.30s",
+    "skillbridge.ai.analysis.retry.5m",
+)
+MAX_RETRIES = len(RETRY_TIER_QUEUES)
+
+#: How many retries a message has already had. Set by this service when it
+#: republishes to a tier, because the count has to travel with the message.
+RETRY_ATTEMPT_HEADER = "x-retry-attempt"
+
+ROUTING_KEYS = {
+    EVENT_SKILL_UPDATED: "ai.skill.updated",
+    EVENT_PROFILE_UPDATED: "ai.profile.updated",
+}

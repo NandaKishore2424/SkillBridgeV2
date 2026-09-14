@@ -1,0 +1,51 @@
+{
+  "$comment": "The RabbitMQ topology, named once. RabbitMQConfig (Java) declares it; the Python AI service connects to it and declares nothing. RabbitTopologyContractTest and tests/test_amqp_topology_contract.py both check against this file, so neither side can rename a queue or change an argument alone. MessagingTopologyBrokerTest checks a real broker honours it.",
+  "exchanges": {
+    "events":     { "name": "skillbridge.events", "type": "topic" },
+    "retry":      { "name": "skillbridge.retry",  "type": "direct" },
+    "deadLetter": { "name": "skillbridge.dlx",    "type": "fanout" }
+  },
+  "queues": {
+    "aiAnalysis": {
+      "name": "skillbridge.ai.analysis",
+      "bindingKey": "ai.#",
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-max-length": 100000,
+        "x-overflow": "reject-publish",
+        "x-dead-letter-exchange": "skillbridge.dlx",
+        "x-dead-letter-strategy": "at-least-once",
+        "x-delivery-limit": 10
+      }
+    },
+    "retryTiers": [
+      {
+        "name": "skillbridge.ai.analysis.retry.5s",
+        "arguments": {
+          "x-queue-type": "quorum", "x-message-ttl": 5000,
+          "x-dead-letter-exchange": "", "x-dead-letter-routing-key": "skillbridge.ai.analysis",
+          "x-dead-letter-strategy": "at-least-once", "x-overflow": "reject-publish"
+        }
+      },
+      {
+        "name": "skillbridge.ai.analysis.retry.30s",
+        "arguments": {
+          "x-queue-type": "quorum", "x-message-ttl": 30000,
+          "x-dead-letter-exchange": "", "x-dead-letter-routing-key": "skillbridge.ai.analysis",
+          "x-dead-letter-strategy": "at-least-once", "x-overflow": "reject-publish"
+        }
+      },
+      {
+        "name": "skillbridge.ai.analysis.retry.5m",
+        "arguments": {
+          "x-queue-type": "quorum", "x-message-ttl": 300000,
+          "x-dead-letter-exchange": "", "x-dead-letter-routing-key": "skillbridge.ai.analysis",
+          "x-dead-letter-strategy": "at-least-once", "x-overflow": "reject-publish"
+        }
+      }
+    ],
+    "deadLetter": { "name": "skillbridge.dlq", "arguments": { "x-queue-type": "quorum" } }
+  },
+  "routingKeys": { "SKILL_UPDATED": "ai.skill.updated", "PROFILE_UPDATED": "ai.profile.updated" },
+  "retry": { "attemptHeader": "x-retry-attempt" }
+}

@@ -165,7 +165,7 @@ public class OutboxRelay {
         String messageId = event.eventId().toString();
         CorrelationData correlation = new CorrelationData(messageId);
 
-        template.send(RabbitMQConfig.EXCHANGE_NAME, event.routingKey(), toMessage(event, messageId), correlation);
+        template.send(RabbitMQConfig.EVENTS_EXCHANGE, event.routingKey(), toMessage(event, messageId), correlation);
 
         CorrelationData.Confirm confirm;
         try {
@@ -183,7 +183,7 @@ public class OutboxRelay {
         if (correlation.getReturned() != null) {
             throw new AmqpException("broker returned the event as unroutable ("
                     + correlation.getReturned().getReplyCode() + " " + correlation.getReturned().getReplyText()
-                    + "): exchange " + RabbitMQConfig.EXCHANGE_NAME + ", routing key " + event.routingKey());
+                    + "): exchange " + RabbitMQConfig.EVENTS_EXCHANGE + ", routing key " + event.routingKey());
         }
     }
 

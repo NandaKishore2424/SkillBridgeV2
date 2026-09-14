@@ -10,8 +10,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.Exchange;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
@@ -57,7 +57,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OutboxRelayBrokerTest {
 
     private static final String MARKER = "OutboxRelayBrokerTest";
-    private static final String QUEUE = "outbox.relay.broker.test";
+    /** The production queue, so a publish that arrives here was routed by the production topology. */
+    private static final String QUEUE = RabbitMQConfig.AI_ANALYSIS_QUEUE;
 
     private static RabbitMQContainer broker;
     private static CachingConnectionFactory liveFactory;
@@ -77,12 +78,18 @@ class OutboxRelayBrokerTest {
         broker.start();
         liveFactory = confirmingFactory(broker.getHost(), broker.getAmqpPort());
 
+        // The production topology, not a copy of it: a routing change that strands
+        // events has to fail here.
         RabbitAdmin admin = new RabbitAdmin(liveFactory);
-        DirectExchange exchange = new DirectExchange(RabbitMQConfig.EXCHANGE_NAME, true, false);
-        Queue queue = new Queue(QUEUE, true);
-        admin.declareExchange(exchange);
-        admin.declareQueue(queue);
-        admin.declareBinding(BindingBuilder.bind(queue).to(exchange).with(RabbitMQConfig.ROUTING_KEY));
+        for (var declarable : RabbitMQConfig.topology().getDeclarables()) {
+            if (declarable instanceof Exchange exchange) {
+                admin.declareExchange(exchange);
+            } else if (declarable instanceof Queue queue) {
+                admin.declareQueue(queue);
+            } else if (declarable instanceof Binding binding) {
+                admin.declareBinding(binding);
+            }
+        }
     }
 
     @AfterAll
@@ -118,7 +125,7 @@ class OutboxRelayBrokerTest {
     @Test
     @DisplayName("a confirmed publish marks the event PUBLISHED and delivers the stored payload verbatim")
     void publishesAndConfirms() {
-        UUID eventId = writeEvent(RabbitMQConfig.ROUTING_KEY);
+        UUID eventId = writeEvent(RabbitMQConfig.SKILL_UPDATED_KEY);
         String stored = jdbc.queryForObject(
                 "SELECT payload FROM outbox_events WHERE event_id = ?", String.class, eventId);
 
@@ -156,9 +163,9 @@ class OutboxRelayBrokerTest {
     @Test
     @DisplayName("while the broker is unreachable events accumulate, and a later run drains them all")
     void accumulatesThenDrains() throws Exception {
-        UUID first = writeEvent(RabbitMQConfig.ROUTING_KEY);
-        UUID second = writeEvent(RabbitMQConfig.ROUTING_KEY);
-        UUID third = writeEvent(RabbitMQConfig.ROUTING_KEY);
+        UUID first = writeEvent(RabbitMQConfig.SKILL_UPDATED_KEY);
+        UUID second = writeEvent(RabbitMQConfig.SKILL_UPDATED_KEY);
+        UUID third = writeEvent(RabbitMQConfig.SKILL_UPDATED_KEY);
 
         CachingConnectionFactory unreachable = confirmingFactory("localhost", closedPort());
         unreachable.setConnectionTimeout(1_000);
@@ -209,7 +216,7 @@ class OutboxRelayBrokerTest {
     void crashLoopingEventGoesDead() {
         // Simulates a relay that claimed this row max-attempts times and died each
         // time before recording anything: attempts at the limit, still PENDING, due.
-        UUID eventId = writeEvent(RabbitMQConfig.ROUTING_KEY);
+        UUID eventId = writeEvent(RabbitMQConfig.SKILL_UPDATED_KEY);
         jdbc.update("UPDATE outbox_events SET attempts = 3, next_attempt_at = now() - interval '1 second' "
                 + "WHERE event_id = ?", eventId);
 
