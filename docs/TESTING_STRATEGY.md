@@ -8,14 +8,21 @@
 
 ## The shape, as measured
 
-| Tier | Files | Tests | Runtime | Needs | Command |
-|---|---|---|---|---|---|
-| **Backend fast** — unit + architecture | 17 | 108 | **4.9 s** | nothing | `mvn test` |
-| **Backend integration** — Spring + real Postgres | 20 | 64 | **~50 s** | Docker | `mvn verify` |
-| **Frontend** — hooks, auth, component | 4 | 22 | **2.5 s** | nothing | `npm test` |
+| Tier | Tests | Runtime | Needs | Command |
+|---|---|---|---|---|
+| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event contract | 143 | **~7 s** | nothing | `mvn test` |
+| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres | 70 | **~50 s** | Docker | `mvn verify` |
+| **Python contract** — the AI event consumer | 12 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
+| **Frontend** — hooks, auth, components | 22 | **2.5 s** | nothing | `npm test` |
 
-**194 tests, 0 skipped, under a minute end to end**, measured 2026-09-13. All of
-it runs in CI.
+**247 tests, 0 skipped**, measured 2026-09-14. All of it runs in CI, and so do
+three gates on top of it:
+
+| Gate | Measured | Threshold | Why not the phase's number |
+|---|---|---|---|
+| Backend coverage (JaCoCo, both tiers merged) | 34.9% line · 27.4% branch | 34% · 27% | a ratchet; 80% now would be deleted, not met |
+| Frontend coverage (v8) | 13.4% line | 13% | same |
+| Mutation score (PIT, domain logic) | 90% — 35 of 39 | 89% | the 4 survivors are equivalent and unkillable |
 
 The integration tier used to run against the live Supabase database and took
 **10 m 38 s** for the same 64 tests — 11× longer, because the time was Spring
@@ -33,6 +40,56 @@ The phase document asks for ~120 such tests. Adding them is worth doing, but it
 is worth doing *after* the integration tier can run on a throwaway database,
 because most of what a slice test would assert here is currently asserted by an
 integration test that does run — just not in CI.
+
+---
+
+## Two production defects the tests found by being written
+
+Neither was hunted for. Both surfaced the moment a test of the right kind existed.
+
+**Every controller slice was impossible.** The application class carried
+`@EnableJpaRepositories(basePackages = "com.skillbridge")` while itself living in
+`com.skillbridge` — restating what Boot's auto-configuration already does. An
+explicit `@Enable…` on the application class is processed by every test that uses
+that class as configuration, and `@WebMvcTest` can filter out auto-configuration
+but not an annotation somebody wrote. So every web slice bootstrapped 24
+repositories and died with *"No bean named 'entityManagerFactory' available"*,
+which reads like a missing database. Removed; the 24 repositories are still found
+everywhere they are wanted.
+
+**Every AI event ever published was discarded.** `AIEvent.metadata` is typed
+`Object`. `SKILL_UPDATED` put a bare `Long` in it and `PROFILE_UPDATED` an explicit
+`null`. The Python consumer calls `.get()` on it, which raises `AttributeError` for
+both; the callback nacks with `requeue=False`; there is no dead-letter queue.
+`payload.get("metadata", {})` did not save the null case, because a default covers
+a *missing* key and never a present-but-null one. The Java tests asserted a message
+was sent. The Python side had no tests. Each end was green about its own idea of
+the contract.
+
+> **When two components share a format, the format has to be an artifact both are
+> checked against.** `contracts/ai-events/v1/ai-event.schema.json` is that artifact
+> now, and each side is tested against it.
+
+---
+
+## Reading a mutation report
+
+PIT's first run survived 5 mutants, and the tempting reading was wrong.
+
+Four were on `allowedNext()` for the terminal states, and it looked like the
+state-machine test must be tautological. It is not. Those methods already return an
+empty `EnumSet`; PIT replaced it with `Collections.emptySet()`, which nothing in
+this code can distinguish. They are **equivalent mutants**: there is no bug for a
+test to catch, and a test written to "kill" them would pin an implementation detail
+and prove nothing. That is why the threshold is 89 and not 100.
+
+The fifth was real. The refusal message's *"Allowed from X: …"* suffix is documented
+as deliberate, and no test asserted it, because the only message check looked for
+the two state names, which appear in the prefix whichever branch builds the suffix.
+It is tested now.
+
+> **Read the survivor before writing the test.** Mutation score is an argument for
+> looking, not a number to drive to 100.
 
 ---
 
