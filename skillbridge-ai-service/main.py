@@ -27,6 +27,7 @@ import database
 import embedder
 from skill_analyzer import analyze_skill_gap
 import ai_event_contract as contract
+from resilient_consumer import Outcome, ResilientConsumer
 
 
 # ─── Lifecycle Management ──────────────────────────────────────────────────────
@@ -47,9 +48,11 @@ async def lifespan(app: FastAPI):
     # 2. Load the AI embedding model into RAM (takes a few seconds)
     embedder.initialize_embedder()
 
-    # 3. Start the RabbitMQ consumer in a background thread so it doesn't
-    #    block FastAPI from serving HTTP requests
-    consumer_thread = threading.Thread(target=_start_rabbitmq_consumer, daemon=True)
+    # 3. Start the RabbitMQ consumer in a background thread. It reconnects on its
+    #    own for as long as the service runs; /health reports whether it is up.
+    global _consumer
+    _consumer = ResilientConsumer(config.RABBITMQ_QUEUE, _handle_delivery, _connect)
+    consumer_thread = threading.Thread(target=_consumer.run_forever, name="amqp-consumer", daemon=True)
     consumer_thread.start()
     print("[AMQP] RabbitMQ consumer thread started")
 
@@ -59,7 +62,14 @@ async def lifespan(app: FastAPI):
 
     yield  # FastAPI serves requests here
 
-    # Shutdown: clean up resources gracefully
+    # Shutdown, in order: stop taking messages and let the one in flight finish,
+    # THEN close the pool it may be using. The reverse order fails the in-flight
+    # analysis with a closed-pool error at exactly the moment of a deploy.
+    print("[SHUTDOWN] Stopping the AMQP consumer...")
+    _consumer.stop()
+    consumer_thread.join(timeout=15)
+    if consumer_thread.is_alive():
+        print("[SHUTDOWN] ⚠ Consumer did not stop within 15s; continuing shutdown")
     print("[SHUTDOWN] Closing database connection pool...")
     database.close_pool()
     print("[SHUTDOWN] ✓ Shutdown complete")
@@ -156,49 +166,58 @@ def _log_report_summary(report) -> None:
     print("─" * 50 + "\n")
 
 
-def _rabbitmq_callback(ch, method, properties, body):
+#: The running consumer, so /health can ask it the truth. Set in lifespan.
+_consumer: ResilientConsumer | None = None
+
+
+def _handle_delivery(body: bytes, properties) -> Outcome:
     """
-    Raw RabbitMQ callback — deserialize the message and dispatch for processing.
-    Wrapped in try/except so one bad message NEVER kills the consumer thread.
+    Decide what one delivery deserves. ResilientConsumer does the acking.
+
+    Unparseable and unknown messages are DISCARDed: they can never succeed, and
+    retrying them only holds up the messages behind. Anything that raises while
+    being processed -- a database error, a model failure -- propagates, and the
+    consumer treats that as RETRY. Until Phase 09 Task 2 declares a dead-letter
+    exchange, RETRY is still discarded by the broker; see resilient_consumer.py.
     """
     try:
         payload = json.loads(body)
-        _process_rabbitmq_message(payload)
-        # Acknowledge the message only after successful processing
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-    except json.JSONDecodeError as e:
-        print(f"[AMQP] ✗ Invalid JSON in message body: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-    except Exception as e:
-        print(f"[AMQP] ✗ Unexpected error processing message: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        print(f"[AMQP] ✗ Unparseable message body, discarding: {e}")
+        return Outcome.DISCARD
+
+    if not isinstance(payload, dict):
+        print("[AMQP] ✗ Message body is not a JSON object, discarding")
+        return Outcome.DISCARD
+
+    event_type = payload.get(contract.FIELD_EVENT_TYPE)
+    if event_type not in contract.HANDLED_EVENT_TYPES:
+        print(f"[AMQP] ⚠ Unknown event type '{event_type}' — no handler registered. Discarding.")
+        return Outcome.DISCARD
+
+    _process_rabbitmq_message(payload)
+    return Outcome.PROCESSED
 
 
-def _start_rabbitmq_consumer() -> None:
+def _connect():
     """
-    Blocking RabbitMQ consumer loop.
-    Runs in a background daemon thread so it doesn't block FastAPI.
-    Auto-reconnects on connection drops using basic_consume with manual acks.
+    One broker connection. ResilientConsumer calls this again after every drop.
+
+    The old consumer made exactly one of these, under a docstring promising it
+    reconnected, and a single broker restart left it dead for good while the
+    service reported healthy.
     """
     parameters = pika.URLParameters(config.AMQP_URL)
-    parameters.heartbeat = 60  # Keep the connection alive
-    
+    parameters.heartbeat = 30
+    parameters.blocked_connection_timeout = 60
     connection = pika.BlockingConnection(parameters)
-    channel = connection.channel()
-    channel.queue_declare(queue=config.RABBITMQ_QUEUE, durable=True)
-    
-    # Process ONE message at a time (prefetch=1)
-    # If we're busy with analysis, don't take more from the queue
-    channel.basic_qos(prefetch_count=1)
-    
-    channel.basic_consume(
-        queue=config.RABBITMQ_QUEUE,
-        on_message_callback=_rabbitmq_callback,
-        auto_ack=False  # Manual acks — we confirm only after successful processing
-    )
-    
-    print(f"[AMQP] ✓ Listening on queue: '{config.RABBITMQ_QUEUE}'")
-    channel.start_consuming()  # Blocks forever in the background thread
+    # The backend declares this queue too; declaring it here as well means a
+    # fresh broker works in either start order. Task 2 replaces this with the
+    # full topology, and the arguments must then match on both sides.
+    declare = connection.channel()
+    declare.queue_declare(queue=config.RABBITMQ_QUEUE, durable=True)
+    declare.close()
+    return connection
 
 
 # ─── REST API Endpoints ────────────────────────────────────────────────────────
@@ -210,13 +229,38 @@ class SkillAnalysisRequest(BaseModel):
 
 
 @app.get("/")
-def health_check():
-    """Health check endpoint. Used by monitoring tools and Docker."""
-    return {
-        "status": "healthy",
-        "service": "SkillBridge AI Engine",
-        "version": "2.0.0"
-    }
+def liveness():
+    """
+    Liveness only: the process is up and answering HTTP. It checks nothing else.
+
+    This used to be the health check and returned {"status": "healthy"}
+    unconditionally, including while the consumer thread was dead. Use /health
+    for whether the service can actually do its job.
+    """
+    return {"status": "alive", "service": "SkillBridge AI Engine", "version": "2.0.0"}
+
+
+@app.get("/health")
+def health():
+    """
+    Readiness: 503 unless the AMQP consumer is consuming and the database answers.
+
+    A dead consumer is the failure this endpoint exists for. Nothing else in the
+    service notices it: HTTP keeps working, and events pile up unread.
+    """
+    consumer_ok = _consumer is not None and _consumer.is_healthy
+    db_ok = database.ping()
+    status_code = 200 if (consumer_ok and db_ok) else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "healthy" if status_code == 200 else "degraded",
+            "checks": {
+                "amqp_consumer": "up" if consumer_ok else "down",
+                "database": "up" if db_ok else "down",
+            },
+        },
+    )
 
 
 @app.post("/api/analyze-skills")

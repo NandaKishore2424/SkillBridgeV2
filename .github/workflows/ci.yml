@@ -115,7 +115,7 @@ jobs:
         run: ./mvnw -B test-compile org.pitest:pitest-maven:mutationCoverage
 
   ai-contract:
-    name: AI event contract (Python consumer)
+    name: AI service (event contract and consumer resilience)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -130,6 +130,9 @@ jobs:
       - name: Install
         run: pip install "jsonschema>=4"
 
+      # Also runs test_resilient_consumer.py, which needs nothing either: the
+      # consumer takes its connection as a callable, so it is tested with fakes.
+      #
       # The Java half runs in the backend job (AiEventContractTest). Both are
       # checked against contracts/ai-events/v1/ai-event.schema.json, so neither
       # language can change the wire format alone.

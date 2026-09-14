@@ -65,6 +65,35 @@ def return_connection(conn) -> None:
         _connection_pool.putconn(conn)
 
 
+def ping() -> bool:
+    """
+    Whether the database answers, for the /health endpoint.
+
+    An EXHAUSTED pool counts as up. The pool has two connections and the
+    consumer may be holding both mid-analysis; that means connections work, not
+    that the database is down, and reporting 503 for it would page someone
+    because the service was busy.
+    """
+    if _connection_pool is None:
+        return False
+    conn = None
+    try:
+        conn = _connection_pool.getconn()
+    except pool.PoolError:
+        return True
+    except Exception:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        return True
+    except Exception:
+        return False
+    finally:
+        _connection_pool.putconn(conn)
+
+
 def close_pool() -> None:
     """Called at application shutdown to cleanly close all connections."""
     if _connection_pool is not None:
