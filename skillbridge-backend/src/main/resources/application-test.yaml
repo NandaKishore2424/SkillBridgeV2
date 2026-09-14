@@ -87,3 +87,16 @@ logging:
 # ---------------------------------------------------------------------------
 jwt:
   secret: dGVzdC1vbmx5LWp3dC1zaWduaW5nLWtleS1ub3QtYS1yZWFsLXNlY3JldC0wMDAw
+
+# ---------------------------------------------------------------------------
+# The outbox relay is OFF under the test profile.
+#
+# Left on, it would poll every 500ms inside every Spring context, claiming any
+# outbox row a test wrote and racing that test's own assertions about it.
+# OutboxRelayBrokerTest builds its relays by hand around a broker it controls
+# and drives relayOnce() explicitly, which is the only way its assertions about
+# attempts, retries and DEAD can be deterministic.
+# ---------------------------------------------------------------------------
+outbox:
+  relay:
+    enabled: false

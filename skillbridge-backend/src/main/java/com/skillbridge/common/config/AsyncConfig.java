@@ -62,38 +62,6 @@ public class AsyncConfig implements org.springframework.scheduling.annotation.As
     }
 
     /**
-     * Carries AI events to RabbitMQ after the publishing transaction commits.
-     *
-     * <p>Deliberately small and bounded. The work is one AMQP publish; the
-     * point of the executor is only to get the network call off the thread
-     * that is still holding a database connection, not to add throughput.
-     *
-     * <p>The rejection policy is the default {@code AbortPolicy} rather than
-     * {@code CallerRunsPolicy}: caller-runs would hand the publish back to the
-     * committing thread, which is precisely the thread whose connection we are
-     * trying to release. A rejected event is logged and dropped, which matches
-     * what {@code AIEventPublisher} already does when the broker is down.
-     */
-    @Bean(name = "aiEventExecutor")
-    public Executor aiEventExecutor(MeterRegistry registry) {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(500);
-        executor.setThreadNamePrefix("ai-event-");
-
-        // Finish what is queued before the JVM goes. Thirty rather than sixty:
-        // these are single AMQP publishes, so a queue that cannot drain in half a
-        // minute is a broker that is not coming back, and holding the shutdown
-        // open for it only delays the deploy.
-        executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(30);
-
-        executor.initialize();
-        return monitored(registry, executor, "aiEventExecutor");
-    }
-
-    /**
      * Bulk CSV import: one row at a time against a database a round trip away.
      *
      * <p>Four threads, and the number comes from the connection ceiling rather

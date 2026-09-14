@@ -28,6 +28,12 @@
 -- rendering of a cast. Compare normalised, or you ship a check that is red
 -- forever and that everyone learns to ignore.
 --
+-- 2026-09-14: outbox_events ADDED (receipt db/schema/2026-09-14-outbox.sql).
+-- The counts and digests above describe the schema BEFORE that table. They are
+-- re-verified against live after the receipt is applied there; until then this
+-- file is ahead of live by one table, one sequence, three constraints and five
+-- indexes.
+--
 -- WHY THIS FILE EXISTS
 --
 -- Flyway was removed on 2026-09-06 and `ddl-auto: validate` became the only
@@ -47,7 +53,10 @@
 -- (`2026-09-06-soft-delete.sql` and friends) are receipts of individual changes
 -- applied to live. This is the current state, whole. When you change the live
 -- schema, apply the change, write a dated receipt, and re-capture this file.
--- `SchemaBaselineFreshnessTest` fails the build when the two disagree.
+-- `scripts/verify-schema-baseline.sh` is how to check that the two agree. It
+-- needs a connection to the live database, so it is a MANUAL step and not a CI
+-- gate: no test enforces it. (An earlier version of this line named a
+-- `SchemaBaselineFreshnessTest` that never existed.)
 --
 -- Ordering is load-bearing: extensions, sequences, tables (whose defaults call
 -- nextval), sequence ownership, constraints, indexes, functions, triggers.
@@ -87,6 +96,7 @@ CREATE SEQUENCE public.enrollments_id_seq AS bigint START WITH 1 INCREMENT BY 1 
 CREATE SEQUENCE public.feedback_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.idempotency_keys_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.industry_job_descriptions_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+CREATE SEQUENCE public.outbox_events_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.placements_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.refresh_tokens_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.roles_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
@@ -313,6 +323,30 @@ CREATE TABLE public.industry_job_descriptions (
     created_at timestamp without time zone DEFAULT now()
 );
 
+-- The transactional outbox (Phase 09). An event is written here in the SAME
+-- transaction as the business change, so the two commit or roll back together;
+-- OutboxRelay publishes it afterwards. No FAILED or IN_FLIGHT status: a failed
+-- attempt stays PENDING with a later next_attempt_at, and a claimed batch is
+-- protected by pushing next_attempt_at forward as a lease, so a relay that dies
+-- mid-batch leaves nothing stuck.
+CREATE TABLE public.outbox_events (
+    id bigint DEFAULT nextval('outbox_events_id_seq'::regclass) NOT NULL,
+    event_id uuid NOT NULL,
+    aggregate_type character varying(100) NOT NULL,
+    aggregate_id character varying(100) NOT NULL,
+    event_type character varying(100) NOT NULL,
+    schema_version integer DEFAULT 1 NOT NULL,
+    routing_key character varying(255) NOT NULL,
+    payload jsonb NOT NULL,
+    headers jsonb,
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    last_error text,
+    next_attempt_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    published_at timestamp without time zone
+);
+
 CREATE TABLE public.placements (
     id bigint DEFAULT nextval('placements_id_seq'::regclass) NOT NULL,
     student_id bigint NOT NULL,
@@ -521,6 +555,7 @@ ALTER SEQUENCE public.enrollments_id_seq OWNED BY public.enrollments.id;
 ALTER SEQUENCE public.feedback_id_seq OWNED BY public.feedback.id;
 ALTER SEQUENCE public.idempotency_keys_id_seq OWNED BY public.idempotency_keys.id;
 ALTER SEQUENCE public.industry_job_descriptions_id_seq OWNED BY public.industry_job_descriptions.id;
+ALTER SEQUENCE public.outbox_events_id_seq OWNED BY public.outbox_events.id;
 ALTER SEQUENCE public.placements_id_seq OWNED BY public.placements.id;
 ALTER SEQUENCE public.refresh_tokens_id_seq OWNED BY public.refresh_tokens.id;
 ALTER SEQUENCE public.roles_id_seq OWNED BY public.roles.id;
@@ -564,6 +599,7 @@ ALTER TABLE public.feedback ADD CONSTRAINT feedback_pkey PRIMARY KEY (id);
 ALTER TABLE public.flyway_schema_history ADD CONSTRAINT flyway_schema_history_pk PRIMARY KEY (installed_rank);
 ALTER TABLE public.idempotency_keys ADD CONSTRAINT idempotency_keys_pkey PRIMARY KEY (id);
 ALTER TABLE public.industry_job_descriptions ADD CONSTRAINT industry_job_descriptions_pkey PRIMARY KEY (id);
+ALTER TABLE public.outbox_events ADD CONSTRAINT outbox_events_pkey PRIMARY KEY (id);
 ALTER TABLE public.placements ADD CONSTRAINT placements_pkey PRIMARY KEY (id);
 ALTER TABLE public.refresh_tokens ADD CONSTRAINT refresh_tokens_pkey PRIMARY KEY (id);
 ALTER TABLE public.roles ADD CONSTRAINT roles_pkey PRIMARY KEY (id);
@@ -585,6 +621,7 @@ ALTER TABLE public.college_admins ADD CONSTRAINT college_admins_user_id_key UNIQ
 ALTER TABLE public.colleges ADD CONSTRAINT colleges_code_key UNIQUE (code);
 ALTER TABLE public.enrollments ADD CONSTRAINT enrollments_batch_id_student_id_key UNIQUE (batch_id, student_id);
 ALTER TABLE public.idempotency_keys ADD CONSTRAINT uk_idempotency_key_user UNIQUE (idempotency_key, user_id);
+ALTER TABLE public.outbox_events ADD CONSTRAINT uk_outbox_event_id UNIQUE (event_id);
 ALTER TABLE public.refresh_tokens ADD CONSTRAINT refresh_tokens_token_hash_key UNIQUE (token_hash);
 ALTER TABLE public.roles ADD CONSTRAINT roles_name_key UNIQUE (name);
 ALTER TABLE public.skills ADD CONSTRAINT skills_name_key UNIQUE (name);
@@ -611,6 +648,7 @@ ALTER TABLE public.feedback ADD CONSTRAINT feedback_feedback_type_check CHECK ((
 ALTER TABLE public.feedback ADD CONSTRAINT feedback_rating_check CHECK (((rating >= 1) AND (rating <= 5)));
 ALTER TABLE public.idempotency_keys ADD CONSTRAINT ck_idempotency_completed CHECK (((((state)::text = 'IN_PROGRESS'::text) AND (response_status IS NULL) AND (completed_at IS NULL)) OR (((state)::text = 'COMPLETED'::text) AND (response_status IS NOT NULL) AND (completed_at IS NOT NULL))));
 ALTER TABLE public.idempotency_keys ADD CONSTRAINT ck_idempotency_state CHECK (((state)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'COMPLETED'::character varying])::text[])));
+ALTER TABLE public.outbox_events ADD CONSTRAINT chk_outbox_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'PUBLISHED'::character varying, 'DEAD'::character varying])::text[])));
 ALTER TABLE public.placements ADD CONSTRAINT placements_status_check CHECK (((status)::text = ANY ((ARRAY['APPLIED'::character varying, 'INTERVIEW'::character varying, 'OFFER'::character varying, 'REJECTED'::character varying])::text[])));
 ALTER TABLE public.roles ADD CONSTRAINT roles_name_check CHECK (((name)::text = ANY ((ARRAY['SYSTEM_ADMIN'::character varying, 'COLLEGE_ADMIN'::character varying, 'TRAINER'::character varying, 'STUDENT'::character varying])::text[])));
 ALTER TABLE public.student_batch_progress ADD CONSTRAINT chk_sbp_percent CHECK (((weighted_percent >= (0)::numeric) AND (weighted_percent <= (100)::numeric)));
@@ -718,6 +756,9 @@ CREATE INDEX idx_feedback_to_user_id ON public.feedback USING btree (to_user_id)
 CREATE INDEX idx_idempotency_expiry ON public.idempotency_keys USING btree (expires_at);
 CREATE INDEX idx_job_embedding ON public.industry_job_descriptions USING ivfflat (embedding vector_cosine_ops) WITH (lists='100');
 CREATE INDEX idx_modules_college ON public.syllabus_modules USING btree (college_id, batch_id);
+CREATE INDEX idx_outbox_dead ON public.outbox_events USING btree (created_at DESC) WHERE ((status)::text = 'DEAD'::text);
+CREATE INDEX idx_outbox_pending ON public.outbox_events USING btree (next_attempt_at, id) WHERE ((status)::text = 'PENDING'::text);
+CREATE INDEX idx_outbox_published ON public.outbox_events USING btree (published_at) WHERE ((status)::text = 'PUBLISHED'::text);
 CREATE INDEX idx_placements_company_id ON public.placements USING btree (company_id);
 CREATE INDEX idx_placements_status ON public.placements USING btree (status);
 CREATE INDEX idx_placements_student_id ON public.placements USING btree (student_id);

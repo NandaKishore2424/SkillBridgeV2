@@ -6,69 +6,56 @@ import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
-import org.junit.jupiter.api.AfterEach;
+import com.skillbridge.shared.messaging.outbox.OutboxEvent;
+import com.skillbridge.shared.messaging.outbox.OutboxEventRepository;
+import com.skillbridge.shared.messaging.outbox.OutboxWriter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 /**
  * The producer's half of the AIEvent contract.
  *
- * <p>Validates what {@link AIEventPublisher} <i>actually sends</i> — captured
- * from a mocked {@code RabbitTemplate}, not hand-built here — against
- * {@code contracts/ai-events/v1/ai-event.schema.json}. The Python consumer is
- * validated against the same file by
- * {@code skillbridge-ai-service/tests/test_ai_event_contract.py}, so neither
- * side can change the wire format alone.
+ * <p>Validates the payload {@link AIEventPublisher} records in the outbox against
+ * {@code contracts/ai-events/v1/ai-event.schema.json}. That stored payload is
+ * what reaches the broker byte for byte: {@code OutboxRelay} sends the text it
+ * finds rather than re-serialising it, which {@code OutboxRelayBrokerTest} asserts
+ * against a real RabbitMQ. The Python consumer is validated against the same
+ * schema by {@code skillbridge-ai-service/tests/test_ai_event_contract.py}.
  *
- * <h2>What this would have caught</h2>
+ * <h2>What this caught once already</h2>
  *
- * <p>{@code AIEvent.metadata} is typed {@code Object}, and
- * {@code publishSkillUpdated} put a bare {@code Long} in it. That serialises as
- * a JSON number. The consumer does {@code metadata.get("skills", [])}, which on
- * a number raises {@code AttributeError}; {@code _rabbitmq_callback} nacks with
- * {@code requeue=False}; there is no dead-letter queue. <b>Every SKILL_UPDATED
- * event ever published was discarded</b>, announced only by a print to stdout.
+ * <p>{@code AIEvent.metadata} is typed {@code Object}. It used to carry a bare
+ * {@code Long} for SKILL_UPDATED and an explicit {@code null} for
+ * PROFILE_UPDATED; the consumer's {@code .get()} raised on both, the message was
+ * nacked without requeue, and with no dead-letter queue every AI event ever
+ * published was discarded. Each end was green about its own idea of the format.
+ * <b>When two components share a format, the format has to be an artifact both
+ * are checked against.</b>
  *
- * <p>{@code PROFILE_UPDATED} failed the same way for a different reason: it sent
- * an explicit {@code null}, and {@code payload.get("metadata", {})} returns
- * {@code None} for a present-but-null key — a default only covers a
- * <i>missing</i> one.
- *
- * <p>Neither was visible from either side alone. The Java tests asserted a
- * message was sent; the Python code had no tests. <b>When two components share
- * a format, the format needs to be an artifact both are checked against</b> —
- * testing each end against its own idea of the contract is how both ends stay
- * green while the system does nothing.
- *
- * <p>No Spring context: a mocked template and a manual transaction
- * synchronisation, so this runs in the fast tier.
+ * <p>No Spring context. {@code MANDATORY} propagation on the writer is not
+ * exercised here — {@code OutboxWriterTransactionTest} does that against a real transaction.
+ * A plain {@code ObjectMapper} stands in for Spring's: nothing in this payload
+ * depends on the modules or inclusion settings Boot adds.
  */
 class AiEventContractTest {
 
     private static JsonSchema schema;
-    private static ObjectMapper json;
-
-    private final RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
+    private static final ObjectMapper json = new ObjectMapper();
 
     @BeforeAll
     static void loadContract() throws Exception {
-        json = new ObjectMapper();
-        Path contract = repositoryRoot()
-                .resolve("contracts/ai-events/v1/ai-event.schema.json");
+        Path contract = repositoryRoot().resolve("contracts/ai-events/v1/ai-event.schema.json");
         assertThat(contract)
                 .as("the contract is a committed artifact, not something a test invents")
                 .isReadable();
@@ -76,121 +63,76 @@ class AiEventContractTest {
                 .getSchema(Files.readString(contract));
     }
 
-    @AfterEach
-    void clearSynchronization() {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
+    @Test
+    @DisplayName("a recorded SKILL_UPDATED payload satisfies the contract")
+    void skillUpdatedMatchesTheContract() throws Exception {
+        JsonNode recorded = recordAndRead(p -> p.publishSkillUpdated(31L, 1L, 7L));
+
+        assertThat(schema.validate(recorded)).as("SKILL_UPDATED must validate; %s", recorded).isEmpty();
     }
 
     @Test
-    @DisplayName("a published SKILL_UPDATED event satisfies the contract")
-    void skillUpdatedMatchesTheContract() {
-        JsonNode published = publishAndCapture(
-                publisher -> publisher.publishSkillUpdated(31L, 1L, 7L));
+    @DisplayName("a recorded PROFILE_UPDATED payload satisfies the contract")
+    void profileUpdatedMatchesTheContract() throws Exception {
+        JsonNode recorded = recordAndRead(p -> p.publishProfileUpdated(31L, 1L));
 
-        assertThat(violations(published))
-                .as("SKILL_UPDATED must validate; %s", published)
-                .isEmpty();
-    }
-
-    @Test
-    @DisplayName("a published PROFILE_UPDATED event satisfies the contract")
-    void profileUpdatedMatchesTheContract() {
-        JsonNode published = publishAndCapture(
-                publisher -> publisher.publishProfileUpdated(31L, 1L));
-
-        assertThat(violations(published))
-                .as("PROFILE_UPDATED must validate; %s", published)
-                .isEmpty();
+        assertThat(schema.validate(recorded)).as("PROFILE_UPDATED must validate; %s", recorded).isEmpty();
     }
 
     @Test
     @DisplayName("metadata is an object, never the bare scalar that used to be sent")
-    void skillUpdatedSendsMetadataAsAnObject() {
-        JsonNode published = publishAndCapture(
-                publisher -> publisher.publishSkillUpdated(31L, 1L, 7L));
+    void skillUpdatedSendsMetadataAsAnObject() throws Exception {
+        JsonNode recorded = recordAndRead(p -> p.publishSkillUpdated(31L, 1L, 7L));
 
-        // The specific regression. `metadata` is typed Object, so nothing in
-        // Java stops a scalar going back in; the schema and this assertion are
-        // what does.
-        assertThat(published.get("metadata").isObject())
+        assertThat(recorded.get("metadata").isObject())
                 .as("a scalar here raises AttributeError in the consumer and the event is dropped")
                 .isTrue();
-        assertThat(published.get("metadata").get("skillId").asLong()).isEqualTo(7L);
+        assertThat(recorded.get("metadata").get("skillId").asLong()).isEqualTo(7L);
     }
 
     @Test
     @DisplayName("the field names are the ones the consumer reads")
-    void fieldNamesAreStable() {
-        JsonNode published = publishAndCapture(
-                publisher -> publisher.publishSkillUpdated(31L, 1L, 7L));
+    void fieldNamesAreStable() throws Exception {
+        JsonNode recorded = recordAndRead(p -> p.publishSkillUpdated(31L, 1L, 7L));
 
-        // Java serialises record component names. Renaming a component is a
-        // silent change: the consumer's payload.get(...) returns None rather
-        // than raising, and the event is skipped.
-        assertThat(published.fieldNames()).toIterable()
+        assertThat(recorded.fieldNames()).toIterable()
                 .containsExactlyInAnyOrder("eventType", "studentId", "collegeId", "metadata");
     }
 
     @Test
-    @DisplayName("the committed examples are what the publisher really produces")
+    @DisplayName("the committed examples are what the producer really records")
     void examplesMatchTheProducer() throws Exception {
-        JsonNode published = publishAndCapture(
-                publisher -> publisher.publishSkillUpdated(31L, 1L, 7L));
-        JsonNode example = json.readTree(Files.readString(repositoryRoot()
-                .resolve("contracts/ai-events/v1/skill-updated.example.json")));
+        JsonNode recorded = recordAndRead(p -> p.publishSkillUpdated(31L, 1L, 7L));
+        JsonNode example = json.readTree(Files.readString(
+                repositoryRoot().resolve("contracts/ai-events/v1/skill-updated.example.json")));
 
-        // The example is what the Python test feeds its dispatcher. If it drifts
-        // from what Java emits, the consumer is being tested against fiction.
-        assertThat(published).isEqualTo(example);
+        assertThat(recorded).isEqualTo(example);
     }
 
     @Test
     @DisplayName("the schema rejects the shape that used to be sent")
     void theOldShapeIsRejected() throws Exception {
-        // Confirms the contract has teeth rather than accepting anything: the
-        // exact payload that was being published before 2026-09-13.
         JsonNode oldShape = json.readTree("""
                 {"eventType":"SKILL_UPDATED","studentId":31,"collegeId":1,"metadata":7}
                 """);
 
-        assertThat(violations(oldShape))
-                .as("a scalar metadata must fail validation")
-                .isNotEmpty();
+        Set<ValidationMessage> violations = schema.validate(oldShape);
+        assertThat(violations).as("a scalar metadata must fail validation").isNotEmpty();
     }
 
-    // ---------------------------------------------------------------- utils
+    /** Runs a publish and returns the payload the outbox row would carry. */
+    private JsonNode recordAndRead(Consumer<AIEventPublisher> publish) throws Exception {
+        OutboxEventRepository repository = mock(OutboxEventRepository.class);
+        AIEventPublisher publisher = new AIEventPublisher(new OutboxWriter(repository, json));
 
-    /** Runs a publish, commits the synchronisation, and returns what was sent. */
-    private JsonNode publishAndCapture(java.util.function.Consumer<AIEventPublisher> publish) {
-        AIEventPublisher publisher = new AIEventPublisher(rabbitTemplate, Runnable::run);
-        TransactionSynchronizationManager.initSynchronization();
         publish.accept(publisher);
-        // Publishing is deferred to afterCommit, so nothing is sent until this.
-        TransactionSynchronizationManager.getSynchronizations()
-                .forEach(TransactionSynchronization::afterCommit);
 
-        ArgumentCaptor<Object> captured = ArgumentCaptor.forClass(Object.class);
-        verify(rabbitTemplate).convertAndSend(anyString(), anyString(), captured.capture());
-
-        // Serialise, then re-parse. `valueToTree` keeps Java's numeric types, so
-        // a Long 7 becomes a LongNode and the identical 7 read from the example
-        // file is an IntNode -- equal JSON, unequal nodes, and a failure that
-        // prints two byte-identical strings. Going through text is also what
-        // actually reaches the broker.
-        try {
-            return json.readTree(json.writeValueAsString(captured.getValue()));
-        } catch (Exception e) {
-            throw new IllegalStateException("the published event is not serialisable", e);
-        }
+        ArgumentCaptor<OutboxEvent> saved = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(repository).save(saved.capture());
+        // Parsed from the stored TEXT, which is what the relay publishes.
+        return json.readTree(saved.getValue().getPayload());
     }
 
-    private Set<ValidationMessage> violations(JsonNode node) {
-        return schema.validate(node);
-    }
-
-    /** The directory holding {@code contracts/}, found by walking up. */
     private static Path repositoryRoot() {
         Path candidate = Path.of("").toAbsolutePath();
         for (int depth = 0; depth < 5 && candidate != null; depth++) {
@@ -199,7 +141,6 @@ class AiEventContractTest {
             }
             candidate = candidate.getParent();
         }
-        throw new IllegalStateException("could not find contracts/ above "
-                + Path.of("").toAbsolutePath());
+        throw new IllegalStateException("could not find contracts/ above " + Path.of("").toAbsolutePath());
     }
 }

@@ -142,11 +142,25 @@ spring:
     addresses: ${AMQP_URL}
     # A broker that has gone away must not hold a thread. Without these the
     # client waits on the socket's own defaults, which on a dropped connection
-    # means minutes -- and the thread waiting is one that has just committed a
-    # transaction and is trying to publish the event for it.
+    # means minutes. Since the outbox (Phase 09) the only thread that publishes
+    # is OutboxRelay's, and it holds no database connection while it does.
     connection-timeout: 5000
+    # Publisher confirms. `convertAndSend` returning means the bytes reached a
+    # local socket buffer, not that the broker accepted them.
+    #
+    # CORRELATED, not SIMPLE. SIMPLE with waitForConfirmsOrDie was tried first and
+    # an unroutable event came back confirmed before the returns callback had run,
+    # so the relay marked it PUBLISHED -- OutboxRelayBrokerTest caught it against
+    # a real broker. CORRELATED puts the ack and the returned message on the same
+    # CorrelationData, so one object answers "accepted?" and "routed?".
+    publisher-confirm-type: correlated
+    # With mandatory, an event that matches no queue is RETURNED rather than
+    # silently dropped: the broker acks it either way, so without returns an
+    # unroutable event would be confirmed and marked published and gone.
+    publisher-returns: true
     template:
       reply-timeout: 10000
+      mandatory: true
 
   mvc:
     async:
@@ -269,3 +283,29 @@ springdoc:
   swagger-ui:
     enabled: ${SWAGGER_ENABLED:false}
     path: /swagger-ui.html
+
+# ---------------------------------------------------------------------------
+# Transactional outbox relay (Phase 09).
+#
+# Events are written to outbox_events in the business transaction; the relay
+# publishes committed rows and retries until the broker confirms. Durations are
+# plain milliseconds so @Scheduled and @Value read them without format surprises.
+# ---------------------------------------------------------------------------
+outbox:
+  relay:
+    # Off under the test profile, where tests drive relayOnce() explicitly.
+    enabled: ${OUTBOX_RELAY_ENABLED:true}
+    # fixedDelay, measured from the END of the previous run, so a slow broker
+    # cannot stack overlapping polls the way fixedRate would.
+    poll-interval-ms: 500
+    batch-size: 100
+    # How long a claimed row is hidden from other relays. Long enough to publish
+    # a whole batch; if the relay dies, the rows come back when it runs out.
+    lease-ms: 60000
+    # Attempts before DEAD. With 500ms doubling to a 5 minute cap, eight attempts
+    # span a little over two minutes: long enough to ride out a broker restart,
+    # short enough that a genuinely broken event reaches a human the same hour.
+    max-attempts: 8
+    confirm-timeout-ms: 5000
+  # PUBLISHED rows are kept this long as an audit of what was emitted, then purged.
+  retention-days: 7

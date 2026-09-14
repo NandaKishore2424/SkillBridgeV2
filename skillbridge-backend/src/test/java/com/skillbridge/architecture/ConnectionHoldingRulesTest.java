@@ -66,19 +66,20 @@ class ConnectionHoldingRulesTest {
             "java.net.Socket");
 
     /**
-     * The audited boundary. {@code AIEventPublisher} does reach
-     * {@code RabbitTemplate}, but only from a callback registered for after the
-     * transaction commits, dispatched onto {@code aiEventExecutor} — so the
-     * committing thread's connection is not held for the publish. The walk stops
-     * here instead of reporting it.
+     * Classes the walk may stop at without reporting. EMPTY, and it should stay so.
      *
-     * <p>That this class really defers is not assumed: {@code
-     * AIEventPublisherDeferralTest} asserts it, and fails if the deferral is
-     * removed. Adding a name to this list without an equivalent test would turn
-     * the rule off.
+     * <p>Until 2026-09-14 this held {@code AIEventPublisher}, which reached
+     * {@code RabbitTemplate} from an afterCommit callback on a background
+     * executor, and was exempt only because a test proved the deferral. The
+     * transactional outbox removed the need: the publisher now INSERTs a row and
+     * touches no broker, and the only class that publishes, {@code OutboxRelay},
+     * is not {@code @Transactional}. So the rule runs with no exceptions at all.
+     *
+     * <p>Adding a name here turns the rule off for everything reachable through
+     * it. Do not do that without a test proving the connection really is
+     * released first.
      */
-    private static final Set<String> DEFERRED_BOUNDARIES = Set.of(
-            "com.skillbridge.shared.messaging.AIEventPublisher");
+    private static final Set<String> DEFERRED_BOUNDARIES = Set.of();
 
     private static JavaClasses production;
 
@@ -110,8 +111,8 @@ class ConnectionHoldingRulesTest {
                         %s
 
                         Move the call outside the transaction. For broker publishes, \
-                        AIEventPublisher already does this: it registers an afterCommit \
-                        callback and dispatches onto aiEventExecutor.""",
+                        write to the outbox with OutboxWriter inside the transaction and \
+                        let OutboxRelay publish it, which it does holding no connection.""",
                         String.join("\n\n", violations))
                 .isEmpty();
     }

@@ -163,6 +163,17 @@
 			<artifactId>postgresql</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!--
+			A real RabbitMQ for the outbox relay tests. Publisher confirms, returns
+			for unroutable messages and a broker that refuses connections are all
+			broker behaviour, and a mocked template would answer whatever the test
+			told it to. Version managed by the Spring Boot parent, like postgresql.
+		-->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>rabbitmq</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>junit-jupiter</artifactId>
