@@ -375,7 +375,7 @@ and in particular no longer needs the application stopped or the database to
 yourself:
 
 ```bash
-cd skillbridge-backend && ./mvnw -B clean verify   # 172 tests, ~55s, 0 skipped
+cd skillbridge-backend && ./mvnw -B clean verify   # 143 fast + 70 integration, 0 skipped, plus the coverage gate
 ```
 
 Against the live database instead, which writes to production data and competes
