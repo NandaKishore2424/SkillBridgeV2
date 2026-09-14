@@ -28,11 +28,12 @@
 -- rendering of a cast. Compare normalised, or you ship a check that is red
 -- forever and that everyone learns to ignore.
 --
--- 2026-09-14: outbox_events ADDED (receipt db/schema/2026-09-14-outbox.sql).
--- The counts and digests above describe the schema BEFORE that table. They are
--- re-verified against live after the receipt is applied there; until then this
--- file is ahead of live by one table, one sequence, three constraints and five
--- indexes.
+-- 2026-09-14: outbox_events ADDED (receipt db/schema/2026-09-14-outbox.sql) and
+-- applied to live the same day. The per-category digests above describe the
+-- schema BEFORE that table. Re-verified afterwards with the canonical fingerprint
+-- (scripts/schema-fingerprint.sql), live and this file agreeing exactly:
+--
+--     31 tables, 575 catalogue objects, digest 83118cd3ed3fc1fbbea886af0badf60f
 --
 -- WHY THIS FILE EXISTS
 --

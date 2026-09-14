@@ -10,12 +10,14 @@
 
 | Tier | Tests | Runtime | Needs | Command |
 |---|---|---|---|---|
-| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event contract | 143 | **~7 s** | nothing | `mvn test` |
-| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres | 70 | **~50 s** | Docker | `mvn verify` |
-| **Python contract** — the AI event consumer | 12 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
+| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event contract | 148 | **~7 s** | nothing | `mvn test` |
+| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres, the relay on real RabbitMQ | 79 | **~60 s** | Docker | `mvn verify` |
+| **Python** — AI event contract and consumer resilience | 28 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
 | **Frontend** — hooks, auth, components | 22 | **2.5 s** | nothing | `npm test` |
 
-**247 tests, 0 skipped**, measured 2026-09-14. All of it runs in CI, and so do
+**277 tests, 0 skipped**, measured 2026-09-14. All of it runs in CI — **proven on a
+clean git worktree**, which the first version of this sentence was not: see below. So
+do
 three gates on top of it:
 
 | Gate | Measured | Threshold | Why not the phase's number |
@@ -69,6 +71,34 @@ the contract.
 > **When two components share a format, the format has to be an artifact both are
 > checked against.** `contracts/ai-events/v1/ai-event.schema.json` is that artifact
 > now, and each side is tested against it.
+
+---
+
+## "Runs in CI" was claimed before it was true
+
+This document said the integration tier ran in CI. It had never run there: nothing
+was pushed, and it could not have booted. `jwt.secret` resolves only from
+`application-local.yaml`, which is gitignored, so on a clean checkout every Spring
+context failed and 58 of 64 integration tests errored.
+
+The check that found it is cheap and should be the default before claiming anything
+about CI: build a `git worktree` (it contains no gitignored files, exactly like CI),
+unset the environment variables, and run the build there. The fix is a test-only key
+in `application-test.yaml`, proven the same way.
+
+---
+
+## Test the broker with a broker
+
+`OutboxRelayBrokerTest` runs the outbox relay against a real RabbitMQ in a
+Testcontainer, and that choice caught a defect a mock could not have. The relay's
+first version used SIMPLE publisher confirms and a returns callback, and an event
+routed to no queue came back confirmed before the callback had run. The relay marked
+it PUBLISHED: silent loss, in the one class whose job is preventing loss.
+
+A mocked `RabbitTemplate` confirms whatever the test tells it to, so it would have
+passed that relay forever. Confirms, returns, refused connections and queue overflow
+are all broker behaviour, and the only honest test of broker behaviour runs a broker.
 
 ---
 
@@ -349,6 +379,11 @@ Everything added in this phase was broken before being trusted:
 | `useDebouncedValue.test.ts` | `clearTimeout` cleanup removed (debounce → throttle) | red, an intermediate `'dat'` leaked |
 | `StudentsList.test.tsx` | client-side filter reintroduced | red on 1 of 6 — the one designed for it |
 | the coverage ratchet | threshold raised to 99% | red |
+| `OutboxWriterTransactionTest` | `MANDATORY` → `REQUIRED`, then → `REQUIRES_NEW` | red on 1, then 2 |
+| `OutboxRelayBrokerTest` | returned-message check removed; `mandatory` off | red on both unroutable tests, each time |
+| `MessagingBoundaryRulesTest` | a service injecting `RabbitTemplate` | red, naming it |
+| `ConnectionHoldingRulesTest` | the relay made `@Transactional` | red, naming the path |
+| `test_resilient_consumer.py` | no reconnect; requeue on retry; health always true | 2, 3 and 2 red |
 | `verify-schema-baseline.sh` end to end | run against a real sabotaged reference database | red, naming both changes and their direction |
 
 Running that last one is what found a bug in the script itself. It waited on
@@ -375,7 +410,7 @@ and in particular no longer needs the application stopped or the database to
 yourself:
 
 ```bash
-cd skillbridge-backend && ./mvnw -B clean verify   # 143 fast + 70 integration, 0 skipped, plus the coverage gate
+cd skillbridge-backend && ./mvnw -B clean verify   # 148 fast + 79 integration, 0 skipped, plus the coverage gate
 ```
 
 Against the live database instead, which writes to production data and competes

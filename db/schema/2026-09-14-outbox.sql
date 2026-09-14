@@ -1,8 +1,14 @@
 -- Transactional outbox
 -- ============================================================================
--- NOT YET APPLIED to Supabase. Written 2026-09-14. It is applied only after the
--- outbox is proven against a throwaway container, and this header is updated
--- with the date it ran. Idempotent: safe to run twice.
+-- Applied to Supabase on 2026-09-14, after the outbox was proven against throwaway
+-- containers (full suite green, relay tested against a real RabbitMQ). Idempotent:
+-- safe to run twice.
+--
+-- VERIFIED after applying, not assumed: live and db/schema/baseline.sql applied to
+-- an empty pgvector/pgvector:pg17 both fingerprint to
+--     575 catalogue objects, digest 83118cd3ed3fc1fbbea886af0badf60f
+-- which is the previous 551 plus exactly this table's 15 columns, 3 constraints,
+-- 5 indexes and 1 sequence.
 --
 -- WHY
 --   AIEventPublisher published from an afterCommit callback on a background
