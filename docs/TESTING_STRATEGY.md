@@ -10,12 +10,12 @@
 
 | Tier | Tests | Runtime | Needs | Command |
 |---|---|---|---|---|
-| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event contract | 148 | **~7 s** | nothing | `mvn test` |
-| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres, the relay on real RabbitMQ | 79 | **~60 s** | Docker | `mvn verify` |
-| **Python** — AI event contract and consumer resilience | 28 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
+| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event and topology contracts | 154 | **~7 s** | nothing | `mvn test` |
+| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres, the relay and topology on real RabbitMQ | 84 | **~60 s** | Docker | `mvn verify` |
+| **Python** — event and topology contracts, consumer resilience and retry | 42 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
 | **Frontend** — hooks, auth, components | 22 | **2.5 s** | nothing | `npm test` |
 
-**277 tests, 0 skipped**, measured 2026-09-14. All of it runs in CI — **proven on a
+**302 tests, 0 skipped**, measured 2026-09-14. All of it runs in CI — **proven on a
 clean git worktree**, which the first version of this sentence was not: see below. So
 do
 three gates on top of it:
@@ -99,6 +99,14 @@ it PUBLISHED: silent loss, in the one class whose job is preventing loss.
 A mocked `RabbitTemplate` confirms whatever the test tells it to, so it would have
 passed that relay forever. Confirms, returns, refused connections and queue overflow
 are all broker behaviour, and the only honest test of broker behaviour runs a broker.
+
+`MessagingTopologyBrokerTest` goes one step further, for a reason learned the hard
+way: **a declaration that succeeds proves the broker accepted the arguments, not that
+it honours them.** A quorum queue accepts `x-overflow: reject-publish-dlx` with a 201
+and then evicts the oldest message instead of refusing the new one. So that test reads
+every queue's type and arguments back from the management API, and watches the
+behaviour: a message routed, a message returned from a retry tier after its TTL, a
+rejection landing in the DLQ, a redelivery limit dead-lettering.
 
 ---
 
@@ -384,6 +392,10 @@ Everything added in this phase was broken before being trusted:
 | `MessagingBoundaryRulesTest` | a service injecting `RabbitTemplate` | red, naming it |
 | `ConnectionHoldingRulesTest` | the relay made `@Transactional` | red, naming the path |
 | `test_resilient_consumer.py` | no reconnect; requeue on retry; health always true | 2, 3 and 2 red |
+| `RabbitTopologyContractTest` | `reject-publish-dlx` on the main queue; a static retry routing key | 2 red, 2 red |
+| `MessagingTopologyBrokerTest` | tiers routed to the DLQ; main queue with no dead-letter exchange | 1 red; 2 red |
+| `test_resilient_consumer.py` (retry) | tiers never escalate; failed republish acked; confirm mode dropped | 3, 1 and 1 red |
+| `test_amqp_topology_contract.py` | a retry tier renamed on the Python side only | red |
 | `verify-schema-baseline.sh` end to end | run against a real sabotaged reference database | red, naming both changes and their direction |
 
 Running that last one is what found a bug in the script itself. It waited on
@@ -410,7 +422,7 @@ and in particular no longer needs the application stopped or the database to
 yourself:
 
 ```bash
-cd skillbridge-backend && ./mvnw -B clean verify   # 148 fast + 79 integration, 0 skipped, plus the coverage gate
+cd skillbridge-backend && ./mvnw -B clean verify   # 154 fast + 84 integration, 0 skipped, plus the coverage gate
 ```
 
 Against the live database instead, which writes to production data and competes
