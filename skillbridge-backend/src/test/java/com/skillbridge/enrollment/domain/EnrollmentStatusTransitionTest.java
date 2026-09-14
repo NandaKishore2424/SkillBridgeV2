@@ -105,6 +105,43 @@ class EnrollmentStatusTransitionTest {
     }
 
     /**
+     * The refusal message says what WOULD have been legal.
+     *
+     * <p>{@code assertCanTransitionTo} documents this as deliberate — "worth the
+     * extra characters, because 'invalid transition' in a bug report tells
+     * whoever reads it nothing" — and until 2026-09-14 no test held it. The only
+     * message assertion checked for the two state names, which sit in the
+     * prefix whichever branch builds the suffix. PIT found it: negating the
+     * {@code isEmpty()} conditional that picks the suffix survived, so a terminal
+     * state could print an empty {@code []} and a live one could claim to be
+     * final, and the suite stayed green.
+     */
+    @Nested
+    @DisplayName("refusal message")
+    class Message {
+
+        @Test
+        @DisplayName("refusing a terminal state says it is final, not an empty []")
+        void terminalRefusalSaysFinal() {
+            assertThatThrownBy(() -> EnrollmentStatus.REJECTED
+                    .assertCanTransitionTo(EnrollmentStatus.APPROVED))
+                    .hasMessageContaining("nothing, it is final")
+                    .hasMessageNotContaining("[]");
+        }
+
+        @Test
+        @DisplayName("refusing a live state lists the transitions that are allowed")
+        void liveRefusalListsTheLegalTargets() {
+            // APPROVED can only go to CANCELLED, so that is what the reader
+            // should be told, and it must not claim APPROVED is final.
+            assertThatThrownBy(() -> EnrollmentStatus.APPROVED
+                    .assertCanTransitionTo(EnrollmentStatus.PENDING))
+                    .hasMessageContaining("CANCELLED")
+                    .hasMessageNotContaining("nothing, it is final");
+        }
+    }
+
+    /**
      * Kept nested like the rest.
      *
      * <p>Surefire reports {@code @Nested} classes as separate test classes and,

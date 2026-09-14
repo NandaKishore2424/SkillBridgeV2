@@ -86,6 +86,34 @@ jobs:
         working-directory: skillbridge-backend
         run: ./mvnw -B clean verify
 
+  mutation:
+    name: Mutation testing (domain logic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: maven
+
+      # Coverage says a line ran. Mutation testing says a test would NOTICE if
+      # the line were wrong: PIT flips conditions and swaps return values and
+      # checks that something fails. A line can be fully covered by a test that
+      # asserts nothing.
+      #
+      # Scoped to pure logic with fast unit tests -- the state machines, the
+      # tenancy check, the paging envelope, the sort parser -- so it needs no
+      # database and finishes in about a minute. Over Spring services it would
+      # re-run the integration tier once per mutant.
+      #
+      # Threshold 89 against a measured 90% (35 of 39). The 4 survivors are
+      # equivalent mutants that no test can kill; see the comment in pom.xml
+      # before "fixing" them.
+      - name: PIT
+        working-directory: skillbridge-backend
+        run: ./mvnw -B test-compile org.pitest:pitest-maven:mutationCoverage
+
   ai-contract:
     name: AI event contract (Python consumer)
     runs-on: ubuntu-latest

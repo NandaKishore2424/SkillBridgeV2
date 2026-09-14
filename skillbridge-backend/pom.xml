@@ -403,6 +403,76 @@
 					</execution>
 				</executions>
 			</plugin>
+			<!--
+				PIT mutation testing, on the code where it measures something.
+
+				Coverage says a line ran. Mutation testing says a test would have
+				NOTICED if the line were wrong: PIT flips a condition, removes a
+				call, returns a different value, and checks some test fails. A
+				line can be 100% covered by a test that asserts nothing.
+
+				Scoped deliberately to pure logic with fast unit tests: the
+				enrollment and progress state machines, the tenancy check, the
+				paging envelope and the sort parser. Running PIT over Spring
+				services would re-run the integration tier once per mutant,
+				hundreds of container-backed runs, which is a nightly job at best
+				and not this gate.
+
+				Not bound to a phase. Run it on demand:
+				    ./mvnw -B test-compile org.pitest:pitest-maven:mutationCoverage
+			-->
+			<plugin>
+				<groupId>org.pitest</groupId>
+				<artifactId>pitest-maven</artifactId>
+				<version>1.17.4</version>
+				<dependencies>
+					<dependency>
+						<groupId>org.pitest</groupId>
+						<artifactId>pitest-junit5-plugin</artifactId>
+						<version>1.2.2</version>
+					</dependency>
+				</dependencies>
+				<configuration>
+					<targetClasses>
+						<param>com.skillbridge.enrollment.domain.*</param>
+						<param>com.skillbridge.progress.domain.*</param>
+						<param>com.skillbridge.common.tenant.TenantGuard</param>
+						<param>com.skillbridge.common.dto.PagedResponse</param>
+						<param>com.skillbridge.common.dto.SortParameter</param>
+					</targetClasses>
+					<targetTests>
+						<param>com.skillbridge.enrollment.domain.*Test</param>
+						<param>com.skillbridge.progress.domain.*Test</param>
+						<param>com.skillbridge.common.tenant.TenantGuardTest</param>
+						<param>com.skillbridge.common.dto.PagedResponseTest</param>
+						<param>com.skillbridge.common.dto.SortParameterTest</param>
+					</targetTests>
+					<excludedGroups><param>integration</param></excludedGroups>
+					<outputFormats>
+						<param>HTML</param>
+						<param>XML</param>
+					</outputFormats>
+					<timestampedReports>false</timestampedReports>
+					<!--
+						A ratchet on mutation score, set from measurement.
+
+						First run: 39 mutants, 34 killed, 87%. Of the 5 that
+						survived, 4 are EQUIVALENT and cannot be killed: the
+						terminal states (REJECTED, WITHDRAWN, EXPIRED, CANCELLED)
+						already return an empty EnumSet, and PIT's
+						EmptyObjectReturnValsMutator replaces that with
+						Collections.emptySet(), which behaves identically for
+						everything this code does with it. Do not write tests to
+						"kill" those; there is nothing wrong to catch.
+
+						The fifth was a real gap, the refusal message's "allowed
+						from" suffix, now covered in EnrollmentStatusTransitionTest.
+						That makes 35 of 39, 89.7%, and the 4 equivalents are why
+						the ceiling here is below 100 and should stay there.
+					-->
+					<mutationThreshold>89</mutationThreshold>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
