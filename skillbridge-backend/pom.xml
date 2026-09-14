@@ -300,6 +300,109 @@
 					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
+			<!--
+				JaCoCo across BOTH tiers.
+
+				Two exec files and a merge, because the tiers run under different
+				plugins: Surefire produces jacoco-unit.exec, Failsafe produces
+				jacoco-integration.exec. Reporting on only one would understate
+				coverage badly. Most of the service and repository code is
+				exercised by the integration tier, and a unit-only report would
+				make the number look like a reason to delete tests rather than
+				write them.
+			-->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<!-- Pinned: the Spring Boot parent does not manage this one, and
+				     an unpinned plugin version is a build that can change under
+				     you without a commit. -->
+				<version>0.8.15</version>
+				<executions>
+					<execution>
+						<id>prepare-unit</id>
+						<goals><goal>prepare-agent</goal></goals>
+						<configuration>
+							<destFile>${project.build.directory}/jacoco-unit.exec</destFile>
+						</configuration>
+					</execution>
+					<execution>
+						<id>prepare-integration</id>
+						<goals><goal>prepare-agent-integration</goal></goals>
+						<configuration>
+							<destFile>${project.build.directory}/jacoco-integration.exec</destFile>
+						</configuration>
+					</execution>
+					<execution>
+						<id>merge</id>
+						<phase>post-integration-test</phase>
+						<goals><goal>merge</goal></goals>
+						<configuration>
+							<fileSets>
+								<fileSet>
+									<directory>${project.build.directory}</directory>
+									<includes><include>jacoco-*.exec</include></includes>
+								</fileSet>
+							</fileSets>
+							<destFile>${project.build.directory}/jacoco-merged.exec</destFile>
+						</configuration>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>post-integration-test</phase>
+						<goals><goal>report</goal></goals>
+						<configuration>
+							<dataFile>${project.build.directory}/jacoco-merged.exec</dataFile>
+							<outputDirectory>${project.build.directory}/site/jacoco</outputDirectory>
+						</configuration>
+					</execution>
+					<!--
+						A RATCHET, not a target.
+
+						Phase 11 asks for 80% line and 70% branch on service and
+						domain packages. The merged suite is at 34.9% line and
+						27.4% branch, and these numbers sit just under that, so
+						coverage cannot fall without failing the build and every
+						batch of tests raises the floor.
+
+						Setting 80% now would mean a red build with no route to
+						green except deleting the threshold, and a threshold
+						everybody deletes is worse than no threshold.
+
+						Read it honestly. 34.9% is not "the backend is a third
+						tested": the covered third is the part that has broken
+						before and now has guards on it, and the uncovered part
+						is mostly service code nobody has written a test for yet.
+						enrollment.service is at 0.6% and bulkupload.service at
+						1.4%, and those are the next places worth going.
+					-->
+					<execution>
+						<id>check</id>
+						<phase>verify</phase>
+						<goals><goal>check</goal></goals>
+						<configuration>
+							<dataFile>${project.build.directory}/jacoco-merged.exec</dataFile>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.34</minimum>
+										</limit>
+										<limit>
+											<counter>BRANCH</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.27</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

@@ -75,7 +75,14 @@ jobs:
       # PostgresContainerInitializer builds each run's database from it.
       #
       # Docker is available on ubuntu-latest, so Testcontainers needs no setup.
-      - name: Integration tier
+      #
+      # `verify` also runs the JaCoCo coverage check, on the MERGED data from
+      # both tiers. It is here rather than in the fast-tier job because a
+      # unit-only number understates coverage badly: most service and
+      # repository code is exercised by this tier. The threshold is a ratchet
+      # just under what is measured (34.9% line, 27.4% branch on 2026-09-14),
+      # not Phase 11's 80/70 -- see the comment in pom.xml.
+      - name: Integration tier and coverage gate
         working-directory: skillbridge-backend
         run: ./mvnw -B clean verify
 
