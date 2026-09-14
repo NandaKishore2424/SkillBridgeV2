@@ -25,6 +25,11 @@ rateLimit:
   enabled: false
 
 spring:
+  rabbitmq:
+    # A test default, because application.yaml's ${AMQP_URL} has none and the
+    # only file that set it, application-local.yaml, is gitignored. Nothing in
+    # the test suite publishes to a broker; this only has to resolve.
+    addresses: amqp://guest:guest@localhost:5672
   datasource:
     hikari:
       # The main pool is fixed at 12 -- this application's share of the 15
@@ -64,3 +69,21 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
     org.hibernate.stat: DEBUG
+
+# ---------------------------------------------------------------------------
+# JWT signing key, FOR TESTS ONLY.
+#
+# application.yaml says `secret: ${JWT_SECRET}` with no default, and the one
+# file that supplied it -- application-local.yaml -- is gitignored. So on a
+# clean checkout, which is exactly what CI is, every Spring context failed with
+# "Could not resolve placeholder 'JWT_SECRET'": 58 of 64 integration tests
+# errored. Found 2026-09-14 by building a clean git worktree; nothing had been
+# pushed, so CI had never run and the previous handover's claim that the
+# integration tier "runs in CI" was untested and wrong.
+#
+# This is not a secret. It signs tokens inside the test JVM and nowhere else, it
+# is the base64 of a string that says so, and it is the same length (48 bytes)
+# as the real key so the signing algorithm the code selects is unchanged.
+# ---------------------------------------------------------------------------
+jwt:
+  secret: dGVzdC1vbmx5LWp3dC1zaWduaW5nLWtleS1ub3QtYS1yZWFsLXNlY3JldC0wMDAw
