@@ -15,6 +15,7 @@ from pathlib import Path
 SERVICE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVICE))
 import ai_event_contract as contract  # noqa: E402
+import dedup  # noqa: E402
 
 TOPOLOGY = json.loads((SERVICE.parent / "contracts" / "amqp" / "topology.json").read_text())
 
@@ -44,6 +45,14 @@ class TopologyContract(unittest.TestCase):
     def test_tier_ttls_escalate(self):
         ttls = [t["arguments"]["x-message-ttl"] for t in TOPOLOGY["queues"]["retryTiers"]]
         self.assertEqual(ttls, sorted(ttls))
+
+    def test_dedup_lease_expires_before_the_retries_run_out(self):
+        # A worker killed mid-event leaves a claim. Deliveries that meet it are
+        # retried, and the last retry arrives after every tier's delay has passed.
+        # If the lease outlived that, the event would reach the DLQ never processed.
+        total_ms = sum(t["arguments"]["x-message-ttl"] for t in TOPOLOGY["queues"]["retryTiers"])
+        self.assertLess(dedup.LEASE_SECONDS * 1000, total_ms,
+                        "a killed worker's claim would outlast every retry of its event")
 
     def test_attempt_header_matches(self):
         self.assertEqual(contract.RETRY_ATTEMPT_HEADER, TOPOLOGY["retry"]["attemptHeader"])

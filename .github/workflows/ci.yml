@@ -140,6 +140,37 @@ jobs:
         working-directory: skillbridge-ai-service
         run: python -m unittest discover -s tests -t . -v
 
+  ai-store:
+    name: AI service (dedup store against PostgreSQL)
+    runs-on: ubuntu-latest
+    # The claim's value is that it is atomic, which only a real database shows.
+    # The test builds its database from db/schema/baseline.sql, so the table it
+    # exercises is the deployed definition, not a copy.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: dedup
+          POSTGRES_PASSWORD: dedup
+          POSTGRES_DB: dedup
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U dedup"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install "psycopg2-binary>=2.9"
+      # Fails, never skips, if AI_TEST_DATABASE_URL is missing.
+      - name: Store test
+        working-directory: skillbridge-ai-service
+        env:
+          AI_TEST_DATABASE_URL: postgresql://dedup:dedup@localhost:5432/dedup
+        run: python -m unittest discover -s tests_integration -t . -v
+
   frontend:
     name: Frontend build
     runs-on: ubuntu-latest

@@ -27,7 +27,12 @@ import database
 import embedder
 from skill_analyzer import analyze_skill_gap
 import ai_event_contract as contract
+import dedup
 from resilient_consumer import Outcome, ResilientConsumer
+
+#: The name this service deduplicates under in processed_events. Renaming it
+#: forgets every event already processed, so treat it like a table name.
+DEDUP_CONSUMER = "skillbridge-ai-service.skill-analysis"
 
 
 # ─── Lifecycle Management ──────────────────────────────────────────────────────
@@ -50,9 +55,17 @@ async def lifespan(app: FastAPI):
 
     # 3. Start the RabbitMQ consumer in a background thread. It reconnects on its
     #    own for as long as the service runs; /health reports whether it is up.
+    #    Every delivery is claimed in processed_events first, so a duplicate --
+    #    and at-least-once delivery produces them -- is acked, not re-analysed.
     global _consumer
+    handler = dedup.deduplicating(
+        _handle_delivery,
+        dedup.ProcessedEventStore(database.get_connection, database.return_connection),
+        DEDUP_CONSUMER,
+        lease_seconds=dedup.LEASE_SECONDS,
+    )
     _consumer = ResilientConsumer(
-        contract.AI_ANALYSIS_QUEUE, _handle_delivery, _connect,
+        contract.AI_ANALYSIS_QUEUE, handler, _connect,
         retry_exchange=contract.RETRY_EXCHANGE,
         retry_queues=contract.RETRY_TIER_QUEUES,
         attempt_header=contract.RETRY_ATTEMPT_HEADER,

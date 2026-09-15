@@ -35,6 +35,15 @@
 --
 --     31 tables, 575 catalogue objects, digest 83118cd3ed3fc1fbbea886af0badf60f
 --
+-- 2026-09-15: processed_events ADDED (receipt db/schema/2026-09-15-processed-events.sql)
+-- and applied to live the same day. Re-verified afterwards, live and this file
+-- agreeing exactly:
+--
+--     32 tables, 589 catalogue objects, digest 215daa33f8d95ea1bfaeacc1ac15cd0c
+--
+-- (digest = md5 of the fingerprint rows joined by newlines in row order; the same
+-- method reproduces the 575 digest above from the previous version of this file.)
+--
 -- WHY THIS FILE EXISTS
 --
 -- Flyway was removed on 2026-09-06 and `ddl-auto: validate` became the only
@@ -360,6 +369,24 @@ CREATE TABLE public.placements (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
+-- Consumer-side deduplication (Phase 09). One row per (consumer, event_id): the
+-- AI service claims an event here before processing it, with a lease, so a
+-- redelivered duplicate is acknowledged instead of processed twice. See
+-- db/schema/2026-09-15-processed-events.sql and skillbridge-ai-service/dedup.py.
+CREATE TABLE public.processed_events (
+    consumer character varying(100) NOT NULL,
+    event_id uuid NOT NULL,
+    status character varying(20) DEFAULT 'IN_PROGRESS'::character varying NOT NULL,
+    attempts integer DEFAULT 1 NOT NULL,
+    lease_until timestamp with time zone NOT NULL,
+    first_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone
+);
+
+-- Not reachable through the REST API's anon/authenticated roles. NOT compared by
+-- scripts/schema-fingerprint.sql, which does not read relrowsecurity.
+ALTER TABLE public.processed_events ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE public.refresh_tokens (
     id bigint DEFAULT nextval('refresh_tokens_id_seq'::regclass) NOT NULL,
     user_id bigint NOT NULL,
@@ -602,6 +629,7 @@ ALTER TABLE public.idempotency_keys ADD CONSTRAINT idempotency_keys_pkey PRIMARY
 ALTER TABLE public.industry_job_descriptions ADD CONSTRAINT industry_job_descriptions_pkey PRIMARY KEY (id);
 ALTER TABLE public.outbox_events ADD CONSTRAINT outbox_events_pkey PRIMARY KEY (id);
 ALTER TABLE public.placements ADD CONSTRAINT placements_pkey PRIMARY KEY (id);
+ALTER TABLE public.processed_events ADD CONSTRAINT processed_events_pkey PRIMARY KEY (consumer, event_id);
 ALTER TABLE public.refresh_tokens ADD CONSTRAINT refresh_tokens_pkey PRIMARY KEY (id);
 ALTER TABLE public.roles ADD CONSTRAINT roles_pkey PRIMARY KEY (id);
 ALTER TABLE public.skills ADD CONSTRAINT skills_pkey PRIMARY KEY (id);
@@ -651,6 +679,9 @@ ALTER TABLE public.idempotency_keys ADD CONSTRAINT ck_idempotency_completed CHEC
 ALTER TABLE public.idempotency_keys ADD CONSTRAINT ck_idempotency_state CHECK (((state)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'COMPLETED'::character varying])::text[])));
 ALTER TABLE public.outbox_events ADD CONSTRAINT chk_outbox_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'PUBLISHED'::character varying, 'DEAD'::character varying])::text[])));
 ALTER TABLE public.placements ADD CONSTRAINT placements_status_check CHECK (((status)::text = ANY ((ARRAY['APPLIED'::character varying, 'INTERVIEW'::character varying, 'OFFER'::character varying, 'REJECTED'::character varying])::text[])));
+ALTER TABLE public.processed_events ADD CONSTRAINT chk_processed_events_attempts CHECK ((attempts >= 1));
+ALTER TABLE public.processed_events ADD CONSTRAINT chk_processed_events_completed CHECK ((((status)::text = 'DONE'::text) = (completed_at IS NOT NULL)));
+ALTER TABLE public.processed_events ADD CONSTRAINT chk_processed_events_status CHECK (((status)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'DONE'::character varying])::text[])));
 ALTER TABLE public.roles ADD CONSTRAINT roles_name_check CHECK (((name)::text = ANY ((ARRAY['SYSTEM_ADMIN'::character varying, 'COLLEGE_ADMIN'::character varying, 'TRAINER'::character varying, 'STUDENT'::character varying])::text[])));
 ALTER TABLE public.student_batch_progress ADD CONSTRAINT chk_sbp_percent CHECK (((weighted_percent >= (0)::numeric) AND (weighted_percent <= (100)::numeric)));
 ALTER TABLE public.student_skills ADD CONSTRAINT student_skills_proficiency_level_check CHECK (((proficiency_level >= 1) AND (proficiency_level <= 5)));
@@ -763,6 +794,8 @@ CREATE INDEX idx_outbox_published ON public.outbox_events USING btree (published
 CREATE INDEX idx_placements_company_id ON public.placements USING btree (company_id);
 CREATE INDEX idx_placements_status ON public.placements USING btree (status);
 CREATE INDEX idx_placements_student_id ON public.placements USING btree (student_id);
+CREATE INDEX idx_processed_events_done ON public.processed_events USING btree (completed_at) WHERE ((status)::text = 'DONE'::text);
+CREATE INDEX idx_processed_events_in_progress ON public.processed_events USING btree (lease_until) WHERE ((status)::text = 'IN_PROGRESS'::text);
 CREATE INDEX idx_progress_college ON public.topic_progress USING btree (college_id, batch_id);
 CREATE INDEX idx_progress_needs_attention ON public.topic_progress USING btree (batch_id, updated_at DESC) WHERE ((status)::text = 'NEEDS_IMPROVEMENT'::text);
 CREATE INDEX idx_progress_pending ON public.topic_progress USING btree (batch_id, student_id) WHERE ((status)::text = 'PENDING'::text);
