@@ -12,10 +12,11 @@
 |---|---|---|---|---|
 | **Backend fast** — unit, architecture, `@WebMvcTest` slices, event and topology contracts | 154 | **~7 s** | nothing | `mvn test` |
 | **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres, the relay and topology on real RabbitMQ | 84 | **~60 s** | Docker | `mvn verify` |
-| **Python** — event and topology contracts, consumer resilience and retry | 42 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
+| **Python** — event and topology contracts, consumer resilience, retry and dedup decisions | 54 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
+| **Python store** — the dedup claim on real PostgreSQL built from `baseline.sql`: racing claims, lease takeover, fencing | 8 | **~4 s** | a PostgreSQL (`AI_TEST_DATABASE_URL`); fails, never skips, without one | `python -m unittest discover -s tests_integration -t .` |
 | **Frontend** — hooks, auth, components | 22 | **2.5 s** | nothing | `npm test` |
 
-**302 tests, 0 skipped**, measured 2026-09-14. All of it runs in CI — **proven on a
+**322 tests, 0 skipped**, measured 2026-09-15. All of it runs in CI — **proven on a
 clean git worktree**, which the first version of this sentence was not: see below. So
 do
 three gates on top of it:
