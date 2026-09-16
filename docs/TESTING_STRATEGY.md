@@ -10,21 +10,21 @@
 
 | Tier | Tests | Runtime | Needs | Command |
 |---|---|---|---|---|
-| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event and topology contracts, alert rules vs emitted metrics | 200 | **~14 s** | nothing | `mvn test` |
-| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres; the relay, topology and dead-letter recorder on real RabbitMQ | 107 | **~95 s** | Docker | `mvn verify` |
-| **Python** — event and topology contracts, consumer resilience, retry, dead-lettering and dedup decisions | 63 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
+| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event and topology contracts, alert rules vs emitted metrics | 211 | **~10 s** | nothing | `mvn test` |
+| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres; the relay, topology and dead-letter recorder on real RabbitMQ | 109 | **~95 s** | Docker | `mvn verify` |
+| **Python** — event contracts in every accepted version, topology, consumer resilience, retry, dead-lettering, dedup and dispatch | 77 | **<0.1 s** | `jsonschema`, `prometheus-client` | `python -m unittest discover -s tests -t .` |
 | **Python store** — the dedup claim on real PostgreSQL built from `baseline.sql`: racing claims, lease takeover, fencing | 8 | **~4 s** | a PostgreSQL (`AI_TEST_DATABASE_URL`); fails, never skips, without one | `python -m unittest discover -s tests_integration -t .` |
 | **Frontend** — hooks, auth, components | 22 | **2.5 s** | nothing | `npm test` |
 | **Alert rules** — `promtool test rules`: synthetic series in, alerts out, NaN included | 4 scenarios, 11 evaluations | **<1 s** | Docker | see `ops/prometheus/messaging-alerts.test.yml` |
 
-**400 tests, 0 skipped**, measured 2026-09-16, plus the `promtool` rule tests. All of it runs in CI — **proven on a
+**427 tests, 0 skipped**, measured 2026-09-16, plus the `promtool` rule tests. All of it runs in CI — **proven on a
 clean git worktree**, which the first version of this sentence was not: see below. So
 do
 three gates on top of it:
 
 | Gate | Measured | Threshold | Why not the phase's number |
 |---|---|---|---|
-| Backend coverage (JaCoCo, both tiers merged) | 42.4% line · 39.0% branch (2026-09-16; was 34.9 · 27.4 when the gate was set) | 34% · 27% | a ratchet; 80% now would be deleted, not met |
+| Backend coverage (JaCoCo, both tiers merged) | 42.9% line · 40.2% branch (2026-09-16; was 34.9 · 27.4 when the gate was set) | 34% · 27% | a ratchet; 80% now would be deleted, not met |
 | Frontend coverage (v8) | 13.4% line | 13% | same |
 | Mutation score (PIT, domain logic) | 90% — 35 of 39 | 89% | the 4 survivors are equivalent and unkillable |
 
@@ -71,8 +71,9 @@ was sent. The Python side had no tests. Each end was green about its own idea of
 the contract.
 
 > **When two components share a format, the format has to be an artifact both are
-> checked against.** `contracts/ai-events/v1/ai-event.schema.json` is that artifact
-> now, and each side is tested against it.
+> checked against.** `contracts/ai-events/` is that artifact now — a schema per
+> version, and `versions.json` saying which version is produced and which are
+> accepted — and each side is tested against all of it (`docs/EVENT_SCHEMA.md`).
 
 ---
 
