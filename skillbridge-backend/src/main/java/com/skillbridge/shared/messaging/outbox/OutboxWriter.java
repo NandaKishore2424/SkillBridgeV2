@@ -1,15 +1,20 @@
 package com.skillbridge.shared.messaging.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillbridge.common.observability.CorrelationIdFilter;
+import com.skillbridge.shared.messaging.EventEnvelope;
+import com.skillbridge.shared.messaging.EventType;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -20,6 +25,10 @@ import java.util.UUID;
  * <p>This is the whole of "publishing" now. The event and the business change it
  * describes commit together or roll back together, because they are two rows in
  * one transaction. {@link OutboxRelay} delivers it to the broker afterwards.
+ *
+ * <p>The stored payload is the whole {@link EventEnvelope}, not just the event's
+ * fields, and the relay publishes it byte for byte. The envelope's {@code eventId}
+ * is the row's {@code event_id} and the AMQP {@code message_id}: one id, everywhere.
  *
  * <h2>Why MANDATORY</h2>
  *
@@ -40,24 +49,54 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OutboxWriter {
 
-    /** Bumped only for a breaking payload change; see contracts/ai-events. */
-    static final int CURRENT_SCHEMA_VERSION = 1;
-
     private final OutboxEventRepository repository;
     private final ObjectMapper objectMapper;
 
     /**
+     * Records a new event, in the envelope, at its type's current schema version.
+     *
+     * @param collegeId the tenant the event belongs to; null only for an event that belongs to none
+     * @param payload   the event's own fields, in the shape {@code type}'s schema version defines
      * @return the event id, which is also what consumers deduplicate on
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public UUID write(String aggregateType, Object aggregateId, String eventType,
-                      String routingKey, Object payload) {
-        OutboxEvent event = OutboxEvent.pending(
-                aggregateType, String.valueOf(aggregateId), eventType, routingKey,
-                toJson(payload), toJson(currentHeaders()), CURRENT_SCHEMA_VERSION,
-                LocalDateTime.now());
-        repository.save(event);
-        return event.getEventId();
+    public UUID write(EventType type, String aggregateType, Object aggregateId, Long collegeId, Object payload) {
+        UUID eventId = UUID.randomUUID();
+        Map<String, String> headers = currentHeaders();
+        EventEnvelope<Object> envelope = new EventEnvelope<>(
+                eventId, type.name(), type.schemaVersion(),
+                Instant.now().truncatedTo(ChronoUnit.MILLIS).toString(),
+                aggregateType, String.valueOf(aggregateId), collegeId,
+                headers.get(CorrelationIdFilter.MDC_TRACE), null, payload);
+        return save(eventId, aggregateType, aggregateId, type.name(), type.routingKey(),
+                type.schemaVersion(), toJson(envelope), headers);
+    }
+
+    /**
+     * Records a dead letter's body to be sent again, in the version it failed in.
+     *
+     * <p>Not re-enveloped and not upgraded: what failed is what is replayed, and a
+     * consumer that has been fixed to handle it will. An envelope gets a new event id
+     * (see {@link EventEnvelope#forReplay}); a version 1 body, which has nowhere to
+     * carry one, goes as it was, under a new AMQP message id.
+     *
+     * @return the new event id
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public UUID writeReplay(String eventType, String routingKey, String aggregateType, Object aggregateId,
+                            JsonNode body) {
+        UUID eventId = UUID.randomUUID();
+        return save(eventId, aggregateType, aggregateId, eventType, routingKey,
+                EventEnvelope.schemaVersionOf(body), toJson(EventEnvelope.forReplay(body, eventId)),
+                currentHeaders());
+    }
+
+    private UUID save(UUID eventId, String aggregateType, Object aggregateId, String eventType, String routingKey,
+                      int schemaVersion, String payload, Map<String, String> headers) {
+        repository.save(OutboxEvent.pending(
+                eventId, aggregateType, String.valueOf(aggregateId), eventType, routingKey,
+                payload, toJson(headers), schemaVersion, LocalDateTime.now()));
+        return eventId;
     }
 
     /**

@@ -52,8 +52,14 @@ class DeadLetterServiceTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final long ADMIN = 900L;
+    /** A version 1 body: what was on the wire before the envelope, and may still be in a DLQ. */
     private static final String SKILL = "{\"eventType\":\"SKILL_UPDATED\",\"studentId\":31,\"collegeId\":1,"
             + "\"metadata\":{\"skillId\":7}}";
+    private static final String ORIGINAL_ID = "3f1c2a9e-7b64-4d0f-9a51-6c2d8e4b7a10";
+    /** A version 2 envelope: what the backend publishes now. */
+    private static final String ENVELOPE = "{\"eventId\":\"" + ORIGINAL_ID + "\",\"eventType\":\"SKILL_UPDATED\","
+            + "\"schemaVersion\":2,\"occurredAt\":\"2026-09-16T10:15:30.123Z\",\"aggregateType\":\"Student\","
+            + "\"aggregateId\":\"31\",\"collegeId\":1,\"traceId\":null,\"payload\":{\"studentId\":31,\"skillId\":7}}";
 
     @Autowired private DeadLetterService service;
     @Autowired private JdbcTemplate jdbc;
@@ -154,13 +160,47 @@ class DeadLetterServiceTest {
             assertThat(outbox.get("routing_key")).isEqualTo(RabbitMQConfig.SKILL_UPDATED_KEY);
             assertThat(outbox.get("aggregate_type")).isEqualTo(DeadLetterService.AGGREGATE_TYPE);
             assertThat(outbox.get("aggregate_id")).isEqualTo(String.valueOf(id));
-            assertThat(JSON.readTree(String.valueOf(outbox.get("payload")))).isEqualTo(JSON.readTree(SKILL));
+            assertThat(JSON.readTree(String.valueOf(outbox.get("payload"))))
+                    .as("a version 1 body is sent as it was").isEqualTo(JSON.readTree(SKILL));
+            assertThat(outbox.get("schema_version")).as("and under version 1").isEqualTo(1);
 
             Map<String, Object> row = row(id);
             assertThat(row.get("status")).isEqualTo("REPLAYED");
             assertThat(row.get("replay_event_id")).isEqualTo(eventId);
             assertThat(row.get("resolved_by")).isEqualTo(ADMIN);
             assertThat(row.get("resolved_at")).isNotNull();
+        }
+
+        @Test
+        @DisplayName("an envelope is replayed in its own version, with a new event id that remembers the old one")
+        void replaysAnEnvelope() throws Exception {
+            long id = stored(ENVELOPE);
+
+            UUID eventId = service.replay(id, ADMIN);
+
+            Map<String, Object> outbox = jdbc.queryForMap(
+                    "SELECT schema_version, payload::text AS payload FROM outbox_events WHERE event_id = ?", eventId);
+            var sent = (com.fasterxml.jackson.databind.node.ObjectNode) JSON.readTree((String) outbox.get("payload"));
+            assertThat(outbox.get("schema_version")).isEqualTo(2);
+            assertThat(sent.get("eventId").asText())
+                    .as("the consumer has already seen the old id; the replay must not look like a duplicate")
+                    .isEqualTo(eventId.toString());
+            assertThat(sent.get("replayOf").asText()).isEqualTo(ORIGINAL_ID);
+
+            sent.remove(List.of("eventId", "replayOf"));
+            var original = (com.fasterxml.jackson.databind.node.ObjectNode) JSON.readTree(ENVELOPE);
+            original.remove("eventId");
+            assertThat(sent).as("everything else is what failed").isEqualTo(original);
+        }
+
+        @Test
+        @DisplayName("half an envelope is not replayed: its version cannot be trusted")
+        void refusesABrokenEnvelope() {
+            long id = stored("{\"eventType\":\"SKILL_UPDATED\",\"schemaVersion\":\"2\",\"payload\":{\"studentId\":1}}");
+
+            assertThat(service.get(id).replayBlocker()).isEqualTo(DeadLetterService.INVALID_ENVELOPE);
+            assertThatThrownBy(() -> service.replay(id, ADMIN)).isInstanceOf(BusinessRuleException.class);
+            assertThat(outboxRows()).isZero();
         }
 
         @Test

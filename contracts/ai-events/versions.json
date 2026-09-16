@@ -1,0 +1,7 @@
+{
+  "$comment": "Which schema version of each event the backend produces, and which versions the AI service accepts. The one place a version bump is decided. The rule the tests enforce from both sides: `produced` must be in `accepted` -- the producer may not move to a version the consumer cannot read. Java checks `produced` against com.skillbridge.shared.messaging.EventType; Python checks `accepted` against ai_event_contract.SUPPORTED_SCHEMA_VERSIONS. Every accepted version has contracts/ai-events/v<N>/ai-event.schema.json. How to change these numbers safely: docs/EVENT_SCHEMA.md.",
+  "eventTypes": {
+    "SKILL_UPDATED":   { "produced": 2, "accepted": [1, 2] },
+    "PROFILE_UPDATED": { "produced": 2, "accepted": [1, 2] }
+  }
+}

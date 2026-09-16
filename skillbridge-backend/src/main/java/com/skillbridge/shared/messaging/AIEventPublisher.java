@@ -1,14 +1,11 @@
 package com.skillbridge.shared.messaging;
 
-import com.skillbridge.common.config.RabbitMQConfig;
 import com.skillbridge.shared.messaging.outbox.OutboxWriter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-
 /**
- * The application's vocabulary for AI events. It no longer talks to RabbitMQ.
+ * The application's vocabulary for AI events. It does not talk to RabbitMQ.
  *
  * <p>Each method records an event in the caller's transaction through
  * {@link OutboxWriter}; {@code OutboxRelay} delivers it. Every caller is a
@@ -21,15 +18,15 @@ import java.util.Map;
  * save would not fail because the broker was down. The reasoning was right and
  * the consequence was data loss: a broker that was down, slow, or refusing meant
  * the event was simply gone — no retry, no queue, no record it should have
- * existed. And an executor that rejected the task dropped it too.
+ * existed. The outbox keeps the good half of that trade — a broker outage still
+ * does not fail the student's request — and removes the bad half.
  *
- * <p>The outbox keeps the good half of that trade — a broker outage still does
- * not fail the student's request, because the broker is not on this path — and
- * removes the bad half: the event is a committed row, and it stays one until the
- * broker confirms it.
+ * <h2>Schema version 2</h2>
  *
- * <p>The payload is still the {@link AIEvent} record, so the wire format is
- * unchanged and {@code contracts/ai-events/v1} still describes it.
+ * <p>Events go out in an {@link EventEnvelope} with a typed payload, at the version
+ * {@link EventType} names. Version 1 was a bare {@code AIEvent} record with the skill
+ * id in an untyped {@code metadata} map — the map that once carried a bare number
+ * and made every event unreadable. See {@code docs/EVENT_SCHEMA.md}.
  */
 @Component
 @RequiredArgsConstructor
@@ -41,15 +38,13 @@ public class AIEventPublisher {
 
     /** A student added or changed a skill; the AI service re-runs the gap analysis. */
     public void publishSkillUpdated(Long studentId, Long collegeId, Long skillId) {
-        // metadata is an object, never the bare Long it once was: the consumer
-        // calls .get() on it. See AiEventContractTest.
-        outbox.write(AGGREGATE, studentId, "SKILL_UPDATED", RabbitMQConfig.SKILL_UPDATED_KEY,
-                new AIEvent("SKILL_UPDATED", studentId, collegeId, Map.of("skillId", skillId)));
+        outbox.write(EventType.SKILL_UPDATED, AGGREGATE, studentId, collegeId,
+                new EventType.SkillUpdated(studentId, skillId));
     }
 
     /** A student changed profile fields that feed the AI analysis. */
     public void publishProfileUpdated(Long studentId, Long collegeId) {
-        outbox.write(AGGREGATE, studentId, "PROFILE_UPDATED", RabbitMQConfig.PROFILE_UPDATED_KEY,
-                new AIEvent("PROFILE_UPDATED", studentId, collegeId, null));
+        outbox.write(EventType.PROFILE_UPDATED, AGGREGATE, studentId, collegeId,
+                new EventType.ProfileUpdated(studentId));
     }
 }

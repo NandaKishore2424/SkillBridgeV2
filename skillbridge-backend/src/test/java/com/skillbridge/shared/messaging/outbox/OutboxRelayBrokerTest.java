@@ -3,6 +3,7 @@ package com.skillbridge.shared.messaging.outbox;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillbridge.common.config.RabbitMQConfig;
 import com.skillbridge.common.scheduling.SingleRunGuard;
+import com.skillbridge.shared.messaging.EventType;
 import com.skillbridge.testsupport.IntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.AfterAll;
@@ -124,7 +125,7 @@ class OutboxRelayBrokerTest {
 
     @Test
     @DisplayName("a confirmed publish marks the event PUBLISHED and delivers the stored payload verbatim")
-    void publishesAndConfirms() {
+    void publishesAndConfirms() throws Exception {
         UUID eventId = writeEvent(RabbitMQConfig.SKILL_UPDATED_KEY);
         String stored = jdbc.queryForObject(
                 "SELECT payload FROM outbox_events WHERE event_id = ?", String.class, eventId);
@@ -141,6 +142,10 @@ class OutboxRelayBrokerTest {
         // text into a quoted string, and the consumer would get a string, not an object.
         assertThat(body).isEqualTo(stored);
         assertThat(received.getMessageProperties().getMessageId()).isEqualTo(eventId.toString());
+        // The body is the envelope, and it names the same event the AMQP properties do.
+        assertThat(objectMapper.readTree(body).get("eventId").asText()).isEqualTo(eventId.toString());
+        assertThat(received.getMessageProperties().<Integer>getHeader("schemaVersion"))
+                .isEqualTo(EventType.SKILL_UPDATED.schemaVersion());
         assertThat(received.getMessageProperties().getContentType()).isEqualTo("application/json");
     }
 
@@ -230,10 +235,19 @@ class OutboxRelayBrokerTest {
 
     // ---------------------------------------------------------------- helpers
 
+    /**
+     * A SKILL_UPDATED event, re-pointed at {@code routingKey} when that is not the real one.
+     *
+     * <p>The writer takes the routing key from the event type, as it should; a test that
+     * needs an unroutable event changes the stored row rather than the production API.
+     */
     private UUID writeEvent(String routingKey) {
-        return new TransactionTemplate(transactionManager).execute(status ->
-                writer.write(MARKER, 31L, "SKILL_UPDATED", routingKey,
-                        Map.of("eventType", "SKILL_UPDATED", "studentId", 31, "collegeId", 1)));
+        UUID eventId = new TransactionTemplate(transactionManager).execute(status ->
+                writer.write(EventType.SKILL_UPDATED, MARKER, 31L, 1L, new EventType.SkillUpdated(31, 7)));
+        if (!routingKey.equals(EventType.SKILL_UPDATED.routingKey())) {
+            jdbc.update("UPDATE outbox_events SET routing_key = ? WHERE event_id = ?", routingKey, eventId);
+        }
+        return eventId;
     }
 
     private OutboxRelay relay(CachingConnectionFactory factory, int maxAttempts) {

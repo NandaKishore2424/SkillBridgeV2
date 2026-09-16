@@ -120,7 +120,10 @@ public class OutboxRelay {
             try {
                 publish(event);
                 store.recordPublished(event.id());
-                meters.counter("outbox.published", "eventType", event.eventType()).increment();
+                // By schema version too: whether anything still goes out in an old
+                // version is the question before a consumer can drop support for it.
+                meters.counter("outbox.published", "eventType", event.eventType(),
+                        "schemaVersion", String.valueOf(event.schemaVersion())).increment();
                 confirmed++;
             } catch (Exception e) {
                 Duration retryIn = OutboxBackoff.delayAfter(event.attempts(), ThreadLocalRandom.current().nextDouble());

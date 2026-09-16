@@ -13,12 +13,11 @@ Senior Engineering Note:
 """
 
 import pika
-import json
 import threading
-import dataclasses
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel
 
 # Our modular components
@@ -28,7 +27,8 @@ import embedder
 from skill_analyzer import analyze_skill_gap
 import ai_event_contract as contract
 import dedup
-from resilient_consumer import Outcome, PermanentFailure, ResilientConsumer
+from event_dispatch import Dispatcher, EventMetrics
+from resilient_consumer import ResilientConsumer
 
 #: The name this service deduplicates under in processed_events. Renaming it
 #: forgets every event already processed, so treat it like a table name.
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
     #    and at-least-once delivery produces them -- is acked, not re-analysed.
     global _consumer
     handler = dedup.deduplicating(
-        _handle_delivery,
+        _dispatcher,
         dedup.ProcessedEventStore(database.get_connection, database.return_connection),
         DEDUP_CONSUMER,
         lease_seconds=dedup.LEASE_SECONDS,
@@ -112,64 +112,47 @@ app = FastAPI(
 
 # ─── RabbitMQ Consumer ────────────────────────────────────────────────────────
 
-def _process_rabbitmq_message(payload: dict) -> None:
+def _analyse(event: contract.AiEvent) -> None:
     """
-    Route incoming Java events to the correct AI handler.
-    
-    This is the dispatcher — it reads the `eventType` field from the Java 
-    AIEvent record and calls the appropriate function.
+    Re-runs the skill-gap analysis for the student an event is about.
+
+    The same work for SKILL_UPDATED and PROFILE_UPDATED, in any accepted schema
+    version: event_dispatch has already turned the message into an AiEvent.
     """
-    event_type = payload.get(contract.FIELD_EVENT_TYPE, "UNKNOWN")
-    student_id = payload.get(contract.FIELD_STUDENT_ID)
-    # NOT payload.get("metadata", {}): a default applies only to a MISSING key,
-    # so an explicit null came back as None and .get() below raised
-    # AttributeError. See ai_event_contract.metadata_of.
-    metadata = contract.metadata_of(payload)
+    print(f"[AMQP] Processing {event.event_type} v{event.schema_version} "
+          f"for studentId={event.student_id} (event {event.event_id or 'unenveloped'})")
 
-    print(f"[AMQP] Processing event: type={event_type}, studentId={student_id}")
+    # Version 1 could carry pre-resolved skill names; nothing ever sent them.
+    student_skills = list(event.skills) or _fetch_student_skills_from_db(event.student_id)
+    if not student_skills:
+        print(f"[AMQP] Student {event.student_id} has no skills; nothing to analyse")
+        return
 
-    if event_type in contract.HANDLED_EVENT_TYPES:
-        # Extract the student's skills from the metadata sent by Java
-        # Java's AIEventPublisher puts skillId/skillName in metadata
-        student_skills = metadata.get("skills", [])
-
-        # If skills aren't in metadata directly, use a fallback skill list
-        # (In production Phase 3, Java will send the full skill list)
-        if not student_skills and student_id:
-            student_skills = _fetch_student_skills_from_db(student_id)
-
-        if student_id and student_skills:
-            report = analyze_skill_gap(student_id=student_id, student_skills=student_skills)
-            _log_report_summary(report)
-        else:
-            print(f"[AMQP] ⚠ Cannot analyze — no student skills available in event payload.")
-    else:
-        print(f"[AMQP] ⚠ Unknown event type '{event_type}' — no handler registered. Skipping.")
+    report = analyze_skill_gap(student_id=event.student_id, student_skills=student_skills)
+    _log_report_summary(report)
 
 
 def _fetch_student_skills_from_db(student_id: int) -> list[str]:
     """
-    Fallback: fetch the student's skill names from Supabase directly.
-    This is used when Java doesn't include the skill list in the event metadata.
-    We query the existing student_skills + skills tables that the Java backend manages.
+    The student's skill names, from the tables the Java backend manages.
+
+    A database error propagates. It used to be caught here and turned into "no
+    skills", which acknowledged the event as processed and skipped the analysis
+    for good -- a transient failure recorded as success, so the retry tiers and
+    the DLQ never saw it. Now the consumer retries it, then dead-letters it.
     """
     conn = database.get_connection()
     try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT s.name 
-            FROM student_skills ss
-            JOIN skills s ON ss.skill_id = s.id
-            WHERE ss.student_id = %s
-        """, (student_id,))
-        rows = cursor.fetchall()
-        cursor.close()
-        skills = [row[0] for row in rows]
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT s.name
+                FROM student_skills ss
+                JOIN skills s ON ss.skill_id = s.id
+                WHERE ss.student_id = %s
+            """, (student_id,))
+            skills = [row[0] for row in cursor.fetchall()]
         print(f"[DB] Fetched {len(skills)} skills for student_id={student_id}: {skills}")
         return skills
-    except Exception as e:
-        print(f"[DB] ⚠ Could not fetch skills for student {student_id}: {e}")
-        return []
     finally:
         database.return_connection(conn)
 
@@ -194,32 +177,17 @@ def _log_report_summary(report) -> None:
 #: The running consumer, so /health can ask it the truth. Set in lifespan.
 _consumer: ResilientConsumer | None = None
 
+#: Events consumed, by type, schema version and outcome; served at /metrics.
+_metrics = EventMetrics()
 
-def _handle_delivery(body: bytes, properties) -> Outcome:
-    """
-    Decide what one delivery deserves. ResilientConsumer does the acking.
-
-    Unparseable and unknown messages raise PermanentFailure, which sends them to
-    the DLQ with the reason: they can never succeed, retrying them only holds up
-    the messages behind, and dropping them would hide the problem. Anything else
-    that raises while being processed -- a database error, a model failure --
-    propagates, and the consumer schedules it on the next retry tier (5s, 30s,
-    5m), then dead-letters it with the last error.
-    """
-    try:
-        payload = json.loads(body)
-    except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        raise PermanentFailure(f"unparseable message body: {e}") from e
-
-    if not isinstance(payload, dict):
-        raise PermanentFailure(f"message body is JSON but not an object: {type(payload).__name__}")
-
-    event_type = payload.get(contract.FIELD_EVENT_TYPE)
-    if event_type not in contract.HANDLED_EVENT_TYPES:
-        raise PermanentFailure(f"no handler for event type {event_type!r}")
-
-    _process_rabbitmq_message(payload)
-    return Outcome.PROCESSED
+#: What one delivery gets: decoded, version-checked, counted, then analysed.
+#: Refusals (unparseable, unknown type, unsupported version) raise
+#: PermanentFailure and reach the DLQ with the reason; anything _analyse raises
+#: is retried on the 5s/30s/5m tiers, then dead-lettered with the last error.
+_dispatcher = Dispatcher(
+    {contract.EVENT_SKILL_UPDATED: _analyse, contract.EVENT_PROFILE_UPDATED: _analyse},
+    _metrics,
+)
 
 
 def _connect():
@@ -290,6 +258,15 @@ def health():
             },
         },
     )
+
+
+@app.get("/metrics")
+def metrics():
+    """
+    Prometheus metrics: ai_events_consumed_total by event type, schema version and
+    outcome. Whether anything still arrives in an old version is read from here.
+    """
+    return Response(generate_latest(_metrics.registry), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/api/analyze-skills")

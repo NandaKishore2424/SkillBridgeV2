@@ -96,11 +96,11 @@ public class OutboxEvent {
     private LocalDateTime publishedAt;
 
     /** A new, immediately due event. */
-    public static OutboxEvent pending(String aggregateType, String aggregateId, String eventType,
+    public static OutboxEvent pending(UUID eventId, String aggregateType, String aggregateId, String eventType,
                                       String routingKey, String payload, String headers,
                                       int schemaVersion, LocalDateTime now) {
         return OutboxEvent.builder()
-                .eventId(UUID.randomUUID())
+                .eventId(eventId)
                 .aggregateType(aggregateType)
                 .aggregateId(aggregateId)
                 .eventType(eventType)

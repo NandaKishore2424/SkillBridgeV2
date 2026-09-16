@@ -67,6 +67,9 @@ class DeadLetterRecorderBrokerTest {
 
     private static final RabbitMQContainer BROKER = new RabbitMQContainer("rabbitmq:3-management");
     private static final String SKILL = "{\"eventType\":\"SKILL_UPDATED\",\"studentId\":31,\"collegeId\":1}";
+    private static final String ENVELOPE_TEMPLATE = "{\"eventId\":\"%s\",\"eventType\":\"SKILL_UPDATED\","
+            + "\"schemaVersion\":2,\"occurredAt\":\"2026-09-16T10:15:30.123Z\",\"aggregateType\":\"Student\","
+            + "\"aggregateId\":\"31\",\"collegeId\":1,\"traceId\":null,\"payload\":{\"studentId\":31,\"skillId\":7}}";
     private static final ObjectMapper JSON = new ObjectMapper();
 
     static {
@@ -247,10 +250,11 @@ class DeadLetterRecorderBrokerTest {
     }
 
     @Test
-    @DisplayName("a replay goes all the way round: outbox, relay, exchange, analysis queue, with a new event id")
+    @DisplayName("a replayed envelope goes all the way round, as the same version under a new event id")
     void replayReachesTheAnalysisQueue() throws Exception {
         UUID original = UUID.randomUUID();
-        publish(RabbitMQConfig.DEAD_LETTER_EXCHANGE, RabbitMQConfig.AI_ANALYSIS_QUEUE, SKILL, original,
+        String envelope = ENVELOPE_TEMPLATE.formatted(original);
+        publish(RabbitMQConfig.DEAD_LETTER_EXCHANGE, RabbitMQConfig.AI_ANALYSIS_QUEUE, envelope, original,
                 Map.of(RabbitMQConfig.FAILURE_REASON_HEADER, "model failed"));
         long id = ((Number) awaitRow(original).get("id")).longValue();
 
@@ -264,7 +268,11 @@ class DeadLetterRecorderBrokerTest {
         assertThat(delivered.getMessageProperties().getMessageId()).isEqualTo(replayId.toString())
                 .isNotEqualTo(original.toString());
         assertThat(delivered.getMessageProperties().getReceivedRoutingKey()).isEqualTo(RabbitMQConfig.SKILL_UPDATED_KEY);
-        assertThat(JSON.readTree(delivered.getBody())).isEqualTo(JSON.readTree(SKILL));
+        assertThat(delivered.getMessageProperties().<Integer>getHeader("schemaVersion")).isEqualTo(2);
+        JsonNode body = JSON.readTree(delivered.getBody());
+        assertThat(body.get("eventId").asText()).as("body and message id agree").isEqualTo(replayId.toString());
+        assertThat(body.get("replayOf").asText()).isEqualTo(original.toString());
+        assertThat(body.get("payload")).isEqualTo(JSON.readTree(envelope).get("payload"));
         assertThat(jdbc.queryForObject("SELECT status FROM dead_letter_events WHERE id = ?", String.class, id))
                 .isEqualTo("REPLAYED");
     }

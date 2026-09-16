@@ -1,0 +1,11 @@
+{
+  "eventId": "3f1c2a9e-7b64-4d0f-9a51-6c2d8e4b7a10",
+  "eventType": "SKILL_UPDATED",
+  "schemaVersion": 2,
+  "occurredAt": "2026-09-16T10:15:30.123Z",
+  "aggregateType": "Student",
+  "aggregateId": "31",
+  "collegeId": 1,
+  "traceId": "4bf92f3577b34da6",
+  "payload": { "studentId": 31, "skillId": 7 }
+}

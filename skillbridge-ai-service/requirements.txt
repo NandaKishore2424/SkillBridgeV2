@@ -7,3 +7,4 @@ langchain-community
 langchain-huggingface
 sentence-transformers
 psycopg2-binary
+prometheus-client

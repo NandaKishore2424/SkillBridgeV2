@@ -1,0 +1,11 @@
+{
+  "eventId": "8a2d4c61-0e5f-4b3a-9c7d-1f2e3a4b5c6d",
+  "eventType": "PROFILE_UPDATED",
+  "schemaVersion": 2,
+  "occurredAt": "2026-09-16T10:16:02.456Z",
+  "aggregateType": "Student",
+  "aggregateId": "31",
+  "collegeId": 1,
+  "traceId": null,
+  "payload": { "studentId": 31 }
+}

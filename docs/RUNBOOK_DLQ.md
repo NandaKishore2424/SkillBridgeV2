@@ -144,6 +144,10 @@ not an outage.
 1. List the new ones (above) and read `failureReason`.
 2. Many with the same reason means one cause. Fix it, then bulk-replay.
 3. A single malformed message: discard it with a note saying where it came from.
+4. `unsupported schemaVersion N`: the backend is publishing a version the AI service
+   does not accept yet — the deploy order in `docs/EVENT_SCHEMA.md` was not followed.
+   Deploy the AI service that accepts N, then bulk-replay: a replay keeps the
+   message's version, so it will be processed this time.
 
 ### DeadLettersUnresolved
 

@@ -8,6 +8,7 @@ import com.skillbridge.common.dto.Pagination;
 import com.skillbridge.common.exception.BusinessRuleException;
 import com.skillbridge.common.exception.ConflictException;
 import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.shared.messaging.EventEnvelope;
 import com.skillbridge.shared.messaging.outbox.OutboxWriter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,6 +66,7 @@ public class DeadLetterService {
 
     /** {@link #replayBlocker} reasons. Stable strings: a UI may switch on them. */
     public static final String NOT_JSON_OBJECT = "NOT_A_JSON_OBJECT";
+    public static final String INVALID_ENVELOPE = "INVALID_ENVELOPE";
     public static final String UNKNOWN_EVENT_TYPE = "UNKNOWN_EVENT_TYPE";
     public static final String NOT_FOUND_OR_BUSY = "NOT_FOUND_OR_BEING_REPLAYED";
 
@@ -192,19 +194,29 @@ public class DeadLetterService {
         if (body == null || !body.isObject()) {
             return Optional.of(NOT_JSON_OBJECT);
         }
-        JsonNode type = body.get("eventType");
+        // A body with an envelope's fields must be a whole envelope: the replay reads
+        // its version from it, and half of one would go out under the wrong version.
+        if (EventEnvelope.claimsToBeEnvelope(body) && !EventEnvelope.isEnvelope(body)) {
+            return Optional.of(INVALID_ENVELOPE);
+        }
+        JsonNode type = body.get(EventEnvelope.EVENT_TYPE);
         if (type == null || !type.isTextual() || !RabbitMQConfig.ROUTING_KEYS.containsKey(type.asText())) {
             return Optional.of(UNKNOWN_EVENT_TYPE);
         }
         return Optional.empty();
     }
 
-    /** The caller holds the row lock and has checked {@link #replayBlocker}. */
+    /**
+     * The caller holds the row lock and has checked {@link #replayBlocker}.
+     *
+     * <p>The body goes out in the schema version it failed in — an envelope with a new
+     * event id, a version 1 body as it was. See {@link OutboxWriter#writeReplay}.
+     */
     private UUID replayLocked(DeadLetterEvent row, long adminId) {
         JsonNode body = readTree(row.getPayloadJson());
-        String eventType = body.get("eventType").asText();
-        UUID eventId = outbox.write(AGGREGATE_TYPE, row.getId(), eventType,
-                RabbitMQConfig.ROUTING_KEYS.get(eventType), body);
+        String eventType = body.get(EventEnvelope.EVENT_TYPE).asText();
+        UUID eventId = outbox.writeReplay(eventType, RabbitMQConfig.ROUTING_KEYS.get(eventType),
+                AGGREGATE_TYPE, row.getId(), body);
         row.replayed(adminId, eventId, Instant.now());
         log.info("Dead letter {} (event {}) replayed by user {} as event {}",
                 row.getId(), row.getEventId(), adminId, eventId);
