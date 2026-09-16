@@ -44,6 +44,12 @@
 -- (digest = md5 of the fingerprint rows joined by newlines in row order; the same
 -- method reproduces the 575 digest above from the previous version of this file.)
 --
+-- 2026-09-16: dead_letter_events ADDED (receipt db/schema/2026-09-16-dead-letter-events.sql)
+-- and applied to live the same day. Re-verified afterwards, live and this file
+-- agreeing exactly:
+--
+--     33 tables, 622 catalogue objects, digest 4a9095e3aa02771c7eb23690897fe40d
+--
 -- WHY THIS FILE EXISTS
 --
 -- Flyway was removed on 2026-09-06 and `ddl-auto: validate` became the only
@@ -101,6 +107,7 @@ CREATE SEQUENCE public.bulk_uploads_id_seq AS bigint START WITH 1 INCREMENT BY 1
 CREATE SEQUENCE public.college_admins_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.colleges_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.companies_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+CREATE SEQUENCE public.dead_letter_events_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.enrollment_requests_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.enrollments_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
 CREATE SEQUENCE public.feedback_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
@@ -251,6 +258,37 @@ CREATE TABLE public.companies (
     deleted_at timestamp without time zone,
     deleted_by bigint
 );
+
+-- Dead letters a person can see (Phase 09). DeadLetterRecorder copies every
+-- message from skillbridge.dlq here and acks it; an admin replays one (through the
+-- outbox, as a new event) or discards it. payload is TEXT, not JSONB, because the
+-- messages most likely to be dead-lettered are the ones that do not parse. See
+-- db/schema/2026-09-16-dead-letter-events.sql.
+CREATE TABLE public.dead_letter_events (
+    id bigint DEFAULT nextval('dead_letter_events_id_seq'::regclass) NOT NULL,
+    fingerprint character varying(64) NOT NULL,
+    event_id uuid,
+    event_type character varying(100),
+    routing_key character varying(255),
+    source_queue character varying(255),
+    death_reason character varying(50) NOT NULL,
+    failure_reason text,
+    retry_count integer DEFAULT 0 NOT NULL,
+    payload text NOT NULL,
+    payload_encoding character varying(10) DEFAULT 'utf8'::character varying NOT NULL,
+    payload_json jsonb,
+    headers jsonb,
+    failed_at timestamp with time zone NOT NULL,
+    recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    resolved_at timestamp with time zone,
+    resolved_by bigint,
+    resolution_note character varying(500),
+    replay_event_id uuid
+);
+
+-- Payloads carry student ids; not reachable through the REST API's anon role.
+ALTER TABLE public.dead_letter_events ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE public.enrollment_requests (
     id bigint DEFAULT nextval('enrollment_requests_id_seq'::regclass) NOT NULL,
@@ -578,6 +616,7 @@ ALTER SEQUENCE public.bulk_uploads_id_seq OWNED BY public.bulk_uploads.id;
 ALTER SEQUENCE public.college_admins_id_seq OWNED BY public.college_admins.id;
 ALTER SEQUENCE public.colleges_id_seq OWNED BY public.colleges.id;
 ALTER SEQUENCE public.companies_id_seq OWNED BY public.companies.id;
+ALTER SEQUENCE public.dead_letter_events_id_seq OWNED BY public.dead_letter_events.id;
 ALTER SEQUENCE public.enrollment_requests_id_seq OWNED BY public.enrollment_requests.id;
 ALTER SEQUENCE public.enrollments_id_seq OWNED BY public.enrollments.id;
 ALTER SEQUENCE public.feedback_id_seq OWNED BY public.feedback.id;
@@ -621,6 +660,7 @@ ALTER TABLE public.bulk_uploads ADD CONSTRAINT bulk_uploads_pkey PRIMARY KEY (id
 ALTER TABLE public.college_admins ADD CONSTRAINT college_admins_pkey PRIMARY KEY (id);
 ALTER TABLE public.colleges ADD CONSTRAINT colleges_pkey PRIMARY KEY (id);
 ALTER TABLE public.companies ADD CONSTRAINT companies_pkey PRIMARY KEY (id);
+ALTER TABLE public.dead_letter_events ADD CONSTRAINT dead_letter_events_pkey PRIMARY KEY (id);
 ALTER TABLE public.enrollment_requests ADD CONSTRAINT enrollment_requests_pkey PRIMARY KEY (id);
 ALTER TABLE public.enrollments ADD CONSTRAINT enrollments_pkey PRIMARY KEY (id);
 ALTER TABLE public.feedback ADD CONSTRAINT feedback_pkey PRIMARY KEY (id);
@@ -648,6 +688,7 @@ ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 -- 5b. Unique constraints
 ALTER TABLE public.college_admins ADD CONSTRAINT college_admins_user_id_key UNIQUE (user_id);
 ALTER TABLE public.colleges ADD CONSTRAINT colleges_code_key UNIQUE (code);
+ALTER TABLE public.dead_letter_events ADD CONSTRAINT uk_dead_letter_fingerprint UNIQUE (fingerprint);
 ALTER TABLE public.enrollments ADD CONSTRAINT enrollments_batch_id_student_id_key UNIQUE (batch_id, student_id);
 ALTER TABLE public.idempotency_keys ADD CONSTRAINT uk_idempotency_key_user UNIQUE (idempotency_key, user_id);
 ALTER TABLE public.outbox_events ADD CONSTRAINT uk_outbox_event_id UNIQUE (event_id);
@@ -668,6 +709,12 @@ ALTER TABLE public.batches ADD CONSTRAINT batches_status_check CHECK (((status):
 ALTER TABLE public.batches ADD CONSTRAINT chk_batches_capacity CHECK (((capacity IS NULL) OR (capacity > 0)));
 ALTER TABLE public.colleges ADD CONSTRAINT colleges_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'INACTIVE'::character varying])::text[])));
 ALTER TABLE public.companies ADD CONSTRAINT companies_hiring_type_check CHECK (((hiring_type)::text = ANY ((ARRAY['FULL_TIME'::character varying, 'INTERNSHIP'::character varying, 'BOTH'::character varying])::text[])));
+ALTER TABLE public.dead_letter_events ADD CONSTRAINT chk_dead_letter_encoding CHECK (((payload_encoding)::text = ANY ((ARRAY['utf8'::character varying, 'base64'::character varying])::text[])));
+ALTER TABLE public.dead_letter_events ADD CONSTRAINT chk_dead_letter_json CHECK (((payload_json IS NULL) OR ((payload_encoding)::text = 'utf8'::text)));
+ALTER TABLE public.dead_letter_events ADD CONSTRAINT chk_dead_letter_replayed CHECK ((((status)::text = 'REPLAYED'::text) = (replay_event_id IS NOT NULL)));
+ALTER TABLE public.dead_letter_events ADD CONSTRAINT chk_dead_letter_resolved CHECK ((((status)::text = 'PENDING'::text) = (resolved_at IS NULL)));
+ALTER TABLE public.dead_letter_events ADD CONSTRAINT chk_dead_letter_retry_count CHECK ((retry_count >= 0));
+ALTER TABLE public.dead_letter_events ADD CONSTRAINT chk_dead_letter_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'REPLAYED'::character varying, 'DISCARDED'::character varying])::text[])));
 ALTER TABLE public.enrollment_requests ADD CONSTRAINT chk_requests_source CHECK (((source)::text = ANY ((ARRAY['TRAINER_REQUEST'::character varying, 'STUDENT_APPLICATION'::character varying, 'ADMIN_DIRECT'::character varying])::text[])));
 ALTER TABLE public.enrollment_requests ADD CONSTRAINT chk_requests_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'WITHDRAWN'::character varying, 'EXPIRED'::character varying, 'CANCELLED'::character varying])::text[])));
 ALTER TABLE public.enrollment_requests ADD CONSTRAINT chk_requests_trainer_presence CHECK ((((source)::text <> 'TRAINER_REQUEST'::text) OR (trainer_id IS NOT NULL)));
@@ -780,6 +827,8 @@ CREATE INDEX idx_colleges_status ON public.colleges USING btree (status);
 CREATE INDEX idx_companies_college_id ON public.companies USING btree (college_id);
 CREATE INDEX idx_companies_live ON public.companies USING btree (college_id) WHERE (deleted_at IS NULL);
 CREATE INDEX idx_companies_name_trgm ON public.companies USING gin (lower((name)::text) gin_trgm_ops);
+CREATE INDEX idx_dead_letter_pending ON public.dead_letter_events USING btree (id DESC) WHERE ((status)::text = 'PENDING'::text);
+CREATE INDEX idx_dead_letter_resolved ON public.dead_letter_events USING btree (resolved_at) WHERE ((status)::text <> 'PENDING'::text);
 CREATE INDEX idx_enrollments_college ON public.enrollments USING btree (college_id, batch_id);
 CREATE INDEX idx_enrollments_student_status ON public.enrollments USING btree (student_id, status);
 CREATE INDEX idx_feedback_batch_id ON public.feedback USING btree (batch_id);

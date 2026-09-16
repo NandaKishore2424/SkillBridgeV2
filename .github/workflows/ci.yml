@@ -140,6 +140,21 @@ jobs:
         working-directory: skillbridge-ai-service
         run: python -m unittest discover -s tests -t . -v
 
+  alert-rules:
+    name: Alert rules (promtool)
+    runs-on: ubuntu-latest
+    # MessagingAlertRulesTest (backend job) checks the rules name metrics the backend
+    # emits. This checks they are valid PromQL and that they fire when they should:
+    # messaging-alerts.test.yml feeds them synthetic series, NaN included.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check and test the rules
+        run: |
+          docker run --rm -v "$PWD/ops/prometheus:/rules:ro" --entrypoint promtool \
+            prom/prometheus:v3.5.0 check rules /rules/messaging-alerts.yml
+          docker run --rm -v "$PWD/ops/prometheus:/rules:ro" --entrypoint promtool \
+            prom/prometheus:v3.5.0 test rules /rules/messaging-alerts.test.yml
+
   ai-store:
     name: AI service (dedup store against PostgreSQL)
     runs-on: ubuntu-latest

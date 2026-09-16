@@ -309,3 +309,25 @@ outbox:
     confirm-timeout-ms: 5000
   # PUBLISHED rows are kept this long as an audit of what was emitted, then purged.
   retention-days: 7
+
+# ---------------------------------------------------------------------------
+# Dead letters (Phase 09 Task 5).
+#
+# DeadLetterRecorder copies every message from skillbridge.dlq into
+# dead_letter_events and acks it; an admin replays or discards each one
+# (/api/v1/admin/dead-letters). docs/RUNBOOK_DLQ.md is the operator's guide.
+# ---------------------------------------------------------------------------
+dead-letters:
+  recorder:
+    # Off under the test profile. With it off, dead letters stay in the queue:
+    # nothing is lost, they are only not visible.
+    enabled: ${DEAD_LETTER_RECORDER_ENABLED:true}
+  # REPLAYED and DISCARDED rows are kept this long. PENDING rows are never purged.
+  retention-days: 30
+
+# The gauges ops/prometheus/messaging-alerts.yml alerts on. Refreshed on a timer
+# rather than queried on scrape; see MessagingMetrics.
+messaging:
+  backlog-metrics:
+    enabled: ${MESSAGING_METRICS_ENABLED:true}
+    refresh-ms: 30000

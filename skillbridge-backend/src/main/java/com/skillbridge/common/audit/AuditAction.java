@@ -29,6 +29,12 @@ public final class AuditAction {
 
     public static final String BULK_UPLOAD_STARTED = "BULK_UPLOAD_STARTED";
 
+    /** A dead letter republished; metadata carries the new event id. */
+    public static final String DEAD_LETTER_REPLAYED = "DEAD_LETTER_REPLAYED";
+    public static final String DEAD_LETTER_DISCARDED = "DEAD_LETTER_DISCARDED";
+    /** A bulk replay that was not a dry run; metadata carries the selection and what it did. */
+    public static final String DEAD_LETTER_BATCH_REPLAYED = "DEAD_LETTER_BATCH_REPLAYED";
+
     /** Outcome for a rejected action. */
     public static final String OUTCOME_SUCCESS = "SUCCESS";
     public static final String OUTCOME_FAILURE = "FAILURE";

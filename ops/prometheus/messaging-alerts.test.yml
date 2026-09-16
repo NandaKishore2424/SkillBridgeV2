@@ -1,0 +1,111 @@
+# promtool unit tests for messaging-alerts.yml: synthetic series in, alerts out.
+#
+#   docker run --rm -v "$PWD/ops/prometheus:/rules:ro" --entrypoint promtool \
+#       prom/prometheus:v3.5.0 test rules /rules/messaging-alerts.test.yml
+#
+# MessagingAlertRulesTest proves the rules name metrics that exist. This proves the
+# expressions do what their names say -- in particular the two that are easy to get
+# wrong silently: increase() on a counter, and `x != x` as the NaN test.
+
+rule_files:
+  - messaging-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # A new dead letter fires DeadLetterRecorded; a redelivered duplicate does not.
+  - interval: 1m
+    input_series:
+      - series: 'dead_letter_recorded_total{outcome="new",reason="consumer"}'
+        values: '0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+      - series: 'dead_letter_recorded_total{outcome="duplicate",reason="consumer"}'
+        values: '0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 4 4 4 4 4'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: DeadLetterRecorded
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: DeadLetterRecorded
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "New dead letters in the last 10 minutes"
+              description: "Events failed for good and wait for a replay-or-discard decision."
+              runbook_url: "docs/RUNBOOK_DLQ.md#deadletterrecorded"
+      # Only duplicates moved in the last 10 minutes: nothing new to decide.
+      - eval_time: 34m
+        alertname: DeadLetterRecorded
+        exp_alerts: []
+
+  # NaN means "could not read". Every comparison with NaN is false, so the backlog
+  # alerts go quiet; MessagingMetricsUnavailable is what notices.
+  - interval: 1m
+    input_series:
+      - series: 'outbox_events{status="pending"}'
+        values: 'NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN'
+      - series: 'outbox_events{status="dead"}'
+        values: '0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: OutboxBacklogGrowing
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: MessagingMetricsUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              status: pending
+              metric: outbox_events
+            exp_annotations:
+              summary: "outbox_events has been unreadable for 10 minutes"
+              description: "The alerts above cannot fire while their numbers are NaN."
+              runbook_url: "docs/RUNBOOK_DLQ.md#messagingmetricsunavailable"
+
+  # A readable, healthy gauge does not trip the NaN rule.
+  - interval: 1m
+    input_series:
+      - series: 'outbox_events{status="pending"}'
+        values: '5+0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: MessagingMetricsUnavailable
+        exp_alerts: []
+
+  # The backlog alerts wait out their `for`, and respect their thresholds.
+  - interval: 1m
+    input_series:
+      - series: 'outbox_events{status="pending"}'
+        values: '999+0x5 1001+0x20'
+      - series: 'messaging_queue_messages{queue="skillbridge.dlq"}'
+        values: '0+0x3 2+0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OutboxBacklogGrowing
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: OutboxBacklogGrowing
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: OutboxBacklogGrowing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              status: pending
+            exp_annotations:
+              summary: "The outbox relay is falling behind (1.001k pending)"
+              description: "Events are committed but not reaching the broker. Nothing is lost while they wait."
+              runbook_url: "docs/RUNBOOK_DLQ.md#outboxbackloggrowing"
+      - eval_time: 12m
+        alertname: DeadLetterQueueNotDraining
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: DeadLetterQueueNotDraining
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              queue: skillbridge.dlq
+            exp_annotations:
+              summary: "skillbridge.dlq has held 2 message(s) for 10 minutes"
+              description: "The recorder normally empties it within seconds; it is down or failing."
+              runbook_url: "docs/RUNBOOK_DLQ.md#deadletterqueuenotdraining"

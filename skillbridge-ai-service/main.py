@@ -28,7 +28,7 @@ import embedder
 from skill_analyzer import analyze_skill_gap
 import ai_event_contract as contract
 import dedup
-from resilient_consumer import Outcome, ResilientConsumer
+from resilient_consumer import Outcome, PermanentFailure, ResilientConsumer
 
 #: The name this service deduplicates under in processed_events. Renaming it
 #: forgets every event already processed, so treat it like a table name.
@@ -69,6 +69,13 @@ async def lifespan(app: FastAPI):
         retry_exchange=contract.RETRY_EXCHANGE,
         retry_queues=contract.RETRY_TIER_QUEUES,
         attempt_header=contract.RETRY_ATTEMPT_HEADER,
+        # A dead letter goes to the DLQ with the reason in a header, so the backend's
+        # record of it says why (see resilient_consumer.py).
+        dead_letter_exchange=contract.DEAD_LETTER_EXCHANGE,
+        reason_header=contract.FAILURE_REASON_HEADER,
+        failed_at_header=contract.FAILED_AT_HEADER,
+        failed_queue_header=contract.FAILED_QUEUE_HEADER,
+        max_reason_length=contract.MAX_FAILURE_REASON_LENGTH,
     )
     consumer_thread = threading.Thread(target=_consumer.run_forever, name="amqp-consumer", daemon=True)
     consumer_thread.start()
@@ -192,26 +199,24 @@ def _handle_delivery(body: bytes, properties) -> Outcome:
     """
     Decide what one delivery deserves. ResilientConsumer does the acking.
 
-    Unparseable and unknown messages are DEAD_LETTERed into the DLQ: they can
-    never succeed, retrying them only holds up the messages behind, and dropping
-    them would hide the problem. Anything that raises while being processed -- a
-    database error, a model failure -- propagates, and the consumer schedules it
-    on the next retry tier (5s, 30s, 5m), then dead-letters it.
+    Unparseable and unknown messages raise PermanentFailure, which sends them to
+    the DLQ with the reason: they can never succeed, retrying them only holds up
+    the messages behind, and dropping them would hide the problem. Anything else
+    that raises while being processed -- a database error, a model failure --
+    propagates, and the consumer schedules it on the next retry tier (5s, 30s,
+    5m), then dead-letters it with the last error.
     """
     try:
         payload = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        print(f"[AMQP] ✗ Unparseable message body, dead-lettering: {e}")
-        return Outcome.DEAD_LETTER
+        raise PermanentFailure(f"unparseable message body: {e}") from e
 
     if not isinstance(payload, dict):
-        print("[AMQP] ✗ Message body is not a JSON object, dead-lettering")
-        return Outcome.DEAD_LETTER
+        raise PermanentFailure(f"message body is JSON but not an object: {type(payload).__name__}")
 
     event_type = payload.get(contract.FIELD_EVENT_TYPE)
     if event_type not in contract.HANDLED_EVENT_TYPES:
-        print(f"[AMQP] ⚠ Unknown event type '{event_type}' — no handler registered. Dead-lettering.")
-        return Outcome.DEAD_LETTER
+        raise PermanentFailure(f"no handler for event type {event_type!r}")
 
     _process_rabbitmq_message(payload)
     return Outcome.PROCESSED

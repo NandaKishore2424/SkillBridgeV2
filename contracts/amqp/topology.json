@@ -47,5 +47,12 @@
     "deadLetter": { "name": "skillbridge.dlq", "arguments": { "x-queue-type": "quorum" } }
   },
   "routingKeys": { "SKILL_UPDATED": "ai.skill.updated", "PROFILE_UPDATED": "ai.profile.updated" },
-  "retry": { "attemptHeader": "x-retry-attempt" }
+  "retry": { "attemptHeader": "x-retry-attempt" },
+  "deadLettering": {
+    "$comment": "Set by a consumer that dead-letters a message itself, by publishing it to the dead-letter exchange, so the DLQ records WHY. A message the broker dead-letters (a nack that could not be published, the delivery limit) carries RabbitMQ's x-death header instead. The backend's DeadLetterRecorder reads both.",
+    "reasonHeader": "x-failure-reason",
+    "failedAtHeader": "x-failed-at",
+    "failedQueueHeader": "x-failed-queue",
+    "maxReasonLength": 2000
+  }
 }

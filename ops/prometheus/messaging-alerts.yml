@@ -1,0 +1,112 @@
+# Messaging alerts (Phase 09 Task 5).
+#
+# A Prometheus rule file, for whatever scrapes /actuator/prometheus once there is a
+# deployment (Phase 15) and an Alertmanager to route to (Phase 10). Nothing loads it
+# yet. Until then it is held to account by MessagingAlertRulesTest, which fails the
+# build if:
+#   - a rule names a metric, or a label value, that MessagingMetrics does not emit;
+#   - a rule has no severity, summary or runbook link;
+#   - a runbook link does not resolve to a heading in docs/RUNBOOK_DLQ.md.
+# The first is the one that matters. An alert on a renamed metric is valid PromQL
+# that matches nothing, so it never fires and nothing says so.
+#
+# Micrometer names, as the Prometheus registry renders them:
+#   outbox.events{status}             -> outbox_events
+#   dead_letter.events{status}        -> dead_letter_events
+#   messaging.queue.messages{queue}   -> messaging_queue_messages
+#   dead_letter.recorded              -> dead_letter_recorded_total
+#   dead_letter.record.failures       -> dead_letter_record_failures_total
+#
+# Why not the phase document's rabbitmq_queue_messages{queue="skillbridge.dlq"} > 10:
+# since DeadLetterRecorder drains the DLQ within seconds, its depth is ~0 whatever is
+# failing. What needs a person is the number of unresolved dead letters, and a DLQ
+# that is NOT draining means the recorder is down -- two different alerts.
+
+groups:
+  - name: skillbridge-messaging
+    rules:
+      - alert: DeadLetterRecorded
+        expr: sum(increase(dead_letter_recorded_total{outcome="new"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          # No $value: increase() extrapolates, so it would print 1.111 for one letter.
+          summary: "New dead letters in the last 10 minutes"
+          description: "Events failed for good and wait for a replay-or-discard decision."
+          runbook_url: "docs/RUNBOOK_DLQ.md#deadletterrecorded"
+
+      - alert: DeadLettersUnresolved
+        expr: dead_letter_events{status="pending"} > 10
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanize }} dead letters have been waiting over 30 minutes"
+          description: "Nobody has decided about them. Replay or discard; see the runbook."
+          runbook_url: "docs/RUNBOOK_DLQ.md#deadlettersunresolved"
+
+      - alert: DeadLetterQueueNotDraining
+        expr: messaging_queue_messages{queue="skillbridge.dlq"} > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "skillbridge.dlq has held {{ $value | humanize }} message(s) for 10 minutes"
+          description: "The recorder normally empties it within seconds; it is down or failing."
+          runbook_url: "docs/RUNBOOK_DLQ.md#deadletterqueuenotdraining"
+
+      - alert: DeadLetterRecorderFailing
+        expr: increase(dead_letter_record_failures_total[10m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "The dead-letter recorder cannot store what it takes from the DLQ"
+          description: "It is holding the message and retrying; nothing is lost yet, and nothing moves either."
+          runbook_url: "docs/RUNBOOK_DLQ.md#deadletterrecorderfailing"
+
+      - alert: OutboxBacklogGrowing
+        expr: outbox_events{status="pending"} > 1000
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The outbox relay is falling behind ({{ $value | humanize }} pending)"
+          description: "Events are committed but not reaching the broker. Nothing is lost while they wait."
+          runbook_url: "docs/RUNBOOK_DLQ.md#outboxbackloggrowing"
+
+      - alert: OutboxEventsDead
+        expr: outbox_events{status="dead"} > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanize }} outbox event(s) were never delivered"
+          description: "The relay gave up after its maximum attempts. They never reached the broker, so they are not in the DLQ."
+          runbook_url: "docs/RUNBOOK_DLQ.md#outboxeventsdead"
+
+      - alert: AnalysisQueueBacklog
+        expr: messaging_queue_messages{queue="skillbridge.ai.analysis"} > 10000
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanize }} messages waiting for the AI service"
+          description: "At 100000 the queue refuses publishes and the outbox starts backing up."
+          runbook_url: "docs/RUNBOOK_DLQ.md#analysisqueuebacklog"
+
+      # NaN is how MessagingMetrics says "could not read this". Every comparison with
+      # NaN is false, so without this rule an unreadable backlog is a silent one.
+      # `x != x` holds only for NaN. A comparison drops the metric name, so each branch
+      # puts it back as a `metric` label -- otherwise outbox_events{status="pending"}
+      # and dead_letter_events{status="pending"} would alert as the same thing.
+      - alert: MessagingMetricsUnavailable
+        expr: >-
+          label_replace(outbox_events != outbox_events, "metric", "outbox_events", "", "")
+          or label_replace(dead_letter_events != dead_letter_events, "metric", "dead_letter_events", "", "")
+          or label_replace(messaging_queue_messages != messaging_queue_messages, "metric", "messaging_queue_messages", "", "")
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.metric }} has been unreadable for 10 minutes"
+          description: "The alerts above cannot fire while their numbers are NaN."
+          runbook_url: "docs/RUNBOOK_DLQ.md#messagingmetricsunavailable"

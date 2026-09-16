@@ -82,6 +82,13 @@ MAX_RETRIES = len(RETRY_TIER_QUEUES)
 #: republishes to a tier, because the count has to travel with the message.
 RETRY_ATTEMPT_HEADER = "x-retry-attempt"
 
+#: Set when this service dead-letters a message itself, so the DLQ says why.
+#: x-failed-at is epoch milliseconds; the reason is cut to MAX_FAILURE_REASON_LENGTH.
+FAILURE_REASON_HEADER = "x-failure-reason"
+FAILED_AT_HEADER = "x-failed-at"
+FAILED_QUEUE_HEADER = "x-failed-queue"
+MAX_FAILURE_REASON_LENGTH = 2000
+
 ROUTING_KEYS = {
     EVENT_SKILL_UPDATED: "ai.skill.updated",
     EVENT_PROFILE_UPDATED: "ai.profile.updated",

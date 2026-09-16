@@ -57,6 +57,15 @@ class TopologyContract(unittest.TestCase):
     def test_attempt_header_matches(self):
         self.assertEqual(contract.RETRY_ATTEMPT_HEADER, TOPOLOGY["retry"]["attemptHeader"])
 
+    def test_dead_lettering_headers_match(self):
+        # The backend's recorder reads these; a rename on one side would record
+        # every failure with no reason and nobody would notice until they needed one.
+        spec = TOPOLOGY["deadLettering"]
+        self.assertEqual(contract.FAILURE_REASON_HEADER, spec["reasonHeader"])
+        self.assertEqual(contract.FAILED_AT_HEADER, spec["failedAtHeader"])
+        self.assertEqual(contract.FAILED_QUEUE_HEADER, spec["failedQueueHeader"])
+        self.assertEqual(contract.MAX_FAILURE_REASON_LENGTH, spec["maxReasonLength"])
+
     def test_routing_keys_match_and_cover_every_handled_event(self):
         self.assertEqual(contract.ROUTING_KEYS, TOPOLOGY["routingKeys"])
         self.assertEqual(set(contract.ROUTING_KEYS), set(contract.HANDLED_EVENT_TYPES),

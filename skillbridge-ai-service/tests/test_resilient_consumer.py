@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from resilient_consumer import (  # noqa: E402
-    Outcome, ResilientConsumer, backoff_seconds, retry_attempt, retry_route,
+    Outcome, PermanentFailure, ResilientConsumer, backoff_seconds, retry_attempt, retry_route,
 )
 
 TIERS = ("tier.5s", "tier.30s", "tier.5m")
@@ -75,8 +75,8 @@ class FakeConnection:
         self.scheduled.append(callback)
 
 
-def delivery(tag=7):
-    return types.SimpleNamespace(delivery_tag=tag)
+def delivery(tag=7, routing_key="ai.skill.updated"):
+    return types.SimpleNamespace(delivery_tag=tag, routing_key=routing_key)
 
 
 def props(**headers):
@@ -144,6 +144,14 @@ class Reconnection(unittest.TestCase):
         self.assertEqual(channel.consumed, ("q", False), "manual acks, never auto_ack")
         self.assertTrue(channel.confirming, "retry republishes need confirm mode to fail loudly")
         self.assertFalse(consumer.is_healthy, "not healthy once stopped")
+
+    def test_confirm_mode_when_only_dead_lettering_is_configured(self):
+        consumer = None
+        channel = FakeChannel(on_start=lambda ch: consumer.stop())
+        consumer = ResilientConsumer("q", lambda b, p: Outcome.PROCESSED, lambda: FakeConnection(channel),
+                                     dead_letter_exchange="dlx")
+        consumer.run_forever()
+        self.assertTrue(channel.confirming, "an unconfirmed publish to the DLX could be acked and lost")
 
     def test_no_confirm_mode_without_a_retry_exchange(self):
         consumer = None
@@ -258,6 +266,70 @@ class Outcomes(unittest.TestCase):
     def test_a_handler_returning_nonsense_is_retried_not_acked_as_done(self):
         ch = self.deliver(lambda b, p: None)
         self.assertEqual(len(ch.publishes), 1)
+
+
+class DeadLetteringWithAReason(unittest.TestCase):
+    """With a dead-letter exchange configured, a dead letter says why it died."""
+
+    NOW = 1_789_000_000.123
+
+    def deliver(self, handler, properties=None, channel=None, retry=True, max_reason_length=2000):
+        channel = channel or FakeChannel()
+        kwargs = dict(retry_exchange="retry", retry_queues=TIERS) if retry else {}
+        consumer = ResilientConsumer("q.main", handler, lambda: None, dead_letter_exchange="dlx",
+                                     max_reason_length=max_reason_length, clock=lambda: self.NOW, **kwargs)
+        consumer._on_message(channel, delivery(7), properties if properties is not None else props(), b'{"x":1}')
+        return channel
+
+    def test_a_permanent_failure_is_published_with_its_reason_then_acked(self):
+        def reject(body, properties):
+            raise PermanentFailure("unknown event type 'NOPE'")
+
+        ch = self.deliver(reject, props(traceId="t-1"))
+        self.assertEqual(ch.publishes, [dict(
+            exchange="dlx", routing_key="ai.skill.updated", body=b'{"x":1}', mandatory=True,
+            headers={"traceId": "t-1", "x-failure-reason": "unknown event type 'NOPE'",
+                     "x-failed-at": 1_789_000_000_123, "x-failed-queue": "q.main"})])
+        self.assertEqual((ch.acks, ch.nacks), ([7], []), "acked only because the publish succeeded")
+
+    def test_exhausted_retries_record_the_last_failure(self):
+        def explode(body, properties):
+            raise RuntimeError("db down")
+
+        ch = self.deliver(explode, props(**{HEADER: 3}))
+        reason = ch.publishes[0]["headers"]["x-failure-reason"]
+        self.assertEqual(ch.publishes[0]["exchange"], "dlx")
+        self.assertIn("retries exhausted after 3 attempts", reason)
+        self.assertIn("RuntimeError: db down", reason)
+        self.assertEqual(ch.publishes[0]["headers"][HEADER], 3, "the retry count travels to the DLQ")
+
+    def test_a_failed_dead_letter_publish_falls_back_to_a_nack(self):
+        # The nack still reaches the DLQ through the queue's DLX -- without the reason.
+        # Acking here would lose the message.
+        ch = self.deliver(lambda b, p: (_ for _ in ()).throw(PermanentFailure("bad")),
+                          channel=FakeChannel(publish_error=RuntimeError("unroutable")))
+        self.assertEqual((ch.acks, ch.nacks), ([], [(7, False)]))
+
+    def test_a_returned_dead_letter_says_so(self):
+        ch = self.deliver(lambda b, p: Outcome.DEAD_LETTER)
+        self.assertEqual(ch.publishes[0]["headers"]["x-failure-reason"],
+                         "handler returned DEAD_LETTER without a reason")
+
+    def test_the_reason_is_cut_to_the_contract_length(self):
+        ch = self.deliver(lambda b, p: (_ for _ in ()).throw(PermanentFailure("x" * 500)), max_reason_length=60)
+        self.assertEqual(len(ch.publishes[0]["headers"]["x-failure-reason"]), 60)
+
+    def test_without_properties_it_is_still_dead_lettered_by_nack(self):
+        consumer = ResilientConsumer("q", lambda b, p: Outcome.DEAD_LETTER, lambda: None,
+                                     dead_letter_exchange="dlx")
+        ch = FakeChannel()
+        consumer._on_message(ch, delivery(7), None, b"x")
+        self.assertEqual((ch.acks, ch.nacks, ch.publishes), ([], [(7, False)], []))
+
+    def test_the_original_headers_are_not_mutated(self):
+        original = props(traceId="t-1")
+        self.deliver(lambda b, p: Outcome.DEAD_LETTER, original)
+        self.assertEqual(original.headers, {"traceId": "t-1"})
 
 
 if __name__ == "__main__":

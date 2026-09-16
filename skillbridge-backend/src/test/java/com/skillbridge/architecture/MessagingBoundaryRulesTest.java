@@ -34,14 +34,19 @@ class MessagingBoundaryRulesTest {
             "org.springframework.amqp.core.AmqpTemplate",
             "org.springframework.amqp.rabbit.core.RabbitTemplate",
             "org.springframework.amqp.rabbit.core.RabbitOperations",
-            "org.springframework.amqp.rabbit.core.RabbitMessagingTemplate");
+            "org.springframework.amqp.rabbit.core.RabbitMessagingTemplate",
+            // The raw client channel publishes too (basicPublish), and bypasses everything.
+            "com.rabbitmq.client.Channel");
 
     /** Everything else is a violation. Adding a name here needs a reason written beside it. */
     private static final Set<String> ALLOWED = Set.of(
             // Relays committed outbox rows; publishes holding no database connection.
             "com.skillbridge.shared.messaging.outbox.OutboxRelay",
             // Declares the RabbitTemplate bean; constructs it, never publishes with it.
-            "com.skillbridge.common.config.RabbitMQConfig");
+            "com.skillbridge.common.config.RabbitMQConfig",
+            // Takes a Channel only to ack DLQ deliveries by hand, after the insert
+            // commits. It never publishes; a replay goes through OutboxWriter.
+            "com.skillbridge.shared.messaging.deadletter.DeadLetterRecorder");
 
     private static JavaClasses production;
 
@@ -53,7 +58,7 @@ class MessagingBoundaryRulesTest {
     }
 
     @Test
-    @DisplayName("only OutboxRelay and RabbitMQConfig depend on a broker publishing template")
+    @DisplayName("only OutboxRelay, RabbitMQConfig and the DLQ recorder depend on a broker publishing type")
     void onlyTheRelayReachesTheBroker() {
         Set<String> violations = new TreeSet<>();
 

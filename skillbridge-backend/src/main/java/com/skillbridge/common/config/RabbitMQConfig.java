@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The broker topology, declared in exactly one place.
@@ -26,15 +27,17 @@ import java.util.List;
  *                                          | ai.#
  *                                          v
  *                               skillbridge.ai.analysis (quorum) --&gt; AI consumer
- *                                   |  x-dead-letter-exchange              |
- *                                   |  (nack, delivery limit)              | transient failure:
- *                                   v                                      | republish, then ack
- *            skillbridge.dlq &lt;-- skillbridge.dlx (fanout)                  v
- *                 (quorum, no TTL: a human looks)          skillbridge.retry (direct)
- *                                                            |      |       |
- *                                                          .5s    .30s    .5m   (TTL, no consumer)
- *                                                            |      |       |
- *                                    expire --&gt; default exchange --&gt; skillbridge.ai.analysis
+ *                                          |                             |
+ *                     nack, delivery limit |                             | transient failure:
+ *                                          v                             | republish, then ack
+ *            skillbridge.dlq &lt;-- skillbridge.dlx (fanout)                 v
+ *                 |                        ^                  skillbridge.retry (direct)
+ *                 |                        |                     |      |       |
+ *                 |    AI consumer: permanent failure, or      .5s    .30s    .5m   (TTL, no consumer)
+ *                 |    retries exhausted -- published with       |      |       |
+ *                 |    a reason header, then acked            expire --&gt; default exchange
+ *                 v                                                  --&gt; skillbridge.ai.analysis
+ *   DeadLetterRecorder --&gt; dead_letter_events --&gt; a person: replay (through the outbox) or discard
  * </pre>
  *
  * <p>The Python service only checks the queue exists (a passive declare), so the
@@ -83,6 +86,29 @@ public class RabbitMQConfig {
     /** Hierarchical keys: a future notification service binds notification.# unaware of these. */
     public static final String SKILL_UPDATED_KEY = "ai.skill.updated";
     public static final String PROFILE_UPDATED_KEY = "ai.profile.updated";
+
+    /**
+     * The routing key each event type is published with. A replay looks the key up
+     * here rather than trusting the dead letter's own routing key, which by then is
+     * often a retry queue's name: a message that went round the tiers comes back
+     * through the default exchange, and its original key is not in the message at all.
+     */
+    public static final Map<String, String> ROUTING_KEYS = Map.of(
+            "SKILL_UPDATED", SKILL_UPDATED_KEY,
+            "PROFILE_UPDATED", PROFILE_UPDATED_KEY);
+
+    /** How many retries the consumer has scheduled; carried on the message. */
+    public static final String RETRY_ATTEMPT_HEADER = "x-retry-attempt";
+
+    /**
+     * Set by a consumer that dead-letters a message itself, so the DLQ records why.
+     * A message the broker dead-lettered carries {@code x-death} instead.
+     */
+    public static final String FAILURE_REASON_HEADER = "x-failure-reason";
+    /** Epoch milliseconds. */
+    public static final String FAILED_AT_HEADER = "x-failed-at";
+    public static final String FAILED_QUEUE_HEADER = "x-failed-queue";
+    public static final int MAX_FAILURE_REASON_LENGTH = 2000;
 
     /** Caps broker memory against a runaway producer. Overflow refuses the publish. */
     public static final int AI_QUEUE_MAX_LENGTH = 100_000;

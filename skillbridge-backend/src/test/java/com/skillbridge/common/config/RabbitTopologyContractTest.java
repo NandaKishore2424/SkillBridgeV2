@@ -63,6 +63,27 @@ class RabbitTopologyContractTest {
     }
 
     @Test
+    @DisplayName("the event-type to routing-key map is the contract's, entry for entry")
+    void routingKeyMapMatches() {
+        // A replay publishes with the key this map gives. An event type missing here
+        // can never be replayed; one mapped to the wrong key replays into no queue.
+        assertThat(RabbitMQConfig.ROUTING_KEYS).isEqualTo(json.convertValue(contract.get("routingKeys"), Map.class));
+    }
+
+    @Test
+    @DisplayName("retry and dead-lettering header names match the contract")
+    void headerNamesMatch() {
+        // The Python consumer sets these and DeadLetterRecorder reads them. A rename on
+        // one side records every failure without its reason, and nothing else notices.
+        assertThat(RabbitMQConfig.RETRY_ATTEMPT_HEADER).isEqualTo(text("retry", "attemptHeader"));
+        assertThat(RabbitMQConfig.FAILURE_REASON_HEADER).isEqualTo(text("deadLettering", "reasonHeader"));
+        assertThat(RabbitMQConfig.FAILED_AT_HEADER).isEqualTo(text("deadLettering", "failedAtHeader"));
+        assertThat(RabbitMQConfig.FAILED_QUEUE_HEADER).isEqualTo(text("deadLettering", "failedQueueHeader"));
+        assertThat(RabbitMQConfig.MAX_FAILURE_REASON_LENGTH)
+                .isEqualTo(contract.at("/deadLettering/maxReasonLength").asInt());
+    }
+
+    @Test
     @DisplayName("every queue is declared with exactly the contract's arguments")
     void queueArgumentsMatch() {
         Map<String, Queue> declared = queues();

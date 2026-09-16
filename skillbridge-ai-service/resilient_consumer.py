@@ -30,6 +30,21 @@ HOW A RETRY WORKS (Phase 09 Task 2)
     If the republish itself fails -- the tier is unroutable, or the broker nacks
     it -- the message is dead-lettered rather than acked. A retry that cannot be
     scheduled must not become a message that silently disappears.
+
+HOW A DEAD LETTER CARRIES ITS REASON (Phase 09 Task 5)
+    A nack tells the broker "dead-letter this", and the broker records only that
+    it was "rejected". The backend stores every DLQ message for a person to
+    decide on, and "rejected" does not help them decide.
+
+    So with ``dead_letter_exchange`` set, the consumer publishes a copy to the
+    dead-letter exchange itself, with the reason, the time and its queue in
+    headers, and then acks -- the same publish-then-ack as a retry, in confirm
+    mode. If that publish fails, it falls back to the nack: the message still
+    reaches the DLQ, without the reason. A delivery that crashes the consumer
+    outright is dead-lettered by the broker's delivery limit, also without one.
+
+    A handler says a message can never succeed by raising PermanentFailure with
+    the reason. Returning Outcome.DEAD_LETTER still works and records less.
 """
 
 from __future__ import annotations
@@ -39,6 +54,7 @@ import enum
 import logging
 import random
 import threading
+import time
 from typing import Any, Callable, Optional, Sequence
 
 log = logging.getLogger(__name__)
@@ -58,6 +74,13 @@ class Outcome(enum.Enum):
     #: the dead-letter exchange puts it in the DLQ. Retrying a message that cannot
     #: work only blocks the ones behind it; dropping it would hide the problem.
     DEAD_LETTER = "dead_letter"
+
+
+class PermanentFailure(Exception):
+    """
+    Raised by a handler for a message that can never succeed: unparseable, an
+    unknown type. The message is dead-lettered at once, with str(exc) as the reason.
+    """
 
 
 def backoff_seconds(attempt: int, jitter: float) -> float:
@@ -97,6 +120,8 @@ class ResilientConsumer:
     is treated as RETRY and never reaches pika, where it would kill the channel.
 
     Without ``retry_exchange`` a RETRY is dead-lettered, never silently dropped.
+    Without ``dead_letter_exchange`` a dead letter is a plain nack, and the DLQ
+    learns only that it was rejected.
     """
 
     def __init__(
@@ -111,6 +136,12 @@ class ResilientConsumer:
         retry_exchange: Optional[str] = None,
         retry_queues: Sequence[str] = (),
         attempt_header: str = "x-retry-attempt",
+        dead_letter_exchange: Optional[str] = None,
+        reason_header: str = "x-failure-reason",
+        failed_at_header: str = "x-failed-at",
+        failed_queue_header: str = "x-failed-queue",
+        max_reason_length: int = 2000,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self._queue = queue
         self._handler = handler
@@ -125,6 +156,12 @@ class ResilientConsumer:
         self._retry_exchange = retry_exchange
         self._retry_queues = tuple(retry_queues)
         self._attempt_header = attempt_header
+        self._dead_letter_exchange = dead_letter_exchange
+        self._reason_header = reason_header
+        self._failed_at_header = failed_at_header
+        self._failed_queue_header = failed_queue_header
+        self._max_reason_length = max_reason_length
+        self._clock = clock
         self._lock = threading.Lock()
         self._connection: Any = None
         self._round_connected = False
@@ -175,9 +212,10 @@ class ResilientConsumer:
             self._connection = connection
         try:
             channel = connection.channel()
-            if self._retry_exchange is not None:
-                # Confirm mode, so a republish to a retry tier either reaches a queue
-                # or raises -- and a retry that raises is dead-lettered, not lost.
+            if self._retry_exchange is not None or self._dead_letter_exchange is not None:
+                # Confirm mode, so a republish -- to a retry tier or to the dead-letter
+                # exchange -- either reaches a queue or raises. Nothing is acked on
+                # the strength of a publish the broker did not accept.
                 channel.confirm_delivery()
             channel.basic_qos(prefetch_count=self._prefetch)
             channel.basic_consume(queue=self._queue, on_message_callback=self._on_message, auto_ack=False)
@@ -197,48 +235,91 @@ class ResilientConsumer:
 
     def _on_message(self, channel: Any, method: Any, properties: Any, body: bytes) -> None:
         tag = method.delivery_tag
+        reason: Optional[str] = None
         try:
             outcome = self._handler(body, properties)
-        except Exception:  # noqa: BLE001
+        except PermanentFailure as exc:
+            outcome, reason = Outcome.DEAD_LETTER, str(exc) or type(exc).__name__
+        except Exception as exc:  # noqa: BLE001
             log.exception("Handler raised on delivery %s; treating it as transient", tag)
-            outcome = Outcome.RETRY
+            outcome, reason = Outcome.RETRY, f"{type(exc).__name__}: {exc}"
 
         if not isinstance(outcome, Outcome):
             log.error("Handler returned %r, not an Outcome; treating it as RETRY", outcome)
-            outcome = Outcome.RETRY
+            outcome, reason = Outcome.RETRY, f"handler returned {outcome!r}, not an Outcome"
 
         # Deliberately NOT caught: if ack or nack fails the channel is broken, and the
         # exception ending start_consuming is how the reconnect loop finds out. The
         # unacked message is then redelivered.
         if outcome is Outcome.PROCESSED:
             channel.basic_ack(delivery_tag=tag)
-        elif outcome is Outcome.RETRY and self._schedule_retry(channel, properties, body, tag):
-            channel.basic_ack(delivery_tag=tag)
-        else:
-            channel.basic_nack(delivery_tag=tag, requeue=False)
+            return
+        if outcome is Outcome.RETRY:
+            not_scheduled = self._schedule_retry(channel, properties, body, tag)
+            if not_scheduled is None:
+                channel.basic_ack(delivery_tag=tag)
+                return
+            reason = f"{not_scheduled}; last failure: {reason or 'handler returned RETRY'}"
+        self._dead_letter(channel, method, properties, body,
+                          reason or "handler returned DEAD_LETTER without a reason")
 
-    def _schedule_retry(self, channel: Any, properties: Any, body: bytes, tag: Any) -> bool:
-        """Republishes to the next tier. False means dead-letter it instead."""
-        if self._retry_exchange is None or properties is None:
-            return False
+    def _schedule_retry(self, channel: Any, properties: Any, body: bytes, tag: Any) -> Optional[str]:
+        """Republishes to the next tier. Returns None if scheduled, else why not."""
+        if self._retry_exchange is None:
+            return "no retry tiers are configured"
+        if properties is None:
+            return "the delivery has no properties to carry a retry count"
 
         headers = getattr(properties, "headers", None) or {}
         attempt = retry_attempt(headers, self._attempt_header)
         route = retry_route(attempt, self._retry_queues)
         if route is None:
             log.error("Delivery %s failed after %d retries; dead-lettering it", tag, attempt)
-            return False
+            return f"retries exhausted after {attempt} attempts"
 
         retried = copy.copy(properties)
         retried.headers = {**headers, self._attempt_header: attempt + 1}
         try:
             channel.basic_publish(exchange=self._retry_exchange, routing_key=route, body=body,
                                   properties=retried, mandatory=True)
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             log.exception("Could not schedule retry %d for delivery %s; dead-lettering it instead",
                           attempt + 1, tag)
-            return False
+            return f"retry {attempt + 1} could not be scheduled ({type(exc).__name__}: {exc})"
 
         log.warning("Delivery %s failed; retry %d of %d scheduled via %s",
                     tag, attempt + 1, len(self._retry_queues), route)
-        return True
+        return None
+
+    def _dead_letter(self, channel: Any, method: Any, properties: Any, body: bytes, reason: str) -> None:
+        """
+        Sends a delivery to the DLQ, with its reason when that can be published.
+
+        Publish-then-ack, like a retry. The fallback is a nack without requeue,
+        which the main queue's dead-letter exchange also routes to the DLQ -- just
+        without the reason. Nothing here acks a message that did not reach the DLQ.
+        """
+        tag = method.delivery_tag
+        reason = reason[: self._max_reason_length]
+        log.error("Dead-lettering delivery %s: %s", tag, reason)
+
+        if self._dead_letter_exchange is not None and properties is not None:
+            failed = copy.copy(properties)
+            failed.headers = {
+                **(getattr(properties, "headers", None) or {}),
+                self._reason_header: reason,
+                self._failed_at_header: int(self._clock() * 1000),
+                self._failed_queue_header: self._queue,
+            }
+            try:
+                channel.basic_publish(exchange=self._dead_letter_exchange,
+                                      routing_key=getattr(method, "routing_key", "") or "",
+                                      body=body, properties=failed, mandatory=True)
+            except Exception:  # noqa: BLE001
+                log.exception("Could not publish delivery %s to the dead-letter exchange; "
+                              "nacking it so the broker dead-letters it without the reason", tag)
+            else:
+                channel.basic_ack(delivery_tag=tag)
+                return
+
+        channel.basic_nack(delivery_tag=tag, requeue=False)

@@ -56,6 +56,10 @@ class ConnectionHoldingRulesTest {
     private static final List<String> NETWORK_CLIENTS = List.of(
             "org.springframework.amqp.core.AmqpTemplate",
             "org.springframework.amqp.rabbit.core.RabbitTemplate",
+            // An ack, a passive declare, a queue-depth read: each a broker round trip.
+            "com.rabbitmq.client.Channel",
+            "org.springframework.amqp.core.AmqpAdmin",
+            "org.springframework.amqp.rabbit.core.RabbitAdmin",
             "org.springframework.mail.MailSender",
             "org.springframework.mail.javamail.JavaMailSender",
             "org.springframework.web.client.RestTemplate",

@@ -100,3 +100,20 @@ jwt:
 outbox:
   relay:
     enabled: false
+
+# ---------------------------------------------------------------------------
+# Also off under the test profile, for the same reason and one more.
+#
+# The recorder would open a connection to localhost:5672 in every Spring context
+# -- on a developer machine that is a real broker, whose DLQ it would drain into
+# the test database. DeadLetterRecorderBrokerTest turns it on against a broker it
+# owns. The metrics refresh would run COUNT(*)s in the background, which Hibernate
+# statistics do not see but a query-count assertion's timing might.
+# ---------------------------------------------------------------------------
+dead-letters:
+  recorder:
+    enabled: false
+
+messaging:
+  backlog-metrics:
+    enabled: false
