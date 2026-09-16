@@ -10,21 +10,22 @@
 
 | Tier | Tests | Runtime | Needs | Command |
 |---|---|---|---|---|
-| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event and topology contracts, alert rules vs emitted metrics | 211 | **~10 s** | nothing | `mvn test` |
-| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres; the relay, topology and dead-letter recorder on real RabbitMQ | 109 | **~95 s** | Docker | `mvn verify` |
-| **Python** — event contracts in every accepted version, topology, consumer resilience, retry, dead-lettering, dedup and dispatch | 77 | **<0.1 s** | `jsonschema`, `prometheus-client` | `python -m unittest discover -s tests -t .` |
+| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event and topology contracts, alert rules vs emitted metrics | 215 | **~11 s** | nothing | `mvn test` |
+| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres; the relay, topology and dead-letter recorder on real RabbitMQ, and a broker killed for 90 s | 113 | **~3.7 min** | Docker | `mvn verify` |
+| **Python** — event contracts in every accepted version, topology, consumer resilience, retry, dead-lettering, dedup and dispatch | 78 | **<0.1 s** | `jsonschema`, `prometheus-client` | `python -m unittest discover -s tests -t .` |
 | **Python store** — the dedup claim on real PostgreSQL built from `baseline.sql`: racing claims, lease takeover, fencing | 8 | **~4 s** | a PostgreSQL (`AI_TEST_DATABASE_URL`); fails, never skips, without one | `python -m unittest discover -s tests_integration -t .` |
 | **Frontend** — hooks, auth, components | 22 | **2.5 s** | nothing | `npm test` |
+| **Python broker** — the production consumer against a RabbitMQ killed for 60 s; SIGTERM to a real uvicorn with a delivery in flight | 3 | **~90 s** | Docker, `pika`, `fastapi`, `uvicorn`; fails, never skips, without Docker | `python -m unittest discover -s tests_broker -t .` |
 | **Alert rules** — `promtool test rules`: synthetic series in, alerts out, NaN included | 4 scenarios, 11 evaluations | **<1 s** | Docker | see `ops/prometheus/messaging-alerts.test.yml` |
 
-**427 tests, 0 skipped**, measured 2026-09-16, plus the `promtool` rule tests. All of it runs in CI — **proven on a
+**439 tests, 0 skipped**, measured 2026-09-16, plus the `promtool` rule tests. All of it runs in CI — **proven on a
 clean git worktree**, which the first version of this sentence was not: see below. So
 do
 three gates on top of it:
 
 | Gate | Measured | Threshold | Why not the phase's number |
 |---|---|---|---|
-| Backend coverage (JaCoCo, both tiers merged) | 42.9% line · 40.2% branch (2026-09-16; was 34.9 · 27.4 when the gate was set) | 34% · 27% | a ratchet; 80% now would be deleted, not met |
+| Backend coverage (JaCoCo, both tiers merged) | 43.4% line · 40.5% branch (2026-09-16; was 34.9 · 27.4 when the gate was set) | 34% · 27% | a ratchet; 80% now would be deleted, not met |
 | Frontend coverage (v8) | 13.4% line | 13% | same |
 | Mutation score (PIT, domain logic) | 90% — 35 of 39 | 89% | the 4 survivors are equivalent and unkillable |
 
@@ -125,6 +126,19 @@ and then evicts the oldest message instead of refusing the new one. So that test
 every queue's type and arguments back from the management API, and watches the
 behaviour: a message routed, a message returned from a retry tier after its TTL, a
 rejection landing in the DLQ, a redelivery limit dead-lettering.
+
+**And an outage is a test you run, not a property you assume.** The relay was "tested
+against an unreachable broker" from the day it was written: a factory pointed at a
+closed port, one poll, rows still PENDING. Every assertion held. Writing the real
+test — `OutboxBrokerOutageTest` kills a broker for 90 seconds while events keep being
+written — required doing the arithmetic first, and the arithmetic said the relay
+would fail it: each failed poll charged an attempt, eight attempts at 500 ms doubling
+is about a minute, and then the event is DEAD. The one-poll test could never see
+that; it stopped before the second attempt. The relay now tells the broker's
+failures from the event's (see `OutboxRelay`), and the test that would have caught
+the defect runs in CI. The Python side got the same treatment:
+`tests_broker/` kills a real RabbitMQ under the production consumer, and sends
+SIGTERM to a real uvicorn with a delivery in flight.
 
 ---
 

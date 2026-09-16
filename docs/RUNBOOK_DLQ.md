@@ -193,9 +193,12 @@ message, because the DLQ has nowhere to dead-letter to.)
 Nothing is lost; they are rows in `outbox_events` and will be sent when the broker
 accepts them.
 
-1. Is RabbitMQ up? `docker ps`, or the hosted broker's console.
-2. Is the relay running? `outbox.relay.enabled` must be true, and the log shows
-   `Outbox event … failed on attempt` for each failure, with the reason.
+1. Is RabbitMQ up? `docker ps`, or the hosted broker's console. While it is not,
+   the relay logs `Broker unavailable (…); N event(s) given back uncharged, relay
+   paused for …ms` about twice a minute, and the events wait: a broker outage is
+   not charged to them, however long it lasts. Five minutes, 601 events, all
+   delivered, in `OutboxBrokerOutageTest`.
+2. Is the relay running? `outbox.relay.enabled` must be true.
 3. Is `skillbridge.ai.analysis` full? At 100000 messages it refuses publishes
    (`x-overflow: reject-publish`) and the relay retries. See
    [AnalysisQueueBacklog](#analysisqueuebacklog).
@@ -213,13 +216,19 @@ accepts them.
 so they are **not** in the DLQ and not in `dead_letter_events`. There is no
 endpoint for these yet.
 
+Only a failure that belongs to the event counts toward those 8: a routing key no
+queue binds, or a relay that crashed while publishing it eight times. A broker that
+was down, slow or full does not — the relay pauses and the events wait. (Until
+2026-09-16 it did count, and any outage longer than about a minute made every event
+written in its first minute DEAD.)
+
 ```sql
 SELECT id, event_id, event_type, routing_key, attempts, last_error, created_at
 FROM outbox_events WHERE status = 'DEAD' ORDER BY id DESC;
 ```
 
-The usual cause is `unroutable`: a routing key no queue is bound to. Fix the
-binding or the key; then, to send them again, put them back in the relay's path —
+The cause is almost always `unroutable`: a routing key no queue is bound to. Fix
+the binding or the key; then, to send them again, put them back in the relay's path —
 it is safe, because the relay publishes each at least once and the consumer
 deduplicates on `event_id`:
 

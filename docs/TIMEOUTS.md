@@ -46,7 +46,7 @@ about the code. On 2026-09-10 a TCP connect to the pooler ranged from 300 ms to
 | Setting | Value | Why |
 |---|---|---|
 | `spring.mvc.async.request-timeout` | 30 s | Nothing returns a `Callable` or `DeferredResult` today; this is the ceiling for the first one that does, so it arrives bounded rather than inheriting Tomcat's indefinite default |
-| `spring.rabbitmq.connection-timeout` | 5 s | A broker that has gone away must not hold a thread — and the thread waiting is one that has just committed and is trying to publish the event for it |
+| `spring.rabbitmq.connection-timeout` | 5 s | A broker that has gone away must not hold a thread. Since the outbox the only publisher is `OutboxRelay`, which stops its batch at the first broker failure, so a broker that hangs costs one of these per batch, not one per event (`OutboxBrokerOutageTest`) |
 | `spring.rabbitmq.template.reply-timeout` | 10 s | |
 
 ---
@@ -58,19 +58,19 @@ Not timeouts, but the same question: what bounds this.
 | Pool | Size | Queue | Rejection | Shutdown |
 |---|---|---|---|---|
 | `bulkUploadExecutor` | 2–4 | 50 | caller-runs | drain, 60 s |
-| `aiEventExecutor` | 2–4 | 500 | abort | drain, 30 s |
 
-**Both are sized by what the database can absorb, not by a formula.** Little's Law
+There was a second pool, `aiEventExecutor`, for publishing AI events after commit.
+The transactional outbox (Phase 09) removed it: an event is now a row written in the
+business transaction, and `OutboxRelay` publishes it on its own schedule.
+
+**The pool is sized by what the database can absorb, not by a formula.** Little's Law
 puts CSV row processing near 58 threads; four is a third of the connection pool,
 which is as much as a background job may take from a pool that also serves every
 page on the site. Sizing from the formula and ignoring the downstream constraint
 is the mistake Phase 07 § 2.1 names, and here the constraint is unusually hard.
 
-**The rejection policies differ on purpose.** Caller-runs on the upload pool is
-back-pressure: the submitting thread does the work, so nothing is dropped or
-refused. Abort on the AI event pool is correct instead, because caller-runs would
-hand the publish back to the committing thread — precisely the thread whose
-connection the executor exists to release.
+**Caller-runs is back-pressure:** the submitting thread does the work, so nothing
+is dropped or refused.
 
 > Phase 07 says a rejected task is swallowed and the upload silently never
 > happens. Measured, it is not: submission runs on the caller's thread, so the
@@ -78,6 +78,21 @@ connection the executor exists to release.
 > `ExecutorSaturationTest` holds both behaviours side by side. Loud rather than
 > silent, and still the wrong answer — an administrator's upload refused because
 > somebody else's was in progress.
+
+---
+
+## Messaging: how long things wait, and why
+
+| What | Value | Why |
+|---|---|---|
+| Relay pause after a broker failure | 1 s, doubling to 30 s, +25% jitter | A broker that is down, slow or full is not charged to the events; the relay waits instead of asking every half second. 13 attempts in a 5-minute outage, measured |
+| Relay retry after an event's own failure | 500 ms, doubling to 5 min, +50% jitter | Only an unroutable event gets here; DEAD after 8 |
+| Relay confirm timeout | 5 s | How long a publish may go unconfirmed before the broker is treated as unavailable |
+| Relay lease | 60 s | Long enough to publish a batch; a relay that dies gives its rows back when it runs out |
+| Consumer reconnect | 2 s, doubling to 60 s, +0–3 s jitter | Measured 7 s from broker back to consumer back in one run; **up to about 63 s** when the broker returns just after an attempt |
+| Consumer shutdown | 15 s | How long SIGTERM waits for the delivery in flight, under the 30 s most orchestrators give before SIGKILL. A slower delivery is left unacknowledged and redelivered (`test_graceful_shutdown.py`) |
+| Consumer dedup lease | 120 s | Shorter than the retry tiers' total, so a killed worker's event is taken over before its retries run out (asserted in `test_amqp_topology_contract.py`) |
+| Dead-letter recorder retry | 1 s, doubling to 30 s | Holds the message while the database is down; never requeues it |
 
 ---
 

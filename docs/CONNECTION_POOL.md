@@ -244,11 +244,13 @@ were all `@Transactional` and all published to RabbitMQ before returning — a
 connection held for the broker round trip. A comment at one of them claimed the
 publish ran after commit; it did not.
 
-`AIEventPublisher` now registers an `afterCommit` synchronization and dispatches
-onto `aiEventExecutor`, which fixes three things at once: the connection is not
-held for the publish, a rolled-back transaction no longer emits an event for a
-change that did not happen, and the AI service's own read can no longer race the
-commit.
+`AIEventPublisher` then registered an `afterCommit` synchronization and dispatched
+onto an `aiEventExecutor`, which fixed three things at once: the connection was not
+held for the publish, a rolled-back transaction no longer emitted an event for a
+change that did not happen, and the AI service's own read could no longer race the
+commit. Since Phase 09 it goes further: the event is an outbox row written in the
+same transaction, and `OutboxRelay` publishes it with no connection held — so a
+broker outage can no longer lose it either. The executor is gone.
 
 Two guards, each confirmed to fail before being trusted:
 
