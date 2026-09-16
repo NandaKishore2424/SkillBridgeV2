@@ -199,6 +199,17 @@ class Reconnection(unittest.TestCase):
         consumer.run_forever()
         self.assertEqual(attempts["n"], 1)
 
+    def test_a_delivery_after_stop_is_left_unacknowledged_for_the_next_consumer(self):
+        # Graceful shutdown must not start new work. Acking would lose the message;
+        # nacking with requeue could bounce it back here until the close runs.
+        handled = []
+        consumer = ResilientConsumer("q", lambda b, p: handled.append(b) or Outcome.PROCESSED, lambda: None,
+                                     retry_exchange="retry", retry_queues=TIERS, dead_letter_exchange="dlx")
+        consumer.stop()
+        channel = FakeChannel()
+        consumer._on_message(channel, delivery(9), props(), b"{}")
+        self.assertEqual((handled, channel.acks, channel.nacks, channel.publishes), ([], [], [], []))
+
     def test_stop_schedules_the_close_on_the_connections_own_thread(self):
         consumer = ResilientConsumer("q", lambda b, p: Outcome.PROCESSED, lambda: None)
         connection = FakeConnection(FakeChannel())

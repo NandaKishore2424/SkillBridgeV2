@@ -12,9 +12,6 @@ Senior Engineering Note:
   main.py ORCHESTRATES but does not IMPLEMENT.
 """
 
-import pika
-import threading
-from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -26,7 +23,9 @@ import database
 import embedder
 from skill_analyzer import analyze_skill_gap
 import ai_event_contract as contract
+import amqp_consumer
 import dedup
+import service_lifecycle
 from event_dispatch import Dispatcher, EventMetrics
 from resilient_consumer import ResilientConsumer
 
@@ -37,26 +36,22 @@ DEDUP_CONSUMER = "skillbridge-ai-service.skill-analysis"
 
 # ─── Lifecycle Management ──────────────────────────────────────────────────────
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Modern FastAPI lifespan manager (replaces deprecated @app.on_event).
-    Everything before `yield` runs at startup; everything after runs at shutdown.
-    """
+def _open_resources() -> None:
     print("=" * 60)
     print("  SkillBridge AI Engine — Starting Up")
     print("=" * 60)
-
-    # 1. Initialize the DB connection pool FIRST (other modules may need it)
+    # The pool first: the handler needs it. Then the model, which takes seconds.
     database.initialize_pool()
-
-    # 2. Load the AI embedding model into RAM (takes a few seconds)
     embedder.initialize_embedder()
 
-    # 3. Start the RabbitMQ consumer in a background thread. It reconnects on its
-    #    own for as long as the service runs; /health reports whether it is up.
-    #    Every delivery is claimed in processed_events first, so a duplicate --
-    #    and at-least-once delivery produces them -- is acked, not re-analysed.
+
+def _make_consumer() -> ResilientConsumer:
+    """
+    The analysis-queue consumer, set where /health can ask it the truth.
+
+    Every delivery is claimed in processed_events first, so a duplicate -- and
+    at-least-once delivery produces them -- is acked, not re-analysed.
+    """
     global _consumer
     handler = dedup.deduplicating(
         _dispatcher,
@@ -64,40 +59,13 @@ async def lifespan(app: FastAPI):
         DEDUP_CONSUMER,
         lease_seconds=dedup.LEASE_SECONDS,
     )
-    _consumer = ResilientConsumer(
-        contract.AI_ANALYSIS_QUEUE, handler, _connect,
-        retry_exchange=contract.RETRY_EXCHANGE,
-        retry_queues=contract.RETRY_TIER_QUEUES,
-        attempt_header=contract.RETRY_ATTEMPT_HEADER,
-        # A dead letter goes to the DLQ with the reason in a header, so the backend's
-        # record of it says why (see resilient_consumer.py).
-        dead_letter_exchange=contract.DEAD_LETTER_EXCHANGE,
-        reason_header=contract.FAILURE_REASON_HEADER,
-        failed_at_header=contract.FAILED_AT_HEADER,
-        failed_queue_header=contract.FAILED_QUEUE_HEADER,
-        max_reason_length=contract.MAX_FAILURE_REASON_LENGTH,
-    )
-    consumer_thread = threading.Thread(target=_consumer.run_forever, name="amqp-consumer", daemon=True)
-    consumer_thread.start()
-    print("[AMQP] RabbitMQ consumer thread started")
+    _consumer = amqp_consumer.build(config.AMQP_URL, handler)
+    return _consumer
 
-    print("=" * 60)
-    print("  ✓ SkillBridge AI Engine is READY")
-    print("=" * 60)
 
-    yield  # FastAPI serves requests here
-
-    # Shutdown, in order: stop taking messages and let the one in flight finish,
-    # THEN close the pool it may be using. The reverse order fails the in-flight
-    # analysis with a closed-pool error at exactly the moment of a deploy.
-    print("[SHUTDOWN] Stopping the AMQP consumer...")
-    _consumer.stop()
-    consumer_thread.join(timeout=15)
-    if consumer_thread.is_alive():
-        print("[SHUTDOWN] ⚠ Consumer did not stop within 15s; continuing shutdown")
-    print("[SHUTDOWN] Closing database connection pool...")
-    database.close_pool()
-    print("[SHUTDOWN] ✓ Shutdown complete")
+# Startup and shutdown, in order: service_lifecycle.py says why the order matters.
+# SIGTERM reaches the shutdown half through uvicorn; tests_broker/ proves it.
+lifespan = service_lifecycle.lifespan_for(_open_resources, _make_consumer, database.close_pool)
 
 
 # ─── FastAPI App ───────────────────────────────────────────────────────────────
@@ -188,33 +156,6 @@ _dispatcher = Dispatcher(
     {contract.EVENT_SKILL_UPDATED: _analyse, contract.EVENT_PROFILE_UPDATED: _analyse},
     _metrics,
 )
-
-
-def _connect():
-    """
-    One broker connection. ResilientConsumer calls this again after every drop.
-
-    The old consumer made exactly one of these, under a docstring promising it
-    reconnected, and a single broker restart left it dead for good while the
-    service reported healthy.
-    """
-    parameters = pika.URLParameters(config.AMQP_URL)
-    parameters.heartbeat = 30
-    parameters.blocked_connection_timeout = 60
-    connection = pika.BlockingConnection(parameters)
-    # PASSIVE: check the queue exists, declare nothing. The backend's
-    # RabbitMQConfig owns the topology, and a second declarer would have to match
-    # every quorum argument exactly or fail with PRECONDITION_FAILED. If the
-    # backend has not started yet this raises, ResilientConsumer backs off and
-    # retries, and /health reports 503 meanwhile -- which is the truth.
-    try:
-        check = connection.channel()
-        check.queue_declare(queue=contract.AI_ANALYSIS_QUEUE, passive=True)
-        check.close()
-    except Exception:
-        connection.close()
-        raise
-    return connection
 
 
 # ─── REST API Endpoints ────────────────────────────────────────────────────────

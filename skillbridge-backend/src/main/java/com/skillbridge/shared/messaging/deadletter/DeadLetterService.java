@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -68,6 +69,7 @@ public class DeadLetterService {
     public static final String NOT_JSON_OBJECT = "NOT_A_JSON_OBJECT";
     public static final String INVALID_ENVELOPE = "INVALID_ENVELOPE";
     public static final String UNKNOWN_EVENT_TYPE = "UNKNOWN_EVENT_TYPE";
+    public static final String TOO_LARGE = "TOO_LARGE_TO_REPLAY";
     public static final String NOT_FOUND_OR_BUSY = "NOT_FOUND_OR_BEING_REPLAYED";
 
     private final DeadLetterEventRepository repository;
@@ -202,6 +204,11 @@ public class DeadLetterService {
         JsonNode type = body.get(EventEnvelope.EVENT_TYPE);
         if (type == null || !type.isTextual() || !RabbitMQConfig.ROUTING_KEYS.containsKey(type.asText())) {
             return Optional.of(UNKNOWN_EVENT_TYPE);
+        }
+        // The outbox refuses it anyway; saying so here keeps it out of a bulk replay's
+        // transaction, and tells the admin before they click.
+        if (row.getPayloadJson().getBytes(StandardCharsets.UTF_8).length > OutboxWriter.MAX_PAYLOAD_BYTES) {
+            return Optional.of(TOO_LARGE);
         }
         return Optional.empty();
     }

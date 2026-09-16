@@ -84,6 +84,18 @@ public class OutboxStore {
         return false;
     }
 
+    /**
+     * Returns claimed events untouched by blame: the broker was unavailable, so the
+     * attempt is not counted, and they come due again after {@code retryIn}.
+     */
+    @Transactional
+    public int releaseUncharged(List<Long> ids, String reason, Duration retryIn) {
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        return repository.releaseUncharged(ids, truncate(reason), LocalDateTime.now().plus(retryIn));
+    }
+
     @Transactional
     public int purgePublishedBefore(LocalDateTime cutoff) {
         return repository.deletePublishedBefore(cutoff);

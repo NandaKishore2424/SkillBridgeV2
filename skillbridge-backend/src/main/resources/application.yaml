@@ -302,9 +302,12 @@ outbox:
     # How long a claimed row is hidden from other relays. Long enough to publish
     # a whole batch; if the relay dies, the rows come back when it runs out.
     lease-ms: 60000
-    # Attempts before DEAD. With 500ms doubling to a 5 minute cap, eight attempts
-    # span a little over two minutes: long enough to ride out a broker restart,
-    # short enough that a genuinely broken event reaches a human the same hour.
+    # Attempts before DEAD -- counting only failures that are the EVENT's: today,
+    # an event no queue will route. A broker that is down, slow or full is not
+    # charged to anyone; the relay pauses (1s doubling to 30s) and retries for as
+    # long as it takes. Charging those was the first version's mistake: eight
+    # attempts at 500ms doubling is about one minute, so a longer outage made
+    # every event written in its first minute DEAD. See OutboxRelay.
     max-attempts: 8
     confirm-timeout-ms: 5000
   # PUBLISHED rows are kept this long as an audit of what was emitted, then purged.

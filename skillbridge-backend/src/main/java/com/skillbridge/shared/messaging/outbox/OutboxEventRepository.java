@@ -69,6 +69,22 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
     int scheduleRetry(@Param("id") Long id, @Param("error") String error,
                       @Param("nextAttemptAt") LocalDateTime nextAttemptAt);
 
+    /**
+     * Gives claimed rows back without charging them the attempt the claim counted.
+     *
+     * <p>For a broker that was unavailable: the attempt said nothing about these
+     * events, so it must not bring them closer to DEAD. {@code GREATEST} because a
+     * row can only be here after a claim incremented it, but a floor costs nothing.
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE outbox_events
+            SET attempts = GREATEST(attempts - 1, 0), next_attempt_at = :nextAttemptAt, last_error = :error
+            WHERE id IN (:ids) AND status = 'PENDING'
+            """, nativeQuery = true)
+    int releaseUncharged(@Param("ids") Collection<Long> ids, @Param("error") String error,
+                         @Param("nextAttemptAt") LocalDateTime nextAttemptAt);
+
     @Modifying
     @Query(value = """
             UPDATE outbox_events

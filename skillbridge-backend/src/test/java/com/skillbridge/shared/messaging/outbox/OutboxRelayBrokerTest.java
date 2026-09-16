@@ -29,6 +29,8 @@ import javax.sql.DataSource;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -184,11 +186,13 @@ class OutboxRelayBrokerTest {
         for (UUID id : new UUID[]{first, second, third}) {
             Map<String, Object> row = row(id);
             assertThat(row.get("status")).as("nothing is lost while the broker is down").isEqualTo("PENDING");
-            assertThat(row.get("attempts")).isEqualTo(1);
-            assertThat(row.get("last_error")).isNotNull();
+            // Not charged: an unreachable broker says nothing about the event. Charged,
+            // eight attempts at 500ms doubling made every event DEAD within about a minute.
+            assertThat(row.get("attempts")).as("the outage is not the event's fault").isEqualTo(0);
+            assertThat((String) row.get("last_error")).contains("broker unavailable");
         }
 
-        // The backoff scheduled them a little into the future; bring them due now
+        // The pause scheduled them a little into the future; bring them due now
         // rather than sleeping, so the test does not depend on timing.
         jdbc.update("UPDATE outbox_events SET next_attempt_at = now() - interval '1 second'");
 
@@ -201,6 +205,53 @@ class OutboxRelayBrokerTest {
         RabbitTemplate reader = new RabbitTemplate(liveFactory);
         for (int i = 0; i < 3; i++) {
             assertThat(reader.receive(QUEUE, 5_000)).as("message %d of 3", i + 1).isNotNull();
+        }
+    }
+
+    @Test
+    @DisplayName("a full queue refuses the publish; the refused events are not charged, and the relay pauses")
+    void fullQueueIsBackpressureNotFailure() throws Exception {
+        // The analysis queue is declared with x-overflow=reject-publish. A policy caps it
+        // at one message, so publishing soon gets nacked -- the broker saying "not now".
+        // A quorum queue's limit is soft (measured: it took a second message before it
+        // refused), so the test does not depend on exactly where the refusals start.
+        setPolicy("{\"max-length\":1}");
+        try {
+            List<UUID> events = new ArrayList<>();
+            for (int i = 0; i < 4; i++) {
+                events.add(writeEvent(RabbitMQConfig.SKILL_UPDATED_KEY));
+            }
+            OutboxRelay relay = relay(liveFactory, 1);   // one attempt: a charged failure would be DEAD at once
+
+            int accepted = relay.relayOnce();
+
+            assertThat(accepted).as("some go before the queue is full, not all").isBetween(1, 3);
+            for (int i = 0; i < events.size(); i++) {
+                Map<String, Object> row = row(events.get(i));
+                if (i < accepted) {
+                    assertThat(row.get("status")).isEqualTo("PUBLISHED");
+                } else {
+                    assertThat(row.get("status")).as("backpressure must not kill event %d", i).isEqualTo("PENDING");
+                    assertThat(row.get("attempts")).as("event %d is not charged", i).isEqualTo(0);
+                }
+            }
+            UUID firstRefused = events.get(accepted);
+            assertThat((String) row(firstRefused).get("last_error")).contains("nacked");
+
+            // Paused: even with the rows due, the scheduled poll leaves them alone.
+            jdbc.update("UPDATE outbox_events SET next_attempt_at = now() - interval '1 second'");
+            relay.poll();
+            assertThat(status(firstRefused)).as("a paused relay does not poll").isEqualTo("PENDING");
+
+            // The consumer catches up, the queue has room again, and the rest go.
+            clearPolicy();
+            new RabbitAdmin(liveFactory).purgeQueue(QUEUE, false);
+            assertThat(relay(liveFactory, 1).relayOnce()).isEqualTo(events.size() - accepted);
+            for (UUID id : events) {
+                assertThat(status(id)).isEqualTo("PUBLISHED");
+            }
+        } finally {
+            clearPolicy();
         }
     }
 
@@ -263,6 +314,33 @@ class OutboxRelayBrokerTest {
         factory.setPublisherConfirmType(CachingConnectionFactory.ConfirmType.CORRELATED);
         factory.setPublisherReturns(true);
         return factory;
+    }
+
+    /** A policy on the analysis queue only, applied before this returns. */
+    private static void setPolicy(String definition) throws Exception {
+        var result = broker.execInContainer("rabbitmqctl", "set_policy", "--apply-to", "queues",
+                "outbox-relay-test", "^" + QUEUE.replace(".", "\\.") + "$", definition);
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+        for (int i = 0; i < 50; i++) {
+            if (broker.execInContainer("rabbitmqctl", "list_queues", "name", "policy")
+                    .getStdout().contains("outbox-relay-test")) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("policy never applied");
+    }
+
+    private static void clearPolicy() throws Exception {
+        broker.execInContainer("rabbitmqctl", "clear_policy", "outbox-relay-test");
+        for (int i = 0; i < 50; i++) {
+            if (!broker.execInContainer("rabbitmqctl", "list_queues", "name", "policy")
+                    .getStdout().contains("outbox-relay-test")) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("policy never cleared");
     }
 
     private static int closedPort() throws Exception {

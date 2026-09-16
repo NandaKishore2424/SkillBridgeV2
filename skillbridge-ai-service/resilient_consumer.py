@@ -194,7 +194,12 @@ class ResilientConsumer:
         log.info("AMQP consumer stopped")
 
     def stop(self) -> None:
-        """Stops consuming. Safe from any thread; a running delivery finishes first."""
+        """
+        Stops consuming. Safe from any thread.
+
+        A delivery already being handled finishes and is acknowledged; one that
+        arrives after this is left for the next consumer (see _on_message).
+        """
         self._stop.set()
         with self._lock:
             connection = self._connection
@@ -235,6 +240,14 @@ class ResilientConsumer:
 
     def _on_message(self, channel: Any, method: Any, properties: Any, body: bytes) -> None:
         tag = method.delivery_tag
+        if self._stop.is_set():
+            # Shutting down, and this delivery arrived after stop() was called. Start
+            # nothing new: leave it unacknowledged. The connection close stop()
+            # scheduled runs next, and the broker hands an unacked delivery back to
+            # the queue for the next consumer. A nack-with-requeue would do the same
+            # and could be redelivered here, to be refused again, until the close.
+            log.info("Stopping; leaving delivery %s for the next consumer", tag)
+            return
         reason: Optional[str] = None
         try:
             outcome = self._handler(body, properties)

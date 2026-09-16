@@ -194,6 +194,17 @@ class DeadLetterServiceTest {
         }
 
         @Test
+        @DisplayName("a body bigger than the outbox takes is refused up front, not by a failed insert")
+        void refusesWhatTheOutboxWouldRefuse() {
+            String padding = "x".repeat(com.skillbridge.shared.messaging.outbox.OutboxWriter.MAX_PAYLOAD_BYTES);
+            long id = stored("{\"eventType\":\"SKILL_UPDATED\",\"studentId\":31,\"padding\":\"" + padding + "\"}");
+
+            assertThat(service.get(id).replayBlocker()).isEqualTo(DeadLetterService.TOO_LARGE);
+            assertThatThrownBy(() -> service.replay(id, ADMIN)).isInstanceOf(BusinessRuleException.class);
+            assertThat(outboxRows()).isZero();
+        }
+
+        @Test
         @DisplayName("half an envelope is not replayed: its version cannot be trusted")
         void refusesABrokenEnvelope() {
             long id = stored("{\"eventType\":\"SKILL_UPDATED\",\"schemaVersion\":\"2\",\"payload\":{\"studentId\":1}}");

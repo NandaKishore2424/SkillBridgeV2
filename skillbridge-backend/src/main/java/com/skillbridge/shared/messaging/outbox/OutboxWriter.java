@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -48,6 +49,17 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class OutboxWriter {
+
+    /**
+     * The largest payload the outbox takes: 64 KiB.
+     *
+     * <p>Every event here is a handful of ids. The bound exists for {@link OutboxRelay},
+     * which treats a broker's refusal as the broker's problem, not the event's — true
+     * only if no event is large enough for a broker to refuse on its own merits. A
+     * larger payload is a producer bug, and it fails the business transaction here,
+     * rather than stalling the relay later.
+     */
+    public static final int MAX_PAYLOAD_BYTES = 64 * 1024;
 
     private final OutboxEventRepository repository;
     private final ObjectMapper objectMapper;
@@ -93,6 +105,11 @@ public class OutboxWriter {
 
     private UUID save(UUID eventId, String aggregateType, Object aggregateId, String eventType, String routingKey,
                       int schemaVersion, String payload, Map<String, String> headers) {
+        int size = payload.getBytes(StandardCharsets.UTF_8).length;
+        if (size > MAX_PAYLOAD_BYTES) {
+            throw new IllegalStateException("outbox payload for " + eventType + " is " + size
+                    + " bytes; the limit is " + MAX_PAYLOAD_BYTES);
+        }
         repository.save(OutboxEvent.pending(
                 eventId, aggregateType, String.valueOf(aggregateId), eventType, routingKey,
                 payload, toJson(headers), schemaVersion, LocalDateTime.now()));

@@ -20,9 +20,11 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -56,6 +58,28 @@ import java.util.concurrent.TimeoutException;
  * <p>A relay that publishes and dies before recording it publishes again when the
  * lease runs out. That is the guarantee on offer from any broker. The message
  * carries the event id so the consumer can deduplicate.
+ *
+ * <h2>Whose fault a failure is</h2>
+ *
+ * <p>Only a failure that belongs to the event counts toward DEAD: today, an event no
+ * queue will route. Anything that belongs to the broker — it cannot be reached, it
+ * does not confirm in time, it nacks because a queue is full or has no leader — is
+ * <b>uncharged</b>: the event, and the rest of its batch, go back as they were, and
+ * the relay pauses (one second, doubling to thirty) before trying again.
+ *
+ * <p>The first version charged every failure. With the backoff doubling from half a
+ * second, an event reached its eighth attempt — DEAD — about a minute after the
+ * broker went away, so any outage longer than that turned every event written in its
+ * first minute into manual work. A full queue did the same, which made "the outbox
+ * keeps the event PENDING while the queue is full" true for one minute. And each
+ * event in a batch made its own connection attempt, so a broker that hung rather than
+ * refused stalled a batch of a hundred for minutes. {@code OutboxBrokerOutageTest}
+ * kills a real broker for longer than that minute and requires every event to arrive.
+ *
+ * <p>The classification rests on one assumption: the broker has no reason of its own
+ * to refuse an event this backend builds. {@link OutboxWriter} makes that true by
+ * bounding the payload size; an oversized message is the one way a broker-side
+ * refusal could really be an event's fault.
  */
 @Component
 @ConditionalOnProperty(prefix = "outbox.relay", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -68,11 +92,18 @@ public class OutboxRelay {
     private final MeterRegistry meters;
     private final RabbitTemplate template;
 
+    static final Duration PAUSE_BASE = Duration.ofSeconds(1);
+    static final Duration PAUSE_CAP = Duration.ofSeconds(30);
+
     private final int batchSize;
     private final Duration lease;
     private final int maxAttempts;
     private final long confirmTimeoutMs;
     private final int retentionDays;
+
+    /** Broker-side failures in a row; decides the pause. Reset by any confirmed publish. */
+    private int consecutiveBrokerFailures;
+    private volatile Instant pausedUntil = Instant.MIN;
 
     public OutboxRelay(OutboxStore store, SingleRunGuard singleRun, ObjectMapper objectMapper,
                        MeterRegistry meters, ConnectionFactory connectionFactory,
@@ -99,6 +130,11 @@ public class OutboxRelay {
 
     @Scheduled(fixedDelayString = "${outbox.relay.poll-interval-ms:500}")
     public void poll() {
+        if (Instant.now().isBefore(pausedUntil)) {
+            // The broker was unavailable a moment ago. Asking again every half second
+            // would only add load to a broker that is struggling and noise to the log.
+            return;
+        }
         try {
             relayOnce();
         } catch (Exception e) {
@@ -116,7 +152,8 @@ public class OutboxRelay {
     public int relayOnce() {
         List<ClaimedEvent> batch = store.claimDue(batchSize, lease, maxAttempts);
         int confirmed = 0;
-        for (ClaimedEvent event : batch) {
+        for (int i = 0; i < batch.size(); i++) {
+            ClaimedEvent event = batch.get(i);
             try {
                 publish(event);
                 store.recordPublished(event.id());
@@ -124,7 +161,11 @@ public class OutboxRelay {
                 // version is the question before a consumer can drop support for it.
                 meters.counter("outbox.published", "eventType", event.eventType(),
                         "schemaVersion", String.valueOf(event.schemaVersion())).increment();
+                consecutiveBrokerFailures = 0;
                 confirmed++;
+            } catch (BrokerUnavailableException e) {
+                pauseAndRelease(batch.subList(i, batch.size()), e);
+                return confirmed;
             } catch (Exception e) {
                 Duration retryIn = OutboxBackoff.delayAfter(event.attempts(), ThreadLocalRandom.current().nextDouble());
                 boolean dead = store.recordFailure(event, describe(e), maxAttempts, retryIn);
@@ -141,6 +182,35 @@ public class OutboxRelay {
             }
         }
         return confirmed;
+    }
+
+    /**
+     * The broker is unavailable: give back this event and every one after it in the
+     * batch, uncharged, and stop asking for a while.
+     *
+     * <p>The rest of the batch goes back unattempted. Trying each would make a
+     * connection attempt per event against a broker that has just failed one — a
+     * hundred of them, five seconds each, when it hangs rather than refuses.
+     */
+    private void pauseAndRelease(List<ClaimedEvent> unsent, BrokerUnavailableException e) {
+        consecutiveBrokerFailures++;
+        Duration pause = pauseAfter(consecutiveBrokerFailures, ThreadLocalRandom.current().nextDouble());
+        pausedUntil = Instant.now().plus(pause);
+        // The exception's own message, which names the root cause; describe() would
+        // prefix it with this wrapper's class name, which says nothing.
+        String reason = "broker unavailable, not charged to the event: " + e.getMessage();
+        store.releaseUncharged(unsent.stream().map(ClaimedEvent::id).toList(), reason, pause);
+        meters.counter("outbox.broker.unavailable").increment();
+        log.warn("Broker unavailable ({}); {} event(s) given back uncharged, relay paused for {}ms",
+                e.getMessage(), unsent.size(), pause.toMillis());
+    }
+
+    /** One second, doubling to thirty, with up to a quarter more as jitter. */
+    static Duration pauseAfter(int consecutiveFailures, double jitter) {
+        int exponent = Math.max(0, Math.min(consecutiveFailures - 1, 10));
+        long base = Math.min(PAUSE_BASE.toMillis() << exponent, PAUSE_CAP.toMillis());
+        double fraction = Math.max(0.0, Math.min(jitter, 1.0));
+        return Duration.ofMillis(base + (long) (base * 0.25 * fraction));
     }
 
     /**
@@ -164,24 +234,39 @@ public class OutboxRelay {
      * message if the broker could not route it. Nothing to correlate by hand, and
      * no second channel of news to wait for.
      */
-    private void publish(ClaimedEvent event) throws Exception {
+    private void publish(ClaimedEvent event) {
         String messageId = event.eventId().toString();
+        // Built before anything is sent: a failure here is the event's own.
+        Message message = toMessage(event, messageId);
         CorrelationData correlation = new CorrelationData(messageId);
 
-        template.send(RabbitMQConfig.EVENTS_EXCHANGE, event.routingKey(), toMessage(event, messageId), correlation);
+        try {
+            template.send(RabbitMQConfig.EVENTS_EXCHANGE, event.routingKey(), message, correlation);
+        } catch (AmqpException e) {
+            throw new BrokerUnavailableException("could not send: " + describe(e), e);
+        }
 
         CorrelationData.Confirm confirm;
         try {
             confirm = correlation.getFuture().get(confirmTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
-            throw new AmqpException("broker did not confirm the event within " + confirmTimeoutMs + "ms", e);
+            throw new BrokerUnavailableException(
+                    "broker did not confirm the event within " + confirmTimeoutMs + "ms", e);
         } catch (InterruptedException e) {
+            // Usually shutdown. The event goes back uncharged, so a deploy costs nothing.
             Thread.currentThread().interrupt();
-            throw new AmqpException("interrupted while waiting for the broker to confirm the event", e);
+            throw new BrokerUnavailableException("interrupted while waiting for the broker to confirm", e);
+        } catch (ExecutionException e) {
+            throw new BrokerUnavailableException("confirm failed: " + describe(e), e);
         }
 
         if (!confirm.isAck()) {
-            throw new AmqpException("broker nacked the event: " + confirm.getReason());
+            // A full queue (reject-publish), a queue with no leader, a broker shutting
+            // down. Backpressure, not a verdict on the event.
+            // RabbitMQ gives no reason with a nack, so the likely ones are named here.
+            String why = confirm.getReason() != null ? confirm.getReason()
+                    : "no reason given; a full queue refusing publishes, or a queue with no leader";
+            throw new BrokerUnavailableException("broker nacked the event (" + why + ")", null);
         }
         if (correlation.getReturned() != null) {
             throw new AmqpException("broker returned the event as unroutable ("
