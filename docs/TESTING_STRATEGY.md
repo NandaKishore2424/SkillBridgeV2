@@ -10,20 +10,21 @@
 
 | Tier | Tests | Runtime | Needs | Command |
 |---|---|---|---|---|
-| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event and topology contracts | 154 | **~7 s** | nothing | `mvn test` |
-| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres, the relay and topology on real RabbitMQ | 84 | **~60 s** | Docker | `mvn verify` |
-| **Python** — event and topology contracts, consumer resilience, retry and dedup decisions | 54 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
+| **Backend fast** — unit, architecture, `@WebMvcTest` slices, event and topology contracts, alert rules vs emitted metrics | 200 | **~14 s** | nothing | `mvn test` |
+| **Backend integration** — `@SpringBootTest` and `@DataJpaTest` on real Postgres; the relay, topology and dead-letter recorder on real RabbitMQ | 107 | **~95 s** | Docker | `mvn verify` |
+| **Python** — event and topology contracts, consumer resilience, retry, dead-lettering and dedup decisions | 63 | **<0.1 s** | `jsonschema` | `python -m unittest discover -s tests -t .` |
 | **Python store** — the dedup claim on real PostgreSQL built from `baseline.sql`: racing claims, lease takeover, fencing | 8 | **~4 s** | a PostgreSQL (`AI_TEST_DATABASE_URL`); fails, never skips, without one | `python -m unittest discover -s tests_integration -t .` |
 | **Frontend** — hooks, auth, components | 22 | **2.5 s** | nothing | `npm test` |
+| **Alert rules** — `promtool test rules`: synthetic series in, alerts out, NaN included | 4 scenarios, 11 evaluations | **<1 s** | Docker | see `ops/prometheus/messaging-alerts.test.yml` |
 
-**322 tests, 0 skipped**, measured 2026-09-15. All of it runs in CI — **proven on a
+**400 tests, 0 skipped**, measured 2026-09-16, plus the `promtool` rule tests. All of it runs in CI — **proven on a
 clean git worktree**, which the first version of this sentence was not: see below. So
 do
 three gates on top of it:
 
 | Gate | Measured | Threshold | Why not the phase's number |
 |---|---|---|---|
-| Backend coverage (JaCoCo, both tiers merged) | 34.9% line · 27.4% branch | 34% · 27% | a ratchet; 80% now would be deleted, not met |
+| Backend coverage (JaCoCo, both tiers merged) | 42.4% line · 39.0% branch (2026-09-16; was 34.9 · 27.4 when the gate was set) | 34% · 27% | a ratchet; 80% now would be deleted, not met |
 | Frontend coverage (v8) | 13.4% line | 13% | same |
 | Mutation score (PIT, domain logic) | 90% — 35 of 39 | 89% | the 4 survivors are equivalent and unkillable |
 
@@ -88,6 +89,21 @@ unset the environment variables, and run the build there. The fix is a test-only
 in `application-test.yaml`, proven the same way.
 
 ---
+
+## An alert is code, and untested code rots
+
+`ops/prometheus/messaging-alerts.yml` is checked twice, because an alert fails in the
+quietest way there is: a rule on a metric that no longer exists is valid PromQL,
+loads, evaluates, matches nothing, and never fires.
+
+- **`MessagingAlertRulesTest`** (fast tier) registers exactly what `MessagingMetrics`
+  registers in a real `PrometheusMeterRegistry`, scrapes it, and fails if a rule names a
+  metric or a `label="value"` nothing emits, or links to a runbook heading that does not
+  exist. Renaming a gauge, or changing a tag value's case, turns it red.
+- **`promtool test rules`** (CI job `alert-rules`) feeds the rules synthetic series and
+  asserts which alerts fire when. It caught something the first test could not: a
+  comparison drops the metric name, so the NaN rule (`x != x`) could not say *which*
+  gauge was unreadable until the rule put the name back as a label.
 
 ## Test the broker with a broker
 
