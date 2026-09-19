@@ -92,6 +92,18 @@ class JobSearchFunctionTest {
     }
 
     @Test
+    @DisplayName("each match carries its description, which the AI service reads skills from (V8)")
+    void returnsDescription() {
+        // required_skills is empty on every stored job; without the description
+        // the skill-gap report had no missing skills to show (decision #11).
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT title, raw_description FROM search_similar_jobs(?::vector, 0.9, 1)",
+                vector(unit(0, 1.0, 1, 0.0)));
+
+        assertThat(rows).singleElement().satisfies(r -> assertThat(r.get("raw_description")).isEqualTo("fixture"));
+    }
+
+    @Test
     @DisplayName("the function's operator matches idx_job_embedding's operator class")
     void cosineIndexIsUsable() {
         jdbc.execute("SET LOCAL enable_seqscan = off");

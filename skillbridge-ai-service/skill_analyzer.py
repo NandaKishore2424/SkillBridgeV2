@@ -19,6 +19,7 @@ Senior Engineering Note:
 import re
 from dataclasses import dataclass, field
 from embedder import embed_text
+from skill_extraction import extract_skills
 from database import get_connection, return_connection
 from config import TOP_JOBS_TO_RETURN, SIMILARITY_THRESHOLD
 
@@ -42,46 +43,6 @@ class SkillGapReport:
     all_missing_skills: list[str]  # Deduplicated across all top matches
     analysis_status: str = "SUCCESS"
     error_message: str = ""
-
-
-# Common skill keywords to extract from raw job descriptions (Phase 2 approach)
-# In Phase 3, the LLM will handle this extraction far more intelligently
-KNOWN_SKILLS: list[str] = [
-    # Languages
-    "python", "sql", "r", "java", "scala", "julia", "bash",
-    # Databases
-    "postgresql", "mysql", "mongodb", "redis", "cassandra", "snowflake", "bigquery",
-    # Data & Analytics
-    "pandas", "numpy", "tableau", "power bi", "excel", "spark", "hadoop", "dbt",
-    "airflow", "kafka", "etl",
-    # ML/AI
-    "machine learning", "deep learning", "tensorflow", "pytorch", "scikit-learn",
-    "nlp", "llm", "langchain", "huggingface",
-    # Cloud & DevOps
-    "aws", "azure", "gcp", "docker", "kubernetes", "git", "linux",
-    # Web/Backend (since SkillBridge students may have these)
-    "spring boot", "react", "node.js", "fastapi", "rest api",
-    # Soft/Analytics
-    "statistics", "data visualization", "a/b testing", "regression",
-]
-
-
-def _extract_skill_keywords(text: str) -> list[str]:
-    """
-    Extract known skill keywords from a raw job description.
-    Case-insensitive matching. Returns a deduplicated list.
-    
-    This is a pragmatic Phase 2 approach. 
-    Phase 3 will replace this with an LLM extraction call.
-    """
-    text_lower = text.lower()
-    found = []
-    for skill in KNOWN_SKILLS:
-        # Use word boundary matching to avoid partial matches (e.g., "R" matching "React")
-        pattern = r'\b' + re.escape(skill) + r'\b'
-        if re.search(pattern, text_lower):
-            found.append(skill)
-    return found
 
 
 def _format_student_skills_as_text(skills: list[str]) -> str:
@@ -165,11 +126,13 @@ def analyze_skill_gap(student_id: int, student_skills: list[str]) -> SkillGapRep
     all_missing_set: set[str] = set()
 
     for row in rows:
-        # Row structure from our SQL function: (id, title, company, required_skills, similarity)
-        job_id, title, company, required_skills_text, similarity = row
+        # search_similar_jobs (V8): (id, title, company, required_skills, raw_description, similarity)
+        job_id, title, company, required_skills_text, raw_description, similarity = row
 
-        # Extract what skills the job WANTS (from the raw description text)
-        job_required_skills = _extract_skill_keywords(required_skills_text or "")
+        # What the job asks for. required_skills is empty on every stored job, so
+        # this reads the description; a job that ever gets required_skills
+        # filled in uses that instead (skill_extraction.py, decision #11).
+        job_required_skills = extract_skills(required_skills_text or raw_description)
         
         # What does the student HAVE vs what the job WANTS?
         matched_keywords = [s for s in job_required_skills if s in normalized_student_skills]
