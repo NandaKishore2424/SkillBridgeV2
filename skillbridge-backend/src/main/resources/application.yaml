@@ -180,19 +180,36 @@ spring:
         max-page-size: 100
         default-page-size: 20
 
+  # Schema migrations. Reinstated 2026-09-19, when the project moved off Supabase
+  # and gained a second environment to reproduce (a laptop now, an EC2 host
+  # later). Flyway runs before JPA starts, so `ddl-auto: validate` below checks
+  # the entities against the schema Flyway just produced.
+  #
+  # To change the schema: add src/main/resources/db/migration/V<next>__<what>.sql
+  # and change the entity in the same commit. Never edit an applied migration;
+  # Flyway checksums them and refuses to start if one changes.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # A database that already holds the schema but has no Flyway history -- the
+    # local database restored from the 2026-09-19 backup, and the EC2 database
+    # restored from the same dump -- is recorded as being at V2 (schema plus
+    # reference data) rather than re-created. V1 and V2 were generated from the
+    # capture that dump was verified against, so "at V2" is a fact, not a hope.
+    # An empty database, which is what the integration tests start with, runs
+    # V1 and V2 from scratch.
+    baseline-on-migrate: true
+    baseline-version: "2"
+    baseline-description: "restored from the 2026-09-19 Supabase backup"
+    validate-on-migrate: true
+
   jpa:
-    # validate, never update. Hibernate must not be allowed to alter the schema.
-    #
-    # Flyway was removed on 2026-09-05 (personal project, one database, no
-    # second environment to reproduce). The schema is now applied directly to
-    # Supabase and this setting is the ONLY remaining guard against the code and
-    # the database drifting apart -- it is what caught both startup bugs that
-    # blocked Phase 00. Do not relax it to `update`: Hibernate will not create
-    # the trg_progress_denorm trigger, the partial unique indexes or the CHECK
-    # constraints this schema depends on, and it never removes anything.
-    #
-    # To change the schema: alter the entity, then apply the matching SQL to
-    # Supabase in the same change. Startup will tell you if you forgot.
+    # validate, never update. Hibernate must not be allowed to alter the schema:
+    # it would not create the trg_progress_denorm trigger, the partial unique
+    # indexes or the CHECK constraints this schema depends on, and it never
+    # removes anything. Flyway owns the schema; this is the second guard that the
+    # entities and the migrations agree -- it is what caught both startup bugs
+    # that blocked Phase 00.
     hibernate:
       ddl-auto: validate
     open-in-view: false

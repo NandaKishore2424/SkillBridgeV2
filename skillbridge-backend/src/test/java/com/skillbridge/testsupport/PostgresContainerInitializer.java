@@ -7,10 +7,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
-import org.testcontainers.utility.MountableFile;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -49,13 +46,12 @@ import java.util.function.Function;
  *
  * <h2>What makes the container faithful</h2>
  *
- * <p>{@code db/schema/baseline.sql} and {@code db/schema/reference-data.sql} are
- * copied into the image's init directory, which the official entrypoint runs in
- * filename order on first start. The baseline is not hand-maintained: it was
- * captured from live and diff-verified against it, and it reproduces live's
- * catalogue exactly on this image too, 551 objects digesting to
- * 31ef5166e257821574abad4853b7bdad on both. {@code scripts/verify-schema-baseline.sh}
- * re-checks that on demand.
+ * <p>The container starts empty and <b>Flyway builds the schema</b> when the
+ * first Spring context starts, from the same {@code db/migration} files that
+ * build every other database (reinstated 2026-09-19). So the tests exercise the
+ * migrations themselves, not a copy of the schema that could drift from them.
+ * V1 was generated from {@code db/schema/baseline.sql}, the capture verified
+ * identical to the retired Supabase database.
  *
  * <p>The image is {@code pgvector/pgvector:pg17}: PostgreSQL 17, matching live's
  * 17.6, with pgvector for {@code industry_job_descriptions.embedding} and contrib
@@ -162,52 +158,11 @@ public class PostgresContainerInitializer
     }
 
     private static PostgreSQLContainer<?> create() {
-        Path schemaDir = repositoryRoot().resolve("db/schema");
-        Path baseline = schemaDir.resolve("baseline.sql");
-        Path reference = schemaDir.resolve("reference-data.sql");
-
-        for (Path required : new Path[]{baseline, reference}) {
-            if (!Files.isReadable(required)) {
-                throw new IllegalStateException(
-                        "cannot build a test database: " + required + " is missing or unreadable. "
-                                + "It is the only copy of this schema outside the Supabase project; "
-                                + "re-capture it with scripts/verify-schema-baseline.sh as the guide.");
-            }
-        }
-
-        // The official postgres entrypoint runs /docker-entrypoint-initdb.d in
-        // filename order on first initialisation, so the numeric prefixes are
-        // load-bearing: reference-data.sql inserts into a table baseline.sql
-        // creates.
+        // Empty on purpose: Flyway (spring.flyway in application.yaml) creates the
+        // schema and reference data on the first context start.
         return new PostgreSQLContainer<>(IMAGE)
                 .withDatabaseName("skillbridge")
                 .withUsername("skillbridge")
-                .withPassword("skillbridge")
-                .withCopyFileToContainer(MountableFile.forHostPath(baseline),
-                        "/docker-entrypoint-initdb.d/01-baseline.sql")
-                .withCopyFileToContainer(MountableFile.forHostPath(reference),
-                        "/docker-entrypoint-initdb.d/02-reference-data.sql");
-    }
-
-    /**
-     * Walks up from the working directory to the directory holding {@code db/schema}.
-     *
-     * <p>Surefire and Failsafe run with the module directory as the working
-     * directory, so this is normally one level up -- but an IDE may launch a test
-     * from the repository root instead, and hard-coding {@code ../} fails there
-     * with a message about a missing file rather than about the working
-     * directory, which is a bad half-hour.
-     */
-    private static Path repositoryRoot() {
-        Path candidate = Path.of("").toAbsolutePath();
-        for (int depth = 0; depth < 5 && candidate != null; depth++) {
-            if (Files.isDirectory(candidate.resolve("db/schema"))) {
-                return candidate;
-            }
-            candidate = candidate.getParent();
-        }
-        throw new IllegalStateException(
-                "could not find db/schema above " + Path.of("").toAbsolutePath()
-                        + " -- run the tests from the repository or the backend module");
+                .withPassword("skillbridge");
     }
 }
