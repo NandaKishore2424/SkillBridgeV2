@@ -2,6 +2,7 @@ package com.skillbridge.common.config;
 
 import com.skillbridge.auth.filter.PasswordChangeRequiredFilter;
 import com.skillbridge.auth.filter.TokenAuthenticationFilter;
+import com.skillbridge.auth.security.JsonSecurityErrorHandler;
 import com.skillbridge.common.observability.UserContextLogFilter;
 import com.skillbridge.common.throttle.RateLimitingFilter;
 import org.springframework.context.annotation.Bean;
@@ -30,17 +31,20 @@ public class SecurityConfig {
     private final PasswordChangeRequiredFilter passwordChangeRequiredFilter;
     private final RateLimitingFilter rateLimitingFilter;
     private final UserContextLogFilter userContextLogFilter;
+    private final JsonSecurityErrorHandler securityErrorHandler;
 
     public SecurityConfig(
             TokenAuthenticationFilter tokenAuthenticationFilter,
             PasswordChangeRequiredFilter passwordChangeRequiredFilter,
             RateLimitingFilter rateLimitingFilter,
-            UserContextLogFilter userContextLogFilter
+            UserContextLogFilter userContextLogFilter,
+            JsonSecurityErrorHandler securityErrorHandler
     ) {
         this.tokenAuthenticationFilter = tokenAuthenticationFilter;
         this.passwordChangeRequiredFilter = passwordChangeRequiredFilter;
         this.rateLimitingFilter = rateLimitingFilter;
         this.userContextLogFilter = userContextLogFilter;
+        this.securityErrorHandler = securityErrorHandler;
     }
 
     @Bean
@@ -74,6 +78,13 @@ public class SecurityConfig {
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
+            // 401 for "who are you?" (missing, expired or rejected token) and 403
+            // for "no", both as JSON. Without this Spring falls back to
+            // Http403ForbiddenEntryPoint and an expired token gets an empty 403,
+            // which the SPA -- correctly -- does not treat as a cue to refresh.
+            .exceptionHandling(errors -> errors
+                .authenticationEntryPoint(securityErrorHandler)
+                .accessDeniedHandler(securityErrorHandler))
             .addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             // After authentication, not before. Rate limiting keys by user id,
             // and before this filter runs there is no principal -- which is how

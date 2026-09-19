@@ -24,7 +24,10 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 // Token storage keys
 const ACCESS_TOKEN_KEY = 'skillbridge_access_token'
-const REFRESH_TOKEN_KEY = 'skillbridge_refresh_token'
+// The refresh token lives ONLY in the HttpOnly cookie the API sets, where
+// script cannot read it. Older builds kept a copy in localStorage; this key is
+// kept solely so clearAuthState can delete such a leftover.
+const LEGACY_REFRESH_TOKEN_KEY = 'skillbridge_refresh_token'
 const USER_KEY = 'skillbridge_user'
 
 interface AuthProviderProps {
@@ -118,12 +121,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        console.log('[AuthContext] Initializing auth...')
         const storedAccessToken = localStorage.getItem(ACCESS_TOKEN_KEY)
-        const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
         const storedUser = localStorage.getItem(USER_KEY)
-        console.log('[AuthContext] Stored token:', storedAccessToken ? 'exists' : 'null')
-        console.log('[AuthContext] Stored user:', storedUser)
 
         if (storedAccessToken && !isTokenExpired(storedAccessToken)) {
           // Access token is valid
@@ -147,7 +146,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setState({
               user,
               accessToken: storedAccessToken,
-              refreshToken: storedRefreshToken,
+              refreshToken: null,
               isAuthenticated: true,
               isLoading: false,
               error: null,
@@ -155,22 +154,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
           } else {
             clearAuthState()
           }
-        } else if (storedRefreshToken) {
-          // Access token expired, try to refresh
-          try {
-            const response = await authAPI.refreshToken(storedRefreshToken)
-            await handleAuthSuccess(response)
-          } catch (error) {
-            // Refresh failed, clear everything
-            clearAuthState()
-          }
         } else {
-          // No refresh token stored, try cookie-based refresh
+          // No usable access token. The refresh cookie, if the browser holds one,
+          // restores the session; if not, this 401s and the user logs in.
           try {
-            const response = await authAPI.refreshToken(null)
+            const response = await authAPI.refreshToken()
             await handleAuthSuccess(response)
           } catch (error) {
-            // No tokens, user is not authenticated
             clearAuthState()
           }
         }
@@ -188,7 +178,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
    */
   const clearAuthState = () => {
     localStorage.removeItem(ACCESS_TOKEN_KEY)
-    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     setState({
       user: null,
@@ -226,10 +216,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Store tokens
     localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken)
-    // Refresh token is stored in HttpOnly cookie for security. Keep localStorage only if it exists already.
-    if (localStorage.getItem(REFRESH_TOKEN_KEY)) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
-    }
     if (user) {
       localStorage.setItem(USER_KEY, JSON.stringify(user))
     }
@@ -346,9 +332,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * rotates refresh tokens: a successful refresh revokes the one it was given.
    * A page that fires several requests at once — every dashboard here does —
    * gets several 401s the moment the access token expires, and without this
-   * guard each one would call refresh with the *same* stored token. The first
-   * succeeds and revokes it; the rest are rejected as invalid, and the catch
-   * below logs the user out.
+   * guard each one would call refresh with the *same* refresh cookie. The first
+   * succeeds and rotates it; the rest present the revoked one, which the server
+   * treats as a replayed token, and the catch below logs the user out.
    *
    * That was survivable while access tokens lasted an hour. They now last
    * fifteen minutes (the token is authoritative for authorisation, so its
@@ -363,13 +349,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     const attempt = (async () => {
-      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-      if (!refreshToken) {
-        throw new Error('No refresh token available')
-      }
-
       try {
-        const response = await authAPI.refreshToken(refreshToken)
+        // No token argument: the browser sends the HttpOnly refresh cookie.
+        const response = await authAPI.refreshToken()
         await handleAuthSuccess(response)
       } catch (error) {
         // Refresh failed, logout user
@@ -401,8 +383,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       async (error) => {
         const originalRequest = error.config
 
-        // If 401 and not already retried, try to refresh token
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // 401 means the access token is missing, expired or revoked: refresh
+        // once and retry. 403 means "not allowed" and is final. The auth
+        // endpoints themselves are excluded -- a 401 from /auth/refresh must
+        // end the session, not trigger another refresh.
+        const url: string = originalRequest?.url ?? ''
+        const isAuthEndpoint = /\/auth\/(login|refresh|first-login|logout)/.test(url)
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
           originalRequest._retry = true
 
           try {

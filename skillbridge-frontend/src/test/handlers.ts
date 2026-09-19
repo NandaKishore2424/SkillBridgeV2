@@ -28,11 +28,13 @@ export function userPayload(overrides: Record<string, unknown> = {}) {
   }
 }
 
-/** An `AuthResponse`, as `/auth/login` and `/auth/refresh` both return. */
-export function authPayload(accessToken: string, refreshToken: string) {
+/**
+ * An `AuthResponse`, as `/auth/login` and `/auth/refresh` both return. There is
+ * no refresh token in it: the API sends that only as an HttpOnly cookie.
+ */
+export function authPayload(accessToken: string) {
   return {
     accessToken,
-    refreshToken,
     expiresIn: 900,
     user: userPayload(),
   }
@@ -40,10 +42,10 @@ export function authPayload(accessToken: string, refreshToken: string) {
 
 export const handlers = [
   http.post(`${API}/auth/login`, () =>
-    HttpResponse.json(authPayload('access-1', 'refresh-1'))),
+    HttpResponse.json(authPayload('access-1'))),
 
   http.post(`${API}/auth/refresh`, () =>
-    HttpResponse.json(authPayload('access-2', 'refresh-2'))),
+    HttpResponse.json(authPayload('access-2'))),
 
   http.post(`${API}/auth/logout`, () => new HttpResponse(null, { status: 204 })),
 ]

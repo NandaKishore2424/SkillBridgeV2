@@ -12,7 +12,7 @@ export interface LoginRequest {
 
 export interface AuthResponse {
   accessToken: string;
-  refreshToken: string;
+  // No refreshToken: the API sets it as an HttpOnly cookie and never sends it in a body.
   expiresIn: number;
   user?: {
     id: number;
@@ -47,9 +47,9 @@ export const login = async (credentials: LoginRequest): Promise<AuthResponse> =>
 /**
  * Refresh access token
  */
-export const refreshToken = async (refreshToken?: string | null): Promise<AuthResponse> => {
-  const payload = refreshToken ? { refreshToken } : {};
-  const response = await apiClient.post<AuthResponse>('/auth/refresh', payload);
+export const refreshToken = async (): Promise<AuthResponse> => {
+  // The refresh token travels only in the HttpOnly cookie (withCredentials).
+  const response = await apiClient.post<AuthResponse>('/auth/refresh', {});
   return response.data;
 };
 
@@ -57,20 +57,12 @@ export const refreshToken = async (refreshToken?: string | null): Promise<AuthRe
  * Logout user (revoke refresh token)
  */
 export const logout = async (): Promise<void> => {
-  const refreshToken = localStorage.getItem('skillbridge_refresh_token');
-  if (refreshToken) {
-    try {
-      await apiClient.post('/auth/logout', { refreshToken });
-    } catch (error) {
-      // Continue with logout even if API call fails
-      console.error('Logout API call failed:', error);
-    }
-  } else {
-    try {
-      await apiClient.post('/auth/logout', {});
-    } catch (error) {
-      console.error('Logout API call failed:', error);
-    }
+  try {
+    // The server revokes the refresh token from the cookie and clears it.
+    await apiClient.post('/auth/logout', {});
+  } catch (error) {
+    // Continue with logout even if the API call fails
+    console.error('Logout API call failed:', error);
   }
 };
 

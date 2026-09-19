@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -11,59 +11,73 @@ import { API, authPayload, userPayload } from '@/test/handlers'
 import { server } from '@/test/server'
 
 /**
- * Concurrent 401s must produce exactly one refresh.
+ * Session renewal against a model of the real server.
  *
- * This guards a bug that reached users: every dashboard here fires several
- * requests at once, so when the access token expires they all 401 together.
- * Without a single-flight guard each one calls `/auth/refresh` with the *same*
- * stored refresh token. The server rotates refresh tokens — a successful
- * refresh revokes the one it was given — so the first call succeeds and the
- * rest are rejected as invalid, and the rejection handler logs the user out.
+ * **What the server actually does** (backend `AuthenticationFailureStatusTest`,
+ * measured 2026-09-17 and fixed 2026-09-19):
+ * - an expired or missing access token gets **401** with
+ *   `WWW-Authenticate: Bearer error="invalid_token"`;
+ * - "you may not" is **403**, and is final;
+ * - the refresh token exists **only in an HttpOnly cookie**: never in a
+ *   response body, never in localStorage, never in a request body;
+ * - each refresh **rotates** that cookie, and presenting the old one fails.
  *
- * It used to be survivable at one logout an hour. The access-token TTL is now
- * fifteen minutes, because the token is authoritative for authorisation and its
- * lifetime is the revocation window, so the race is four times as frequent.
+ * The previous version of this file mocked a 401 "the way it would in
+ * production" while production sent 403, and it seeded a refresh token into
+ * localStorage that a real login never wrote. Both premises were false, so it
+ * stayed green while sessions died fifteen minutes after login. Every premise
+ * here is taken from the backend's own test.
  *
- * **The rotation is modelled here rather than stubbed away.** A handler that
- * happily answered every refresh would let the broken implementation pass: it
- * would make five calls, all succeed, and nothing would be visibly wrong. The
- * handler below revokes the token it consumes, exactly as the server does, so
- * removing the guard reproduces the production failure instead of hiding it.
+ * **The cookie is modelled as server-side state.** A browser attaches it to
+ * each request automatically, so `browserCookie` is "what the browser would
+ * send". A handler reads it on arrival, then pauses before rotating it. That
+ * reproduces the real race: requests sent together all carry the same cookie,
+ * because none has seen the rotation yet.
  */
 
 const ACCESS_TOKEN_KEY = 'skillbridge_access_token'
-const REFRESH_TOKEN_KEY = 'skillbridge_refresh_token'
+const LEGACY_REFRESH_TOKEN_KEY = 'skillbridge_refresh_token'
 const USER_KEY = 'skillbridge_user'
 
-/** Refresh tokens the server still considers valid. Rotation mutates this. */
+/** Refresh tokens the server still accepts. Rotation mutates this. */
 let liveRefreshTokens: Set<string>
+/** What the browser holds in its HttpOnly cookie jar. */
+let browserCookie: string | null
 let refreshCalls: number
+let refreshBodies: unknown[]
 
 function armServer() {
   liveRefreshTokens = new Set(['refresh-1'])
+  browserCookie = 'refresh-1'
   refreshCalls = 0
+  refreshBodies = []
 
   server.use(
     http.post(`${API}/auth/refresh`, async ({ request }) => {
       refreshCalls += 1
-      const body = (await request.json()) as { refreshToken?: string } | null
-      const presented = body?.refreshToken
+      refreshBodies.push(await request.json())
+      const presented = browserCookie
+      // Requests sent at the same moment all carry the cookie as it was then.
+      await delay(20)
 
       if (!presented || !liveRefreshTokens.has(presented)) {
-        // Exactly what the server does with an already-rotated token.
-        return HttpResponse.json({ error: 'INVALID_REFRESH_TOKEN' }, { status: 401 })
+        return HttpResponse.json({ status: 401, error: 'UNAUTHORIZED' }, { status: 401 })
       }
-
       liveRefreshTokens.delete(presented)
-      liveRefreshTokens.add('refresh-2')
-      return HttpResponse.json(authPayload('access-2', 'refresh-2'))
+      const next = `refresh-${refreshCalls + 1}`
+      liveRefreshTokens.add(next)
+      browserCookie = next
+      return HttpResponse.json(authPayload('access-2'))
     }),
 
-    // A protected read that only accepts the *new* access token, so every
-    // request made with the stale one 401s the way it would in production.
+    // A protected read that accepts only the renewed access token, and answers a
+    // stale one exactly as the server does.
     http.get(`${API}/admin/colleges`, ({ request }) => {
       if (request.headers.get('Authorization') !== 'Bearer access-2') {
-        return new HttpResponse(null, { status: 401 })
+        return HttpResponse.json(
+          { status: 401, error: 'UNAUTHORIZED' },
+          { status: 401, headers: { 'WWW-Authenticate': 'Bearer error="invalid_token"' } },
+        )
       }
       return HttpResponse.json({
         items: [], page: 0, size: 20, totalElements: 0,
@@ -73,7 +87,6 @@ function armServer() {
   )
 }
 
-/** Renders the provider and resolves once its mount effect has settled. */
 function Probe() {
   const { isLoading } = useAuth()
   return <div data-testid="auth">{isLoading ? 'loading' : 'ready'}</div>
@@ -93,16 +106,29 @@ async function mountProvider() {
 }
 
 beforeEach(() => {
-  // A non-JWT access token is treated as valid by the provider's mount check,
-  // so initialisation sets state without any network call. That keeps
-  // refreshCalls counting only what the test causes.
+  // What a real login leaves behind: the access token and the user. Nothing
+  // else. A non-JWT access token counts as unexpired on mount, so mounting makes
+  // no network call and refreshCalls counts only what each test causes.
   localStorage.setItem(ACCESS_TOKEN_KEY, 'access-1')
-  localStorage.setItem(REFRESH_TOKEN_KEY, 'refresh-1')
   localStorage.setItem(USER_KEY, JSON.stringify(userPayload()))
   armServer()
 })
 
-describe('token refresh under concurrent 401s', () => {
+describe('session renewal through the refresh cookie', () => {
+  it('renews on a 401 with no refresh token anywhere in script-readable storage', async () => {
+    await mountProvider()
+    expect(localStorage.getItem(LEGACY_REFRESH_TOKEN_KEY)).toBeNull()
+
+    const response = await apiClient.get('/admin/colleges')
+
+    expect(response.status).toBe(200)
+    expect(refreshCalls).toBe(1)
+    // The cookie carries the token; the body must not.
+    expect(refreshBodies).toEqual([{}])
+    expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBe('access-2')
+    expect(localStorage.getItem(LEGACY_REFRESH_TOKEN_KEY)).toBeNull()
+  })
+
   it('refreshes once for five simultaneous 401s, and every request still succeeds', async () => {
     await mountProvider()
 
@@ -116,22 +142,9 @@ describe('token refresh under concurrent 401s', () => {
 
     expect(refreshCalls).toBe(1)
     expect(responses.map((r) => r.status)).toEqual([200, 200, 200, 200, 200])
-  })
-
-  it('leaves the rotated token in storage, so the next refresh has something valid to present', async () => {
-    await mountProvider()
-
-    await Promise.all([
-      apiClient.get('/admin/colleges'),
-      apiClient.get('/admin/colleges'),
-      apiClient.get('/admin/colleges'),
-    ])
-
-    expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBe('access-2')
-    expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBe('refresh-2')
-    // The server's view agrees: the presented token was consumed, the new one lives.
+    // The server's view agrees: one rotation, from the original cookie.
     expect(liveRefreshTokens.has('refresh-1')).toBe(false)
-    expect(liveRefreshTokens.has('refresh-2')).toBe(true)
+    expect(browserCookie).toBe('refresh-2')
   })
 
   it('does not log the user out when several requests race', async () => {
@@ -144,26 +157,47 @@ describe('token refresh under concurrent 401s', () => {
       apiClient.get('/admin/colleges'),
     ])
 
-    // clearAuthState() empties all three keys. Their survival is the assertion
-    // that the user is still signed in — which is the user-visible symptom the
-    // whole guard exists to prevent.
+    // clearAuthState() empties these keys; their survival is the assertion
+    // that the user is still signed in.
     expect(localStorage.getItem(ACCESS_TOKEN_KEY)).not.toBeNull()
-    expect(localStorage.getItem(REFRESH_TOKEN_KEY)).not.toBeNull()
     expect(localStorage.getItem(USER_KEY)).not.toBeNull()
   })
 
-  it('retries a 401 exactly once, so an endpoint that always 401s cannot loop', async () => {
-    // A token that is genuinely rejected: refresh succeeds, the retry 401s
-    // again, and `_retry` must stop it there rather than refreshing for ever.
+  it('treats a 403 as final: no refresh, the request fails', async () => {
     server.use(
-      http.get(`${API}/admin/colleges`, () => new HttpResponse(null, { status: 401 })),
+      http.get(`${API}/admin/colleges`, () =>
+        HttpResponse.json({ status: 403, error: 'FORBIDDEN' }, { status: 403 })),
+    )
+    await mountProvider()
+
+    await expect(apiClient.get('/admin/colleges')).rejects.toMatchObject({
+      response: { status: 403 },
+    })
+    expect(refreshCalls).toBe(0)
+    expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBe('access-1')
+  })
+
+  it('retries a 401 exactly once, so an endpoint that always 401s cannot loop', async () => {
+    server.use(
+      http.get(`${API}/admin/colleges`, () =>
+        HttpResponse.json({ status: 401, error: 'UNAUTHORIZED' }, { status: 401 })),
     )
     await mountProvider()
 
     await expect(apiClient.get('/admin/colleges')).rejects.toMatchObject({
       response: { status: 401 },
     })
+    expect(refreshCalls).toBe(1)
+  })
+
+  it('ends the session when the refresh cookie itself is rejected, without looping', async () => {
+    browserCookie = 'revoked-elsewhere'
+    await mountProvider()
+
+    await expect(apiClient.get('/admin/colleges')).rejects.toBeDefined()
 
     expect(refreshCalls).toBe(1)
+    expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBeNull()
+    expect(localStorage.getItem(USER_KEY)).toBeNull()
   })
 })

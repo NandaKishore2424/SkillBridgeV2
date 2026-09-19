@@ -8,7 +8,6 @@ import { AuthProvider } from '@/shared/contexts/AuthContext'
 import { userPayload } from './handlers'
 
 const ACCESS_TOKEN_KEY = 'skillbridge_access_token'
-const REFRESH_TOKEN_KEY = 'skillbridge_refresh_token'
 const USER_KEY = 'skillbridge_user'
 
 /**
@@ -22,7 +21,6 @@ const USER_KEY = 'skillbridge_user'
  */
 export function signIn(overrides: Record<string, unknown> = {}) {
   localStorage.setItem(ACCESS_TOKEN_KEY, 'access-1')
-  localStorage.setItem(REFRESH_TOKEN_KEY, 'refresh-1')
   localStorage.setItem(USER_KEY, JSON.stringify(userPayload(overrides)))
 }
 
