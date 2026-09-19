@@ -106,7 +106,10 @@ public class JwtService {
                 .claim("collegeId", user.getCollegeId())
                 .claim("isActive", user.getIsActive())
                 .claim("mustChangePassword", mustChangePassword)
-                // No algorithm argument: 0.12 infers HS256 from the key length.
+                // No algorithm argument: JJWT 0.12 picks the strongest HMAC the key
+                // allows -- 32 bytes HS256, 48 HS384, 64 HS512. The documented
+                // `openssl rand -base64 48` key, and the test key, give HS384.
+                // JwtServiceAlgorithmTest pins it.
                 .signWith(signingKey)
                 .compact();
     }

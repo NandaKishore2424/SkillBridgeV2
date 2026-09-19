@@ -57,8 +57,10 @@ class TransactionalReadRulesTest {
             // the handoff would keep a connection for work on another thread.
             "com.skillbridge.bulkupload.service.BulkUploadService.startStudentUpload",
             "com.skillbridge.bulkupload.service.BulkUploadService.startTrainerUpload",
-            // The async job itself. It manages its own per-row transactions so a
-            // single bad CSV row cannot roll back the whole upload.
+            // The async job itself. It holds no transaction at all: each
+            // repository call commits on its own, so a row that fails halfway
+            // keeps what it already wrote (an orphan user, measured 2026-09-17).
+            // Phase 2 rebuilds the import with one transaction per row.
             "com.skillbridge.bulkupload.service.BulkUploadJobService.processStudentUploadAsync",
             "com.skillbridge.bulkupload.service.BulkUploadJobService.processTrainerUploadAsync",
             // Deliberately outside the caller's transaction: an audit record of a

@@ -7,11 +7,15 @@ Measured by `QueryEfficiencyTest`, which runs against two seeded tenants — a
 small one and a larger one — and fails when a count grows between them. Re-run
 it after changing any read path:
 
+It is in the integration tier, so it runs under Failsafe on a Testcontainers
+PostgreSQL (`mvn verify`), not under `mvn test`. To run it alone:
+
 ```bash
-cd skillbridge-backend && DATABASE_URL=set mvn test -Dtest=QueryEfficiencyTest
+cd skillbridge-backend && ./mvnw test-compile failsafe:integration-test failsafe:verify -Dit.test=QueryEfficiencyTest
 ```
 
-The numbers below are the ones it printed on 2026-09-08.
+It prints one `PERF` line per endpoint. The numbers below were first taken on
+2026-09-08 and were re-read, unchanged, from the `mvn verify` of 2026-09-19.
 
 ---
 
@@ -31,8 +35,8 @@ line of defence, deliberately generous.
 
 ## Current counts
 
-Small tenant: 3 batches, 3 students, 2 modules per batch.
-Large tenant: 12 batches, 12 students, 8 modules per batch.
+Small tenant: 2 batches, 2 students, 2 modules per batch.
+Large tenant: 8 batches, 6 students, 6 modules per batch.
 
 | Endpoint | Before | Now (small / large) | Flat? | Doc target |
 |---|---|---|---|---|
@@ -41,7 +45,7 @@ Large tenant: 12 batches, 12 students, 8 modules per batch.
 | `GET /batches/{id}/syllabus` | 6 → 18 | **3 / 3** | ✅ | ≤ 2 ⚠️ |
 | `GET /admin/batches` | 4 | **2 / 2** | ✅ | ≤ 3 ✅ |
 | `GET /admin/students` | 5 | **5 / 5** | ✅ | ≤ 3 ⚠️ |
-| `GET /admin/batches/{id}` | 5 | **5** | n/a | ≤ 5 ✅ |
+| `GET /admin/batches/{id}` | 5 | **5** | n/a | ≤ 5 ✅ (the test asserts ≤ 6) |
 | `GET /student/dashboard/stats` | 2 | **2 / 2** | ✅ | ≤ 3 ✅ |
 
 "Before" shows the two measurements where the count grew — those were real

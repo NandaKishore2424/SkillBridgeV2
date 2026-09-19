@@ -16,7 +16,7 @@
  * :collegeId")} to it and nothing else. Do not copy the {@code @FilterDef} back
  * onto an entity — the application will not start.
  *
- * <p>{@code TenantFilter} enables it per request by name, so what matters is
+ * <p>{@code TenantFilterAspect} enables it per request by name, so what matters is
  * only that exactly one definition of {@code collegeFilter} exists somewhere on
  * the classpath.
  *
@@ -25,7 +25,7 @@
  * which Hibernate applies at the mapping level to every query including
  * {@code findById}. A filter would have to be enabled on the session that
  * actually runs the query, and this application has no reliable point at which
- * to do that — see {@code TenantFilter}. A restriction has nothing to enable and
+ * to do that — see {@code TenantFilterAspect}. A restriction has nothing to enable and
  * so cannot be silently absent.
  */
 @FilterDef(name = "collegeFilter", parameters = @ParamDef(name = "collegeId", type = Long.class))

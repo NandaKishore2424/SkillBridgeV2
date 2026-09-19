@@ -27,7 +27,7 @@ public final class TemporaryPasswordGenerator {
     private static final String ALPHABET =
             "ABCDEFGHJKLMNPQRSTUVWXYZ" + "abcdefghijkmnopqrstuvwxyz" + "23456789";
 
-    /** 14 characters over a 59-character alphabet is roughly 82 bits. */
+    /** 14 characters over a 57-character alphabet is about 81.7 bits. */
     private static final int LENGTH = 14;
 
     private static final SecureRandom RANDOM = new SecureRandom();

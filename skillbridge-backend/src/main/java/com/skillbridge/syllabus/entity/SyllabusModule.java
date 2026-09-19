@@ -41,17 +41,20 @@ public class SyllabusModule {
      * Denormalised tenant column, and NOT NULL in the database.
      *
      * <p>V17 added `college_id NOT NULL` to this table so the Hibernate
-     * `collegeFilter` has a local column to filter on -- a filter condition
-     * cannot traverse a join. The entity was never updated to match, so every
-     * INSERT sent NULL and failed the constraint: creating a syllabus module was
-     * impossible from the moment that migration was applied.
+     * `collegeFilter` would have a local column to filter on -- a filter
+     * condition cannot traverse a join. The entity was never updated to match,
+     * so every INSERT sent NULL and failed the constraint: creating a syllabus
+     * module was impossible from the moment that migration was applied.
+     *
+     * <p>The filter itself is NOT applied: this entity carries no
+     * {@code @Filter}. Modules are tenant-checked through their batch
+     * ({@code TenantGuard}), which {@code CrossTenantAccessTest} covers.
      *
      * <p>`ddl-auto: validate` does not catch this. It checks that mapped columns
      * exist, not that unmapped NOT NULL columns get a value.
      *
      * <p>Maintained by {@code SyllabusService}, which copies it from the batch.
-     * It is redundant with `batch.college` by construction and exists only so the
-     * tenant filter can be expressed.
+     * It is redundant with `batch.college` by construction.
      */
     @Column(name = "college_id", nullable = false)
     private Long collegeId;

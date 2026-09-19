@@ -19,9 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>Why an advisory lock rather than ShedLock or Redis.</b> Phase 07 § 4
  * reaches for Redis, and this application has none — deliberately, see
  * {@code docs/CACHING_STRATEGY.md} § 7. Postgres has the primitive built in and
- * it is a better fit than either: {@code pg_try_advisory_lock} is held by the
- * <em>session</em>, so it is released when the transaction ends and, crucially,
- * also when the connection dies. A lock row in a table needs a lease, a clock
+ * it is a better fit than either: {@code pg_try_advisory_xact_lock} is held by
+ * the <em>transaction</em>, so it is released at commit or rollback and,
+ * crucially, also when the connection dies. A lock row in a table needs a lease, a clock
  * and an expiry sweeper to survive an instance being killed mid-job; this needs
  * none of them, because a dead instance has no session.
  *

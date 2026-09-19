@@ -177,7 +177,7 @@ public class StudentEnrollmentService {
             return;
         }
 
-        long enrolled = enrollmentRepository.countActiveForUpdate(batch.getId());
+        long enrolled = enrollmentRepository.countActive(batch.getId());
         long pending = requestRepository.countByBatchIdAndStatus(batch.getId(), EnrollmentStatus.PENDING);
 
         if (enrolled + pending >= capacity) {

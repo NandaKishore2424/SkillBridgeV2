@@ -15,8 +15,9 @@ import java.util.List;
  * emit its own queries into whatever is being measured.
  *
  * <p>Everything is scoped to a college code, so teardown is exact — a test that
- * leans on ambient data passes for reasons unrelated to the code, and this
- * suite runs against a database with real rows in it.
+ * leans on ambient data passes for reasons unrelated to the code. The suite
+ * normally gets a fresh Testcontainers database, but it can still be pointed at
+ * a shared one ({@code SKILLBRIDGE_TEST_DB=live}), where other rows exist.
  *
  * <p><b>Assign the field before calling {@link #seed}, not in one expression.</b>
  *
@@ -28,7 +29,8 @@ import java.util.List;
  * <p>{@code seed} inserts as it goes, so a failure partway through leaves rows
  * behind. Chained into one expression the field is still null when that happens,
  * the {@code @AfterEach} throws {@code NullPointerException} instead of cleaning
- * up, and the rows stay — in a live database with no staging copy. Observed on
+ * up, and the rows stay. In a shared database that means leftover rows; it
+ * happened against the live one, which had no staging copy. Observed on
  * 2026-09-10 when the link dropped during a fixture's own opening
  * {@code DELETE}.
  */

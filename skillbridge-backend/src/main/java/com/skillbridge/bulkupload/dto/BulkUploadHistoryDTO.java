@@ -40,10 +40,8 @@ public class BulkUploadHistoryDTO {
     private LocalDateTime completedAt;
 
     /**
-     * Reads only the identifiers off the two associations. A Hibernate proxy can
-     * answer {@code getId()} without a session — it is any other property that
-     * forces a load — so this stays safe even when the entity was fetched
-     * without a join.
+     * Reads no association: every field is a column of {@code bulk_uploads}
+     * itself, so this cannot trigger a lazy load, with or without a session.
      */
     public static BulkUploadHistoryDTO from(BulkUpload upload) {
         return BulkUploadHistoryDTO.builder()

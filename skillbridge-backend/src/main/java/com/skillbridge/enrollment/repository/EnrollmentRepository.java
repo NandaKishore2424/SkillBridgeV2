@@ -3,11 +3,9 @@ package com.skillbridge.enrollment.repository;
 import com.skillbridge.enrollment.domain.EnrollmentState;
 import com.skillbridge.enrollment.entity.Enrollment;
 import com.skillbridge.enrollment.repository.projection.StudentStatsProjection;
-import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -109,17 +107,17 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     List<Object[]> countGroupedByBatchIds(@Param("batchIds") List<Long> batchIds);
 
     /**
-     * Count the live enrollments in a batch while holding a write lock on them.
+     * Count the live enrollments in a batch, for the capacity check.
      *
-     * <p>This is the capacity check, and it is the one place a pessimistic lock is
-     * warranted. Two students applying to the last seat at the same instant both
-     * read "capacity - 1" under an ordinary read and both get in. Optimistic
-     * locking cannot help: they are inserting different rows, so no version
-     * collides. Serialising the count is what makes the limit a limit.
+     * <p>This takes no lock, and a {@code @Lock} here would not add one: on an
+     * aggregate query Hibernate emits a plain {@code SELECT count(...)} with no
+     * {@code FOR UPDATE} (the SQL was captured on 2026-09-17). What serialises
+     * two applicants racing for the last seat is the caller's row lock on the
+     * batch, {@link com.skillbridge.batch.repository.BatchRepository#findByIdForUpdate},
+     * taken before this count in the same transaction.
      */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.batch.id = :batchId AND e.status = 'ACTIVE'")
-    long countActiveForUpdate(@Param("batchId") Long batchId);
+    long countActive(@Param("batchId") Long batchId);
 
     /** Active enrollments for one student. Guards student deletion. */
     int countByStudentIdAndStatus(Long studentId, EnrollmentState status);

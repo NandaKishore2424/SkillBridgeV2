@@ -1,5 +1,6 @@
 package com.skillbridge.auth.security;
 
+import com.skillbridge.common.exception.ForbiddenException;
 import com.skillbridge.common.exception.UnauthorizedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -53,15 +54,18 @@ public final class SecurityUtils {
     }
 
     /**
-     * The caller's college, or a 422 if they have none.
+     * The caller's college, or a 403 if they have none.
      *
      * <p>A SYSTEM_ADMIN legitimately has no college, so any endpoint that scopes
      * by tenant has to decide what that means rather than dereferencing null.
+     *
+     * <p>403, not 401: the caller is authenticated, and a 401 tells the SPA to
+     * refresh the session and retry, which cannot help.
      */
     public static Long requireCollegeId() {
         AuthenticatedUser user = currentUser();
         if (user.getCollegeId() == null) {
-            throw new UnauthorizedException(
+            throw new ForbiddenException(
                     "This action requires an account scoped to a college.");
         }
         return user.getCollegeId();
