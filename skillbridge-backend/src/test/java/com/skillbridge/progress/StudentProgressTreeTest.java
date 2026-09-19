@@ -9,6 +9,7 @@ import com.skillbridge.progress.dto.TopicProgressDTO;
 import com.skillbridge.progress.service.ProgressService;
 import com.skillbridge.testsupport.IntegrationTest;
 import com.skillbridge.testsupport.TenantFixture;
+import com.skillbridge.testsupport.TestAuthentication;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -61,6 +62,8 @@ class StudentProgressTreeTest {
     void seed() {
         fixture = new TenantFixture(jdbc, COLLEGE_CODE);
         fixture.seed(1, 2, 2);
+        // The service decides tenancy from the caller, as the HTTP layer would.
+        TestAuthentication.as(fixture.adminUserId, fixture.collegeId, "COLLEGE_ADMIN");
         batchId = fixture.batchIds.get(0);
         studentId = fixture.studentIds.get(0);
         studentUserId = fixture.studentUserIds.get(0);
@@ -80,6 +83,7 @@ class StudentProgressTreeTest {
 
     @AfterEach
     void cleanUp() {
+        TestAuthentication.clear();
         fixture.remove();
     }
 

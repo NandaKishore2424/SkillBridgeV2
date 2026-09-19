@@ -5,6 +5,7 @@ import com.skillbridge.progress.dto.GradingGridRowDTO;
 import com.skillbridge.progress.service.ProgressService;
 import com.skillbridge.testsupport.IntegrationTest;
 import com.skillbridge.testsupport.TenantFixture;
+import com.skillbridge.testsupport.TestAuthentication;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +54,8 @@ class GradingGridTest {
         // indistinguishable rows is visibly wrong.
         fixture = new TenantFixture(jdbc, COLLEGE_CODE);
         fixture.seed(1, 3, 1);
+        // The service decides tenancy from the caller, as the HTTP layer would.
+        TestAuthentication.as(fixture.adminUserId, fixture.collegeId, "COLLEGE_ADMIN");
         topicId = jdbc.queryForObject("""
                 SELECT t.id FROM syllabus_topics t
                 JOIN syllabus_submodules sm ON sm.id = t.submodule_id
@@ -73,6 +76,7 @@ class GradingGridTest {
 
     @AfterEach
     void cleanUp() {
+        TestAuthentication.clear();
         fixture.remove();
     }
 

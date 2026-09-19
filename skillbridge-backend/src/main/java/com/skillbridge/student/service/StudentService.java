@@ -28,7 +28,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.skillbridge.common.exception.ConflictException;
-import com.skillbridge.common.exception.ForbiddenException;
 import com.skillbridge.common.exception.InternalServerException;
 import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.batch.repository.BatchRepository;
@@ -408,12 +407,11 @@ public class StudentService {
         Student student = studentRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
 
+        // Someone else's project is indistinguishable from a missing one: a 403
+        // here told the caller the id existed.
         StudentProject project = studentProjectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
-
-        if (!project.getStudent().getId().equals(student.getId())) {
-            throw new ForbiddenException("Unauthorized to delete this project");
-        }
+                .filter(p -> p.getStudent().getId().equals(student.getId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Project", projectId));
 
         studentProjectRepository.delete(project);
     }

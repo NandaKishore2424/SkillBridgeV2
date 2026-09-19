@@ -1,5 +1,8 @@
 package com.skillbridge.progress.service;
 
+import com.skillbridge.auth.security.SecurityUtils;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.batch.entity.Batch;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.common.exception.BusinessRuleException;
@@ -103,6 +106,14 @@ public class ProgressService {
      */
     @Transactional
     public int backfillBatch(Long batchId) {
+        // The insert below is native SQL, which no Hibernate filter ever sees, so
+        // the checks have to come first. Measured 2026-09-17: without them a
+        // college admin wrote 8 rows into another college's batch.
+        requireBatch(batchId);
+        AuthenticatedUser caller = SecurityUtils.currentUser();
+        if (caller.getRoles().contains("TRAINER") && !caller.getRoles().contains("COLLEGE_ADMIN")) {
+            requireTrainerAssignedToBatch(caller.getId(), batchId);
+        }
         int created = progressRepository.backfillProgressForBatch(batchId);
         log.info("Backfilled {} progress rows across batch {}", created, batchId);
 
@@ -196,8 +207,7 @@ public class ProgressService {
 
     /** Every student's row for one topic — the grading grid. */
     public Page<GradingGridRowDTO> getGradingGrid(Long topicId, Pageable pageable) {
-        SyllabusTopic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Topic", topicId));
+        SyllabusTopic topic = requireTopic(topicId);
 
         return progressRepository.findGradingGridForTopic(topic.getId(), pageable)
                 .map(ProgressService::toGridRow);
@@ -512,8 +522,14 @@ public class ProgressService {
     // Guards
     // ------------------------------------------------------------------
 
+    // Every lookup by id checks the caller's college. findById does not: a
+    // Hibernate filter never applies to a load by primary key, so without the
+    // TenantGuard these returned another college's rows (CrossTenantAccessTest).
+    // A miss and another college's row answer the same 404.
+
     private Student requireStudent(Long studentId) {
         return studentRepository.findById(studentId)
+                .filter(s -> TenantGuard.isVisible(s.getCollege().getId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
     }
 
@@ -525,11 +541,14 @@ public class ProgressService {
 
     private Batch requireBatch(Long batchId) {
         return batchRepository.findById(batchId)
+                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("Batch", batchId));
     }
 
     private SyllabusTopic requireTopic(Long topicId) {
         return topicRepository.findById(topicId)
+                .filter(t -> TenantGuard.isVisible(
+                        t.getSubmodule().getModule().getBatch().getCollege().getId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("Topic", topicId));
     }
 

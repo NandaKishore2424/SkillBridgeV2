@@ -1,6 +1,7 @@
 package com.skillbridge.trainer;
 
 import com.skillbridge.testsupport.IntegrationTest;
+import com.skillbridge.testsupport.TestAuthentication;
 import com.skillbridge.trainer.dto.TrainerBatchDTO;
 import com.skillbridge.trainer.dto.TrainerStudentDTO;
 import com.skillbridge.trainer.service.TrainerDashboardService;
@@ -86,10 +87,15 @@ class TrainerDashboardPaginationTest {
         for (String name : List.of("Carol Fixture", "Alice Fixture", "Bob Fixture")) {
             enroll(collegeId, batchWithStudents, name);
         }
+
+        // The service checks the batch belongs to the caller's college, as the
+        // HTTP layer would ask it to.
+        TestAuthentication.as(trainerUserId, collegeId, "TRAINER");
     }
 
     @AfterEach
     void tearDown() {
+        TestAuthentication.clear();
         removeFixture();
     }
 

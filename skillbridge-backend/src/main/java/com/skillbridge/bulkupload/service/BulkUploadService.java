@@ -1,5 +1,6 @@
 package com.skillbridge.bulkupload.service;
 
+import com.skillbridge.common.tenant.TenantGuard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillbridge.auth.entity.Role;
 import com.skillbridge.auth.entity.User;
@@ -156,9 +157,15 @@ public class BulkUploadService {
      * password of an account already in use.
      */
     @Transactional
-    public void resendInvitation(Long userId) {
+    public void resendInvitation(Long userId, String expectedRole) {
+        // A user of another college, or of a different kind than the path says,
+        // is indistinguishable from a missing one. Before 2026-09-19 this loaded
+        // any user by id, so a college admin could reset another college's pending
+        // invitation, or, through /students/{id}, a fellow admin's.
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .filter(u -> TenantGuard.isVisible(u.getCollegeId()))
+                .filter(u -> u.getRoles().stream().anyMatch(r -> expectedRole.equals(r.getName())))
+                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
 
         if (!"PENDING_SETUP".equals(user.getAccountStatus())) {
             throw new ConflictException("User is already active or not in pending state");

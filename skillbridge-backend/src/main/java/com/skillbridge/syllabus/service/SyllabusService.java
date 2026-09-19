@@ -185,11 +185,9 @@ public class SyllabusService {
     public void deleteModule(Long moduleId) {
         log.info("Deleting module {}", moduleId);
 
-        if (!moduleRepository.existsById(moduleId)) {
-            throw new ResourceNotFoundException("Module not found with id: " + moduleId);
-        }
-
-        moduleRepository.deleteById(moduleId);
+        // requireModule, not existsById: existsById would find another college's
+        // module and delete it (CrossTenantAccessTest).
+        moduleRepository.delete(requireModule(moduleId));
         log.info("Deleted module {}", moduleId);
     }
 
@@ -269,11 +267,7 @@ public class SyllabusService {
     public void deleteSubmodule(Long submoduleId) {
         log.info("Deleting sub-module {}", submoduleId);
 
-        if (!submoduleRepository.existsById(submoduleId)) {
-            throw new ResourceNotFoundException("Sub-module not found with id: " + submoduleId);
-        }
-
-        submoduleRepository.deleteById(submoduleId);
+        submoduleRepository.delete(requireSubmodule(submoduleId));
         log.info("Deleted sub-module {}", submoduleId);
     }
 
@@ -339,11 +333,7 @@ public class SyllabusService {
     public void deleteTopic(Long topicId) {
         log.info("Deleting topic {}", topicId);
 
-        if (!topicRepository.existsById(topicId)) {
-            throw new ResourceNotFoundException("Topic not found with id: " + topicId);
-        }
-
-        topicRepository.deleteById(topicId);
+        topicRepository.delete(requireTopic(topicId));
         log.info("Deleted topic {}", topicId);
     }
 
@@ -425,12 +415,13 @@ public class SyllabusService {
     @CacheEvict(cacheNames = L1CacheConfig.CURRICULUM, allEntries = true)
     @Transactional
     public List<SyllabusModuleDTO> copyCurriculum(Long targetBatchId, Long sourceBatchId) {
+        // Tenant checks first: any other answer would confirm the ids exist.
+        Batch target = requireBatch(targetBatchId);
+        requireBatch(sourceBatchId);
+
         if (targetBatchId.equals(sourceBatchId)) {
             throw new BusinessRuleException("Cannot copy a batch's curriculum onto itself");
         }
-
-        Batch target = requireBatch(targetBatchId);
-        requireBatch(sourceBatchId);
 
         if (!moduleRepository.findByBatchIdOrderByDisplayOrder(targetBatchId).isEmpty()) {
             throw new ConflictException("CURRICULUM_NOT_EMPTY",

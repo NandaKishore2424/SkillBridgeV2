@@ -137,14 +137,14 @@ public class BulkUploadController {
     @PostMapping("/students/{id}/resend-invitation")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<Void> resendStudentInvitation(@PathVariable Long id) {
-        bulkUploadService.resendInvitation(id);
+        bulkUploadService.resendInvitation(id, "STUDENT");
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/trainers/{id}/resend-invitation")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<Void> resendTrainerInvitation(@PathVariable Long id) {
-        bulkUploadService.resendInvitation(id);
+        bulkUploadService.resendInvitation(id, "TRAINER");
         return ResponseEntity.ok().build();
     }
 }

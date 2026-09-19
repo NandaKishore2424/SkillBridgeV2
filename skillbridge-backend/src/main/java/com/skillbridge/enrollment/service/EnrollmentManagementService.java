@@ -123,6 +123,10 @@ public class EnrollmentManagementService {
      * wrong in a way that is very hard to trace back to here.
      */
     public void removeStudent(Long batchId, Long studentId) {
+        // Tenant checks first, so another college's ids answer 404 like a miss,
+        // not a 422 that confirms both exist.
+        requireBatch(batchId);
+        requireStudent(studentId);
         Enrollment enrollment = enrollmentRepository.findByBatchIdAndStudentId(batchId, studentId)
                 .orElseThrow(() -> new BusinessRuleException("NOT_ENROLLED",
                         "Student is not enrolled in this batch"));

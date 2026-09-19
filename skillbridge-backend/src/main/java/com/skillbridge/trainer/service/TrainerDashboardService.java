@@ -1,5 +1,7 @@
 package com.skillbridge.trainer.service;
 
+import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.batch.entity.Batch;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.enrollment.entity.Enrollment;
@@ -101,7 +103,12 @@ public class TrainerDashboardService {
         public Page<TrainerStudentDTO> getBatchStudents(Long userId, Long batchId, Pageable pageable) {
                 log.info("Getting students for batch {} by trainer userId: {}", batchId, userId);
 
-                // Verify trainer has access to this batch
+                // Another college's batch reads as missing (404). Only a batch in the
+                // trainer's own college may answer "not assigned to you" (403).
+                batchRepository.findById(batchId)
+                                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()))
+                                .orElseThrow(() -> ResourceNotFoundException.of("Batch", batchId));
+
                 boolean hasAccess = batchRepository.isTrainerAssignedToBatch(userId, batchId);
                 if (!hasAccess) {
                         throw new ForbiddenException("Trainer does not have access to this batch");

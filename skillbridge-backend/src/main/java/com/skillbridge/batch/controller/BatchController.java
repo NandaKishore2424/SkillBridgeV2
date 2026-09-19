@@ -282,7 +282,7 @@ public class BatchController {
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<BatchDTO> updateBatch(@PathVariable Long id, @RequestBody CreateBatchRequest request) {
         log.info("Updating batch with id: {}", id);
-        Optional<Batch> batchOpt = batchRepository.findById(id);
+        Optional<Batch> batchOpt = findVisibleBatch(id);
         if (batchOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -329,7 +329,7 @@ public class BatchController {
             @PathVariable Long id,
             @RequestBody StatusUpdateRequest request) {
         log.info("Updating batch status for id: {} to {}", id, request.status);
-        Optional<Batch> batchOpt = batchRepository.findById(id);
+        Optional<Batch> batchOpt = findVisibleBatch(id);
         if (batchOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -437,9 +437,19 @@ public class BatchController {
      * indistinguishable from outside, so both answer false and both become 404.
      */
     private boolean isVisibleBatch(Long id) {
+        return findVisibleBatch(id).isPresent();
+    }
+
+    /**
+     * The batch, if it exists AND belongs to the caller's college; empty
+     * otherwise, so the two cases answer the same 404. findById alone does not
+     * check the college (a Hibernate filter never applies to a load by id), and
+     * that let a college admin rename and re-status another college's batch
+     * until CrossTenantAccessTest caught it.
+     */
+    private Optional<Batch> findVisibleBatch(Long id) {
         return batchRepository.findByIdWithCollege(id)
-                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()))
-                .isPresent();
+                .filter(b -> TenantGuard.isVisible(b.getCollege().getId()));
     }
 
     /**
