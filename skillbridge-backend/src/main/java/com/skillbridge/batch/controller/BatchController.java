@@ -1,5 +1,6 @@
 package com.skillbridge.batch.controller;
 
+import com.skillbridge.common.exception.ForbiddenException;
 import com.skillbridge.common.idempotency.Idempotent;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.batch.dto.BatchDTO;
@@ -106,7 +107,7 @@ public class BatchController {
         }
 
         if (collegeId == null) {
-            return ResponseEntity.badRequest().build();
+            throw new ForbiddenException("This action requires an account scoped to a college.");
         }
 
         Specification<Batch> spec = Specification.allOf(
@@ -140,7 +141,7 @@ public class BatchController {
         Optional<Batch> batch = batchRepository.findByIdWithCollege(id)
                 .filter(b -> TenantGuard.isVisible(b.getCollege().getId()));
         return batch.map(b -> ResponseEntity.ok(convertToDTO(b)))
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> ResourceNotFoundException.of("Batch", id));
     }
 
     /**
@@ -159,7 +160,7 @@ public class BatchController {
             @RequestParam(defaultValue = "20") int size) {
         log.info("Fetching trainers for batch: {}", id);
         if (!isVisibleBatch(id)) {
-            return ResponseEntity.notFound().build();
+            throw ResourceNotFoundException.of("Batch", id);
         }
         return ResponseEntity.ok(PagedResponse.from(
                 trainerRepository.findByBatch(id, Pagination.of(page, size)),
@@ -174,7 +175,7 @@ public class BatchController {
             @RequestParam(defaultValue = "20") int size) {
         log.info("Fetching companies for batch: {}", id);
         if (!isVisibleBatch(id)) {
-            return ResponseEntity.notFound().build();
+            throw ResourceNotFoundException.of("Batch", id);
         }
         return ResponseEntity.ok(PagedResponse.from(
                 companyRepository.findByBatch(id, Pagination.of(page, size)),
@@ -283,7 +284,7 @@ public class BatchController {
         log.info("Updating batch with id: {}", id);
         Optional<Batch> batchOpt = findVisibleBatch(id);
         if (batchOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw ResourceNotFoundException.of("Batch", id);
         }
 
         Batch batch = batchOpt.get();
@@ -330,7 +331,7 @@ public class BatchController {
         log.info("Updating batch status for id: {} to {}", id, request.status);
         Optional<Batch> batchOpt = findVisibleBatch(id);
         if (batchOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw ResourceNotFoundException.of("Batch", id);
         }
         Batch batch = batchOpt.get();
         batch.setStatus(request.status);

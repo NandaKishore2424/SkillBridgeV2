@@ -1,5 +1,6 @@
 package com.skillbridge.company.controller;
 
+import com.skillbridge.common.exception.ForbiddenException;
 import com.skillbridge.common.idempotency.Idempotent;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.college.entity.CollegeAdmin;
@@ -123,7 +124,7 @@ public class CompanyController {
         return companyRepository.findByIdWithCollege(id)
                 .filter(c -> c.getCollege() != null && TenantGuard.isVisible(c.getCollege().getId()))
                 .map(c -> ResponseEntity.ok(convertToDTO(c)))
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> ResourceNotFoundException.of("Company", id));
     }
 
     // Idempotent: companies has no unique constraint of any kind, so a
@@ -166,14 +167,14 @@ public class CompanyController {
 
         if (collegeId == null) {
             log.error("College ID is null for user: {}", user.getEmail());
-            return ResponseEntity.badRequest().body("College ID is required. Please provide a valid college ID.");
+            throw new ForbiddenException("This action requires an account scoped to a college.");
         }
 
         // Verify college exists
         Optional<College> collegeOpt = collegeRepository.findById(collegeId);
         if (collegeOpt.isEmpty()) {
             log.error("College not found with ID: {}", collegeId);
-            return ResponseEntity.badRequest().body("College not found with ID: " + collegeId);
+            throw ResourceNotFoundException.of("College", collegeId);
         }
 
         College college = collegeOpt.get();

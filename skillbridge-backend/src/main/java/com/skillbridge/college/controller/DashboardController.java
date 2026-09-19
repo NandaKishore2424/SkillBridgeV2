@@ -1,5 +1,6 @@
 package com.skillbridge.college.controller;
 
+import com.skillbridge.common.exception.ForbiddenException;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
@@ -40,46 +41,27 @@ public class DashboardController {
     public ResponseEntity<DashboardStats> getDashboardStats() {
         log.info("Fetching dashboard stats for college admin");
 
-        try {
-            // Get college ID from authenticated user
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
-            Long collegeId = user.getCollegeId();
+        // 403 for an account with no college (SecurityUtils). This used to sit in a
+        // catch-all that turned every failure, that one included, into a 500.
+        Long collegeId = SecurityUtils.requireCollegeId();
 
-            // If collegeId is null, try to get it from CollegeAdmin entity
-            if (collegeId == null) {
-                Optional<CollegeAdmin> collegeAdminOpt = collegeAdminRepository.findByUserId(user.getId());
-                if (collegeAdminOpt.isPresent()) {
-                    collegeId = collegeAdminOpt.get().getCollege().getId();
-                }
-            }
+        // Get counts
+        long totalBatches = batchRepository.countByCollegeId(collegeId);
+        long activeBatches = batchRepository.countByCollegeIdAndStatus(collegeId, "ACTIVE");
+        long totalStudents = studentRepository.countByCollegeId(collegeId);
+        long totalTrainers = trainerRepository.countByCollegeId(collegeId);
+        long totalCompanies = companyRepository.countByCollegeId(collegeId);
 
-            if (collegeId == null) {
-                log.error("College ID is null for user: {}", user.getEmail());
-                return ResponseEntity.badRequest().build();
-            }
+        DashboardStats stats = DashboardStats.builder()
+                .totalBatches(totalBatches)
+                .activeBatches(activeBatches)
+                .totalStudents(totalStudents)
+                .totalTrainers(totalTrainers)
+                .totalCompanies(totalCompanies)
+                .build();
 
-            // Get counts
-            long totalBatches = batchRepository.countByCollegeId(collegeId);
-            long activeBatches = batchRepository.countByCollegeIdAndStatus(collegeId, "ACTIVE");
-            long totalStudents = studentRepository.countByCollegeId(collegeId);
-            long totalTrainers = trainerRepository.countByCollegeId(collegeId);
-            long totalCompanies = companyRepository.countByCollegeId(collegeId);
-
-            DashboardStats stats = DashboardStats.builder()
-                    .totalBatches(totalBatches)
-                    .activeBatches(activeBatches)
-                    .totalStudents(totalStudents)
-                    .totalTrainers(totalTrainers)
-                    .totalCompanies(totalCompanies)
-                    .build();
-
-            log.info("Dashboard stats: {}", stats);
-            return ResponseEntity.ok(stats);
-        } catch (Exception e) {
-            log.error("Error fetching dashboard stats", e);
-            throw new InternalServerException("Failed to fetch dashboard stats: " + e.getMessage(), e);
-        }
+        log.info("Dashboard stats: {}", stats);
+        return ResponseEntity.ok(stats);
     }
 
     @Data

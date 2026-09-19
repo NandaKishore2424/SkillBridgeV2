@@ -67,7 +67,7 @@ public class CollegeController {
         log.info("Fetching college with id: {}", id);
         Optional<College> college = collegeRepository.findById(id);
         return college.map(CollegeDTO::from).map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+            .orElseThrow(() -> ResourceNotFoundException.of("College", id));
     }
 
     @PostMapping
@@ -83,7 +83,7 @@ public class CollegeController {
     public ResponseEntity<CollegeDTO> updateCollege(@PathVariable Long id, @RequestBody College college) {
         log.info("Updating college with id: {}", id);
         if (!collegeRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
+            throw ResourceNotFoundException.of("College", id);
         }
         college.setId(id);
         College updatedCollege = collegeDirectory.save(college);
@@ -99,7 +99,7 @@ public class CollegeController {
         log.info("Updating college status for id: {} to {}", id, request.status);
         Optional<College> collegeOpt = collegeRepository.findById(id);
         if (collegeOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw ResourceNotFoundException.of("College", id);
         }
         College college = collegeOpt.get();
         college.setStatus(request.status);

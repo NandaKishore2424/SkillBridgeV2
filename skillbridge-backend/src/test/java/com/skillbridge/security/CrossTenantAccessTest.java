@@ -1,5 +1,6 @@
 package com.skillbridge.security;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.UserRepository;
@@ -186,6 +187,7 @@ class CrossTenantAccessTest {
     @DisplayName("another college's ids: 404 from every tenant endpoint, and none of their data changes")
     void anotherCollegesIdsAreInvisible() throws Exception {
         List<String> leaks = new ArrayList<>();
+        Set<String> shapeless = new java.util.TreeSet<>();
         int calls = 0;
 
         for (Endpoint endpoint : tenantEndpoints()) {
@@ -210,6 +212,9 @@ class CrossTenantAccessTest {
                     Tenant bodyTenant = theirsVariables.containsAll(variables) ? theirs : mine;
                     Outcome outcome = call(endpoint, role, ids, bodyTenant);
                     calls++;
+                    if (outcome.status() == 404 && !outcome.errorBody()) {
+                        shapeless.add("%-6s %s".formatted(endpoint.method(), endpoint.pattern()));
+                    }
                     if (outcome.status() != 404 || outcome.mutated()) {
                         leaks.add("%-6s %-62s as %-13s theirs=%s -> %d%s".formatted(
                                 endpoint.method(), expand(endpoint.pattern(), ids), role, theirsVariables,
@@ -223,6 +228,12 @@ class CrossTenantAccessTest {
         assertThat(leaks)
                 .as("A college-scoped caller reached another college's data. Each line is one call "
                         + "that did not answer 404, or that changed the other college's rows.")
+                .isEmpty();
+        // One error model: every 404 is an ErrorResponse, not an empty body or a
+        // bare string a client has to special-case (added 2026-09-19, Phase 3).
+        assertThat(shapeless)
+                .as("These answered 404 without the ErrorResponse body (status, error, message, path). "
+                        + "Throw ResourceNotFoundException instead of building the response by hand.")
                 .isEmpty();
     }
 
@@ -266,7 +277,18 @@ class CrossTenantAccessTest {
 
     // ------------------------------------------------------------------
 
-    record Outcome(int status, boolean mutated) {
+    record Outcome(int status, boolean mutated, boolean errorBody) {
+    }
+
+    /** The ErrorResponse shape GlobalExceptionHandler writes. */
+    private boolean isErrorBody(MvcResult result) {
+        try {
+            JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+            return body != null && body.path("status").asInt() == result.getResponse().getStatus()
+                    && body.hasNonNull("error") && body.hasNonNull("message") && body.hasNonNull("path");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private Outcome call(Endpoint endpoint, String role, Map<String, Long> ids, Tenant bodyTenant) throws Exception {
@@ -285,7 +307,7 @@ class CrossTenantAccessTest {
             theirsFixture.seed(1, 2, 1);
             theirs = extras(theirsFixture);
         }
-        return new Outcome(result.getResponse().getStatus(), mutated);
+        return new Outcome(result.getResponse().getStatus(), mutated, isErrorBody(result));
     }
 
     private List<Endpoint> tenantEndpoints() {
