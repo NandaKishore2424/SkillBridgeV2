@@ -11,6 +11,15 @@
 # ============================================================================
 
 spring:
+  # Only the timeouts. The host is deliberately unset here: Spring creates a
+  # JavaMailSender only when spring.mail.host exists, and MailConfig refuses to
+  # start with provider SMTP and no sender. Bounded because an admin waits on
+  # an invitation.
+  mail:
+    properties:
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 10000
+      "[mail.smtp.writetimeout]": 10000
   application:
     name: skillbridge-backend
 
@@ -284,8 +293,22 @@ app:
     # travel over plain http. Only local development over http://localhost
     # turns it off (application-local.yaml).
     refresh-cookie-secure: ${REFRESH_COOKIE_SECURE:true}
+    # How long an invitation's temporary password works. Enforced at login and
+    # at first-login; after it, the admin resends the invitation.
+    invitation-ttl: ${INVITATION_TTL:7d}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+  mail:
+    # LOG sends nothing and records only recipient and subject, so the app starts
+    # anywhere. SMTP needs spring.mail.host (SPRING_MAIL_HOST, SPRING_MAIL_PORT):
+    # Mailpit from docker-compose is localhost:1025. RESEND needs RESEND_API_KEY
+    # and a domain verified with Resend.
+    provider: ${MAIL_PROVIDER:LOG}
+    from: ${MAIL_FROM:SkillBridge <no-reply@skillbridge.local>}
+    login-url: ${MAIL_LOGIN_URL:http://localhost:5173/first-login}
+    resend:
+      api-key: ${RESEND_API_KEY:}
+      base-url: ${RESEND_BASE_URL:https://api.resend.com}
 
 management:
   endpoints:

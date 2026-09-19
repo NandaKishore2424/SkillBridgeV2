@@ -14,7 +14,8 @@ import com.skillbridge.bulkupload.repository.BulkUploadRepository;
 import com.skillbridge.bulkupload.repository.BulkUploadResultRepository;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.college.repository.CollegeRepository;
-import com.skillbridge.shared.service.EmailService;
+import com.skillbridge.auth.invitation.InvitationMailer;
+import com.skillbridge.auth.invitation.IssuedInvitation;
 import com.skillbridge.student.entity.Student;
 import com.skillbridge.student.repository.StudentRepository;
 import com.skillbridge.trainer.entity.Trainer;
@@ -45,7 +46,7 @@ public class BulkUploadJobService {
     private final TrainerRepository trainerRepository;
     private final CollegeRepository collegeRepository;
     private final RoleRepository roleRepository;
-    private final EmailService emailService;
+    private final InvitationMailer invitationMailer;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
 
@@ -199,7 +200,7 @@ public class BulkUploadJobService {
         studentRepository.save(student);
 
         try {
-            emailService.sendWelcomeEmail(user, temporaryPassword);
+            invitationMailer.send(new IssuedInvitation(user.getEmail(), temporaryPassword));
         } catch (Exception e) {
             log.error("Failed to send email to {}", dto.getEmail(), e);
         }
@@ -244,7 +245,7 @@ public class BulkUploadJobService {
         trainerRepository.save(trainer);
 
         try {
-            emailService.sendWelcomeEmail(user, temporaryPassword);
+            invitationMailer.send(new IssuedInvitation(user.getEmail(), temporaryPassword));
         } catch (Exception e) {
             log.error("Failed to send email to {}", dto.getEmail(), e);
         }

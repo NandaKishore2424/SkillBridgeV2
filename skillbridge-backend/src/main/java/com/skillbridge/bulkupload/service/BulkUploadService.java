@@ -16,7 +16,6 @@ import com.skillbridge.bulkupload.repository.BulkUploadRepository;
 import com.skillbridge.bulkupload.repository.BulkUploadResultRepository;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.college.repository.CollegeRepository;
-import com.skillbridge.shared.service.EmailService;
 import com.skillbridge.student.entity.Student;
 import com.skillbridge.student.repository.StudentRepository;
 import com.skillbridge.trainer.entity.Trainer;
@@ -49,7 +48,6 @@ public class BulkUploadService {
     private final TrainerRepository trainerRepository;
     private final CollegeRepository collegeRepository;
     private final RoleRepository roleRepository;
-    private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
     private final BulkUploadJobService bulkUploadJobService;
@@ -140,48 +138,5 @@ public class BulkUploadService {
     public Page<BulkUpload> getHistory(Long collegeId, String entityType, Pageable pageable) {
         return bulkUploadRepository.findByCollegeIdAndEntityTypeOrderByCreatedAtDesc(
                 collegeId, entityType, pageable);
-    }
-
-    /**
-     * Reissues the invitation for an account that has not completed first login.
-     *
-     * <p>This used to send the user's own email address as the password, because
-     * that is what provisioning set it to. Provisioning now generates a random
-     * one, so resending had to change with it: the old code would have mailed a
-     * password that does not work. A new temporary password is generated and
-     * persisted here, which also invalidates the previous one -- correct
-     * behaviour for a reissue, and the reason the account is re-flagged
-     * {@code mustChangePassword}.
-     *
-     * <p>Guarded on {@code PENDING_SETUP} so this cannot be used to reset the
-     * password of an account already in use.
-     */
-    @Transactional
-    public void resendInvitation(Long userId, String expectedRole) {
-        // A user of another college, or of a different kind than the path says,
-        // is indistinguishable from a missing one. Before 2026-09-19 this loaded
-        // any user by id, so a college admin could reset another college's pending
-        // invitation, or, through /students/{id}, a fellow admin's.
-        User user = userRepository.findById(userId)
-                .filter(u -> TenantGuard.isVisible(u.getCollegeId()))
-                .filter(u -> u.getRoles().stream().anyMatch(r -> expectedRole.equals(r.getName())))
-                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
-
-        if (!"PENDING_SETUP".equals(user.getAccountStatus())) {
-            throw new ConflictException("User is already active or not in pending state");
-        }
-
-        String temporaryPassword = TemporaryPasswordGenerator.generate();
-        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
-        user.setMustChangePassword(true);
-        user.setInvitationSentAt(java.time.LocalDateTime.now());
-        userRepository.save(user);
-
-        try {
-            emailService.sendWelcomeEmail(user, temporaryPassword);
-        } catch (Exception e) {
-            log.error("Failed to resend welcome email", e);
-            throw new InternalServerException("Failed to send email");
-        }
     }
 }

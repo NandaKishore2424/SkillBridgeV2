@@ -84,6 +84,7 @@ public class AuthService {
 
     private final long refreshTokenTtlSeconds;
     private final Duration reuseGrace;
+    private final Duration invitationTtl;
     /** A real BCrypt hash of a random value, so an unknown email costs one BCrypt like a known one. */
     private final String dummyHash;
 
@@ -98,7 +99,8 @@ public class AuthService {
             TrainerRepository trainerRepository,
             CollegeRepository collegeRepository,
             @Value("${jwt.refreshTokenTtlSeconds:1209600}") long refreshTokenTtlSeconds,
-            @Value("${jwt.refreshReuseGraceSeconds:10}") long refreshReuseGraceSeconds
+            @Value("${jwt.refreshReuseGraceSeconds:10}") long refreshReuseGraceSeconds,
+            @Value("${app.auth.invitation-ttl}") Duration invitationTtl
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -111,12 +113,30 @@ public class AuthService {
         this.collegeRepository = collegeRepository;
         this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
         this.reuseGrace = Duration.ofSeconds(refreshReuseGraceSeconds);
+        this.invitationTtl = invitationTtl;
         this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
     /** How long the refresh cookie should live: the same as the token behind it. */
     public long refreshTokenTtlSeconds() {
         return refreshTokenTtlSeconds;
+    }
+
+    /**
+     * An invitation's temporary password travels by email, so it must not work
+     * forever: a mailbox read a month later would still open the account.
+     * Checked only after the password matched, so it reveals nothing to someone
+     * guessing. The admin's remedy is resend-invitation, which restarts the clock.
+     */
+    private void refuseExpiredInvitation(User user, String auditAction) {
+        LocalDateTime sent = user.getInvitationSentAt();
+        if (Boolean.TRUE.equals(user.getMustChangePassword()) && sent != null
+                && sent.plus(invitationTtl).isBefore(LocalDateTime.now())) {
+            auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
+                    auditAction, AuditAction.OUTCOME_DENIED, "{\"reason\":\"INVITATION_EXPIRED\"}");
+            throw new UnauthorizedException(
+                    "This invitation has expired. Ask your college admin to send a new one.");
+        }
     }
 
     // ------------------------------------------------------------------
@@ -148,6 +168,7 @@ public class AuthService {
                     AuditAction.LOGIN_FAILURE, AuditAction.OUTCOME_DENIED, "{\"reason\":\"ACCOUNT_INACTIVE\"}");
             throw new UnauthorizedException("Account is inactive");
         }
+        refuseExpiredInvitation(user, AuditAction.LOGIN_FAILURE);
 
         String primaryRole = primaryRoleOf(user);
         log.info("Login successful for user {} with role {}", user.getId(), primaryRole);
@@ -289,6 +310,7 @@ public class AuthService {
         if (!Boolean.TRUE.equals(user.getMustChangePassword())) {
             throw new BusinessRuleException("User is not required to change password via first-login flow. Use change-password.");
         }
+        refuseExpiredInvitation(user, AuditAction.FIRST_LOGIN_COMPLETED);
         PasswordPolicy.check(newPassword, user.getEmail());
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));

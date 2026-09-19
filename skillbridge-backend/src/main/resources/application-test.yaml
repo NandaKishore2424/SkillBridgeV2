@@ -117,3 +117,10 @@ dead-letters:
 messaging:
   backlog-metrics:
     enabled: false
+
+app:
+  mail:
+    # Tests activate `local` too, and a developer's application-local.yaml may
+    # point mail at a real SMTP server. Nothing is sent from a test unless the
+    # class asks for it (InvitationEmailTest runs its own Mailpit).
+    provider: LOG

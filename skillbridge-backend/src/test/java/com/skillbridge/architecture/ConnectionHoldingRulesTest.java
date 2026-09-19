@@ -67,7 +67,12 @@ class ConnectionHoldingRulesTest {
             "org.springframework.web.reactive.function.client.WebClient",
             "java.net.http.HttpClient",
             "java.net.URL",
-            "java.net.Socket");
+            "java.net.Socket",
+            // Our own port. The walk resolves a call to the method it names, and
+            // an interface method has no body, so it stops here and never reaches
+            // SmtpMailGateway's JavaMailSender. Without this entry a mail sent
+            // inside a transaction passed the rule (checked 2026-09-19).
+            "com.skillbridge.shared.mail.MailGateway");
 
     /**
      * Classes the walk may stop at without reporting. EMPTY, and it should stay so.

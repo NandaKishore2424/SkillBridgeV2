@@ -46,6 +46,16 @@ services:
       retries: 12
     restart: unless-stopped
 
+  mailpit:
+    # Catches every email the app sends, for the demo; nothing leaves the
+    # machine. The web UI is on 8026 because 8025, Mailpit's default, belongs to
+    # another project here. MailpitContainer in the tests uses the same image.
+    image: axllent/mailpit:v1.27
+    ports:
+      - "1025:1025"
+      - "8026:8025"
+    restart: unless-stopped
+
 volumes:
   pgdata:
   rabbitdata:

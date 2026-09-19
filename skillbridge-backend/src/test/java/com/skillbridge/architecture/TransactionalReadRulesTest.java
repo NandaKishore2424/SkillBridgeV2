@@ -63,6 +63,10 @@ class TransactionalReadRulesTest {
             // Phase 2 rebuilds the import with one transaction per row.
             "com.skillbridge.bulkupload.service.BulkUploadJobService.processStudentUploadAsync",
             "com.skillbridge.bulkupload.service.BulkUploadJobService.processTrainerUploadAsync",
+            // Commits the new temporary password (InvitationIssuer, transactional)
+            // and only then sends it. Inside one transaction the mail could carry a
+            // password a rollback discards, and SMTP would hold the connection.
+            "com.skillbridge.auth.invitation.InvitationService.resend",
             // Deliberately outside the caller's transaction: an audit record of a
             // failed operation must survive that operation's rollback.
             "com.skillbridge.common.audit.AuditLogService.record",

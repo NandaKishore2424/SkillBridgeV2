@@ -1,5 +1,6 @@
 package com.skillbridge.bulkupload.controller;
 
+import com.skillbridge.auth.invitation.InvitationService;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.security.SecurityUtils;
 import com.skillbridge.common.dto.PagedResponse;
@@ -32,6 +33,7 @@ public class BulkUploadController {
 
     private final BulkUploadService bulkUploadService;
     private final CsvParserService csvParserService;
+    private final InvitationService invitationService;
 
     @PostMapping("/students/bulk-upload")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
@@ -136,14 +138,14 @@ public class BulkUploadController {
     @PostMapping("/students/{id}/resend-invitation")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<Void> resendStudentInvitation(@PathVariable Long id) {
-        bulkUploadService.resendInvitation(id, "STUDENT");
+        invitationService.resend(id, "STUDENT");
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/trainers/{id}/resend-invitation")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
     public ResponseEntity<Void> resendTrainerInvitation(@PathVariable Long id) {
-        bulkUploadService.resendInvitation(id, "TRAINER");
+        invitationService.resend(id, "TRAINER");
         return ResponseEntity.ok().build();
     }
 }

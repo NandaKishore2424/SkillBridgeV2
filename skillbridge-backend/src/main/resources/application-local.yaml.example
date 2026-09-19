@@ -30,6 +30,11 @@ spring:
     # from localhost, which is the only place this file is used.
     addresses: amqp://guest:guest@localhost:5672/
 
+  mail:
+    # Mailpit from docker-compose. Every message lands at http://localhost:8026.
+    host: localhost
+    port: 1025
+
 jwt:
   # Generate a fresh one, do not reuse any value found in the repo or its history:
   #   openssl rand -base64 48
@@ -40,3 +45,5 @@ jwt:
 app:
   auth:
     refresh-cookie-secure: false
+  mail:
+    provider: SMTP
