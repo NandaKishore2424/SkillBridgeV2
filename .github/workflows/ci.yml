@@ -176,11 +176,11 @@ jobs:
             prom/prometheus:v3.5.0 test rules /rules/messaging-alerts.test.yml
 
   ai-store:
-    name: AI service (dedup store against PostgreSQL)
+    name: AI service (dedup and report stores against PostgreSQL)
     runs-on: ubuntu-latest
     # The claim's value is that it is atomic, which only a real database shows.
-    # The test builds its database from db/schema/baseline.sql, so the table it
-    # exercises is the deployed definition, not a copy.
+    # The tests build their database from the backend's Flyway migrations, so the
+    # tables they exercise are the deployed definitions, not copies.
     services:
       postgres:
         image: pgvector/pgvector:pg17

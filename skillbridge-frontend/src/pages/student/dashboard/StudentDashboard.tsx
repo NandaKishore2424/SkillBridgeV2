@@ -39,6 +39,7 @@ import {
 } from '@/api/student'
 import { itemsOf } from '@/api/paging'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
+import { MySkillGapCard } from '@/shared/components/skill-gap/SkillGapCard'
 import {
   BookOpen,
   TrendingUp,
@@ -198,6 +199,8 @@ export function StudentDashboard() {
                 />
               </div>
             )}
+
+            <MySkillGapCard />
 
             {/* Tabs for Batches */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">

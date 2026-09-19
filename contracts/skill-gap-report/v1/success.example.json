@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "studentId": 42,
+  "status": "SUCCESS",
+  "studentSkills": ["java", "spring boot", "sql"],
+  "matchedJobs": [
+    {
+      "title": "Sr. Programmer Analyst - Big Data",
+      "company": "Acme Analytics",
+      "similarity": 0.624,
+      "matchedSkills": ["java", "sql"],
+      "missingSkills": ["hadoop", "spark"]
+    },
+    {
+      "title": "Data Engineer/Analyst",
+      "company": null,
+      "similarity": 0.592,
+      "matchedSkills": ["sql"],
+      "missingSkills": ["python"]
+    }
+  ],
+  "missingSkills": ["hadoop", "python", "spark"],
+  "analyzedAt": "2026-09-19T16:10:05.123456Z"
+}

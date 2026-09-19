@@ -22,6 +22,8 @@ import config
 import database
 import embedder
 from skill_analyzer import analyze_skill_gap
+import analysis_handler
+import report_store
 import ai_event_contract as contract
 import amqp_consumer
 import dedup
@@ -35,6 +37,9 @@ DEDUP_CONSUMER = "skillbridge-ai-service.skill-analysis"
 
 
 # ─── Lifecycle Management ──────────────────────────────────────────────────────
+
+_reports = report_store.ReportStore(database.get_connection, database.return_connection)
+
 
 def _open_resources() -> None:
     print("=" * 60)
@@ -90,14 +95,10 @@ def _analyse(event: contract.AiEvent) -> None:
     print(f"[AMQP] Processing {event.event_type} v{event.schema_version} "
           f"for studentId={event.student_id} (event {event.event_id or 'unenveloped'})")
 
-    # Version 1 could carry pre-resolved skill names; nothing ever sent them.
-    student_skills = list(event.skills) or _fetch_student_skills_from_db(event.student_id)
-    if not student_skills:
-        print(f"[AMQP] Student {event.student_id} has no skills; nothing to analyse")
-        return
-
-    report = analyze_skill_gap(student_id=event.student_id, student_skills=student_skills)
-    _log_report_summary(report)
+    stored = analysis_handler.analyse_and_store(
+        event, analyze_skill_gap, _fetch_student_skills_from_db, _reports, _log_report_summary)
+    if not stored:
+        print(f"[AMQP] Student {event.student_id} no longer exists; report not stored")
 
 
 def _fetch_student_skills_from_db(student_id: int) -> list[str]:
@@ -134,7 +135,8 @@ def _log_report_summary(report) -> None:
     if report.top_matched_jobs:
         print(f"  Top {len(report.top_matched_jobs)} Matched Jobs:")
         for i, job in enumerate(report.top_matched_jobs, 1):
-            print(f"    {i}. {job.title} @ {job.company[:30]} (score: {job.similarity_score})")
+            # company is nullable in industry_job_descriptions; slicing None failed the event.
+            print(f"    {i}. {job.title} @ {(job.company or '-')[:30]} (score: {job.similarity_score})")
             if job.missing_skills:
                 print(f"       Missing: {job.missing_skills[:3]}")
     if report.all_missing_skills:

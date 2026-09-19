@@ -1,9 +1,9 @@
 """
-ProcessedEventStore against a real PostgreSQL, built from db/schema/baseline.sql.
+ProcessedEventStore against a real PostgreSQL, built from the backend's Flyway migrations.
 
 The claim's whole value is that it is atomic, and a fake store answers whatever it
 is told to, so only a real database can show that two racing claims do not both
-win. Built from the baseline, not from a CREATE TABLE of its own, so the table
+win. Built from the migrations, not from a CREATE TABLE of its own, so the table
 definition under test is the one deployed.
 
 Needs AI_TEST_DATABASE_URL: a server this test may create and drop a database on.
@@ -31,61 +31,22 @@ SERVICE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVICE))
 
 from dedup import Claim, ProcessedEventStore  # noqa: E402
+from tests_integration import migrations  # noqa: E402
 
-BASELINE = SERVICE.parent / "db" / "schema" / "baseline.sql"
 CONSUMER = "store-test"
 
 
 def setUpModule():
-    global _admin_dsn, _db_name, _pool
-    _admin_dsn = os.environ.get("AI_TEST_DATABASE_URL")
-    if not _admin_dsn:
-        raise RuntimeError("AI_TEST_DATABASE_URL is not set: this suite needs a throwaway PostgreSQL "
-                           "(see the module docstring). It fails rather than skipping.")
-    # This creates and drops databases. Refuse the live project outright.
-    for forbidden in ("supabase", "pooler"):
-        if forbidden in _admin_dsn:
-            raise RuntimeError("AI_TEST_DATABASE_URL points at Supabase; this suite must never run there")
-
-    _wait_until_ready(_admin_dsn)
-    _db_name = f"dedup_it_{uuid.uuid4().hex[:12]}"
-    admin = psycopg2.connect(_admin_dsn)
-    admin.autocommit = True
-    with admin.cursor() as cur:
-        cur.execute(f'CREATE DATABASE "{_db_name}"')
-    admin.close()
-
-    dsn = psycopg2.extensions.make_dsn(_admin_dsn, dbname=_db_name)
-    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute(BASELINE.read_text())
-    _pool = pool.ThreadedConnectionPool(1, 16, dsn)
-
-
-def _wait_until_ready(dsn, timeout=60):
-    # pg_isready is not readiness: the image's entrypoint runs a temporary server
-    # for initialisation, answers during it, then shuts it down. Three successes a
-    # second apart step over that window (the same trap as verify-schema-baseline.sh).
-    deadline, streak = time.monotonic() + timeout, 0
-    while streak < 3:
-        if time.monotonic() > deadline:
-            raise RuntimeError(f"PostgreSQL at AI_TEST_DATABASE_URL was not ready within {timeout}s")
-        try:
-            psycopg2.connect(dsn, connect_timeout=2).close()
-            streak += 1
-        except psycopg2.OperationalError:
-            streak = 0
-        time.sleep(1)
+    global _db, _pool
+    _db = migrations.ThrowawayDatabase("dedup_it")
+    _pool = pool.ThreadedConnectionPool(1, 16, _db.create())
 
 
 def tearDownModule():
     if "_pool" in globals():
         _pool.closeall()
-    if "_db_name" in globals():
-        admin = psycopg2.connect(_admin_dsn)
-        admin.autocommit = True
-        with admin.cursor() as cur:
-            cur.execute(f'DROP DATABASE IF EXISTS "{_db_name}"')
-        admin.close()
+    if "_db" in globals():
+        _db.drop()
 
 
 def sql(statement, params=()):

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillbridge.local/contracts/skill-gap-report/v1/skill-gap-report.schema.json",
+  "title": "Skill-gap report, schema version 1",
+  "description": "The latest analysis of one student, as the AI service writes it to skill_gap_reports.report (Flyway V7) and the backend reads it back for display. Written by skillbridge-ai-service/report_store.py::report_document; read by com.skillbridge.skillgap.SkillGapReportDocument. Strict, like the AI events: adding a field is a reviewed change to this file, and both sides test against it.",
+  "type": "object",
+  "required": ["schemaVersion", "studentId", "status", "studentSkills", "matchedJobs", "missingSkills", "analyzedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "studentId": { "type": "integer", "minimum": 1 },
+    "status": {
+      "description": "SUCCESS: jobs were searched. SKIPPED: the student has no skills, so there was nothing to search with. A failed analysis is not written; it is retried, then dead-lettered.",
+      "enum": ["SUCCESS", "SKIPPED"]
+    },
+    "studentSkills": {
+      "description": "The skills the analysis used, normalised (lower case, trimmed).",
+      "type": "array", "items": { "type": "string" }
+    },
+    "matchedJobs": {
+      "description": "Most similar first. Empty when SKIPPED, or when no job cleared the similarity threshold.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "company", "similarity", "matchedSkills", "missingSkills"],
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string" },
+          "company": { "type": ["string", "null"] },
+          "similarity": { "description": "Cosine similarity, -1 to 1 (search_similar_jobs, V4).", "type": "number", "minimum": -1, "maximum": 1 },
+          "matchedSkills": { "type": "array", "items": { "type": "string" } },
+          "missingSkills": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "missingSkills": {
+      "description": "The union of every matched job's missing skills.",
+      "type": "array", "items": { "type": "string" }
+    },
+    "analyzedAt": {
+      "description": "When the analysis ran, UTC, ISO-8601 with a Z.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+    }
+  }
+}

@@ -48,18 +48,26 @@ import {
   Power,
   AlertCircle,
   Upload,
+  Sparkles,
 } from 'lucide-react'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui'
+import { StudentSkillGap } from '@/shared/components/skill-gap/SkillGapCard'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 
 export function StudentsList() {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
+  const [skillGapFor, setSkillGapFor] = useState<{ id: number; fullName: string } | null>(null)
   const debouncedSearch = useDebouncedValue(searchQuery)
 
   // A narrowing search has to reset the page. Staying on page 3 while the
@@ -232,6 +240,10 @@ export function StudentsList() {
                                       View Details
                                     </Link>
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setSkillGapFor(student)}>
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Skill gap
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handleStatusToggle(student)}
                                     disabled={statusMutation.isPending}
@@ -286,6 +298,15 @@ export function StudentsList() {
               </div>
             )}
           </div>
+          <Dialog open={skillGapFor !== null} onOpenChange={(open) => !open && setSkillGapFor(null)}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Skill gap: {skillGapFor?.fullName}</DialogTitle>
+                <DialogDescription>The latest AI analysis of this student's profile.</DialogDescription>
+              </DialogHeader>
+              {skillGapFor && <StudentSkillGap studentId={skillGapFor.id} />}
+            </DialogContent>
+          </Dialog>
         </PageWrapper>
       </AuthenticatedLayout>
     </RoleGuard>
