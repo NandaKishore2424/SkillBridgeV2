@@ -190,6 +190,25 @@ describe('session renewal through the refresh cookie', () => {
     expect(refreshCalls).toBe(1)
   })
 
+  it('adopts the token another tab just stored instead of logging out, when that tab won the refresh', async () => {
+    server.use(
+      http.post(`${API}/auth/refresh`, async () => {
+        refreshCalls += 1
+        // Another tab rotated the shared cookie first, so ours is refused.
+        // That tab then wrote its fresh access token to the shared storage.
+        localStorage.setItem(ACCESS_TOKEN_KEY, 'access-2')
+        return HttpResponse.json({ status: 401, error: 'UNAUTHORIZED' }, { status: 401 })
+      }),
+    )
+    await mountProvider()
+
+    const response = await apiClient.get('/admin/colleges')
+
+    expect(response.status).toBe(200)
+    expect(refreshCalls).toBe(1)
+    expect(localStorage.getItem(USER_KEY)).not.toBeNull()
+  })
+
   it('ends the session when the refresh cookie itself is rejected, without looping', async () => {
     browserCookie = 'revoked-elsewhere'
     await mountProvider()

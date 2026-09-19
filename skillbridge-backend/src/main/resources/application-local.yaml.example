@@ -41,3 +41,9 @@ jwt:
   # Generate a fresh one, do not reuse any value found in the repo or its history:
   #   openssl rand -base64 48
   secret: YOUR_JWT_SECRET
+
+# Local development runs over plain http://localhost, where a Secure cookie
+# would not be stored. Never set this in any deployed environment.
+app:
+  auth:
+    refresh-cookie-secure: false

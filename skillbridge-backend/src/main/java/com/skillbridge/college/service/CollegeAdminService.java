@@ -10,6 +10,7 @@ import com.skillbridge.college.repository.CollegeAdminRepository;
 import com.skillbridge.college.repository.CollegeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.skillbridge.auth.security.PasswordPolicy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,7 @@ public class CollegeAdminService {
         if (userRepository.existsByEmail(request.email)) {
             throw new ConflictException("User with email already exists: " + request.email);
         }
+        PasswordPolicy.check(request.password, request.email);
 
         // Get COLLEGE_ADMIN role - find by enum and convert to string
         Role collegeAdminRole = roleRepository.findAll().stream()

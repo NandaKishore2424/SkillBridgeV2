@@ -14,6 +14,9 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+
+import { apiErrorMessage } from '@/lib/apiError'
+import { passwordSchema } from '@/lib/password'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { AuthenticatedLayout } from '@/shared/components/layout'
 import { PageWrapper } from '@/shared/components/layout'
@@ -47,13 +50,7 @@ import { itemsOf } from '@/api/paging'
 const createAdminSchema = z.object({
   collegeId: z.number().min(1, 'Please select a college'),
   email: z.string().email('Please enter a valid email address'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      'Password must contain uppercase, lowercase, number, and special character'
-    ),
+  password: passwordSchema,
   confirmPassword: z.string(),
   fullName: z.string().min(1, 'Full name is required'),
   phone: z.string().max(20, 'Phone number is too long').optional().or(z.literal('')),
@@ -107,7 +104,7 @@ export function CreateCollegeAdmin() {
       navigate('/admin/colleges')
     },
     onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to create college admin. Please try again.')
+      showError(apiErrorMessage(error, 'Failed to create college admin. Please try again.'))
     },
   })
 

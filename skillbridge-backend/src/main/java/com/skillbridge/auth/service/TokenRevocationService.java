@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 /**
  * Closes the window between deactivating an account and its access token
@@ -71,15 +72,23 @@ public class TokenRevocationService {
     /**
      * Refuse every access token this user already holds.
      *
-     * <p>Call on deactivation. Safe to call repeatedly — the later timestamp
-     * simply widens the set of tokens refused, and every token it refuses was
-     * issued to an account that is now inactive.
+     * <p>Call on deactivation, and when a password changes or a stolen refresh
+     * token is detected. Safe to call repeatedly: the later timestamp simply
+     * widens the set of tokens refused.
+     *
+     * <p><b>The cutoff is truncated to the second.</b> A JWT's {@code iat} has
+     * whole-second precision, so a token issued a few milliseconds <em>after</em>
+     * a millisecond-precise cutoff carries an {@code iat} that reads as before it,
+     * and would be refused. That broke "change your password and keep this
+     * session", where the new token is issued in the same second. The price is
+     * that a token issued earlier in the same second as the revocation survives
+     * it: a window of at most one second.
      */
     public void revoke(Long userId) {
         if (userId == null) {
             return;
         }
-        revokedAt.put(userId, Instant.now());
+        revokedAt.put(userId, Instant.now().truncatedTo(ChronoUnit.SECONDS));
         log.info("Revoked existing access tokens for user {}", userId);
     }
 

@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "refresh_tokens", indexes = {
@@ -43,4 +44,16 @@ public class RefreshToken {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    /**
+     * The chain one login produces as it is rotated. A rotated-away token
+     * presented again revokes the whole family: two parties holding the same
+     * token means one of them stole it. Carried unchanged into every successor.
+     */
+    @Column(name = "family_id", nullable = false, updatable = false)
+    private UUID familyId;
+
+    /** When this token was rotated away or revoked; what the reuse grace period is measured from. */
+    @Column(name = "revoked_at")
+    private LocalDateTime revokedAt;
 }

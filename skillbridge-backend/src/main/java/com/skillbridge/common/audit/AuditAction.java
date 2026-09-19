@@ -35,6 +35,11 @@ public final class AuditAction {
     /** A bulk replay that was not a dry run; metadata carries the selection and what it did. */
     public static final String DEAD_LETTER_BATCH_REPLAYED = "DEAD_LETTER_BATCH_REPLAYED";
 
+    /** A rotated-away refresh token was presented again: the family was revoked as stolen. */
+    public static final String REFRESH_TOKEN_REUSE = "REFRESH_TOKEN_REUSE";
+    /** Every session of a user ended (password change or first login). */
+    public static final String SESSIONS_REVOKED = "SESSIONS_REVOKED";
+
     /** Outcome for a rejected action. */
     public static final String OUTCOME_SUCCESS = "SUCCESS";
     public static final String OUTCOME_FAILURE = "FAILURE";

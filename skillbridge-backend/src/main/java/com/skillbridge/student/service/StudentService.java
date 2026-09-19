@@ -1,11 +1,7 @@
 package com.skillbridge.student.service;
 
-import com.skillbridge.auth.entity.Role;
 import com.skillbridge.auth.entity.User;
-import com.skillbridge.auth.repository.RoleRepository;
 import com.skillbridge.auth.repository.UserRepository;
-import com.skillbridge.college.entity.College;
-import com.skillbridge.college.repository.CollegeRepository;
 import com.skillbridge.shared.messaging.AIEventPublisher;
 import com.skillbridge.student.dto.*;
 import com.skillbridge.student.entity.*;
@@ -16,7 +12,6 @@ import com.skillbridge.student.repository.StudentSpecifications;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +23,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.skillbridge.common.exception.ConflictException;
-import com.skillbridge.common.exception.InternalServerException;
 import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.common.dto.IdGrouping;
@@ -41,68 +35,12 @@ import com.skillbridge.common.exception.ResourceNotFoundException;
 public class StudentService {
     private final StudentRepository studentRepository;
     private final UserRepository userRepository;
-    private final CollegeRepository collegeRepository;
     private final SkillRepository skillRepository;
     private final StudentSkillRepository studentSkillRepository;
     private final StudentProjectRepository studentProjectRepository;
     private final BatchRepository batchRepository;
-    private final RoleRepository roleRepository;
     private final com.skillbridge.auth.service.TokenRevocationService tokenRevocation;
-    private final PasswordEncoder passwordEncoder;
     private final AIEventPublisher aiEventPublisher; // injected for async AI notifications
-
-    @Transactional
-    public StudentDTO createStudent(CreateStudentRequest request) {
-        // Validate college
-        College college = collegeRepository.findById(request.getCollegeId())
-                .orElseThrow(() -> new ResourceNotFoundException("College not found"));
-
-        // Check if roll number already exists for this college
-        if (studentRepository.existsByRollNumberAndCollegeId(request.getRollNumber(), request.getCollegeId())) {
-            throw new ConflictException("Roll number already exists for this college");
-        }
-
-        // Check if user with email already exists
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new ConflictException("User with this email already exists");
-        }
-
-        // Get STUDENT role
-        Role studentRole = roleRepository.findByName("STUDENT")
-                .orElseThrow(() -> new InternalServerException("Required role not found"));
-
-        Set<Role> roles = new HashSet<>();
-        roles.add(studentRole);
-
-        // Create User
-        User newUser = User.builder()
-                .collegeId(request.getCollegeId())
-                .email(request.getEmail())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .isActive(true)
-                .roles(roles)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-        User savedUser = userRepository.save(newUser);
-
-        // Create Student profile
-        Student student = Student.builder()
-                .user(savedUser)
-                .college(college)
-                .fullName(request.getFullName())
-                .rollNumber(request.getRollNumber())
-                .degree(request.getDegree())
-                .branch(request.getBranch())
-                .year(request.getYear())
-                .phone(request.getPhone())
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-        Student savedStudent = studentRepository.save(student);
-
-        return mapToDTO(savedStudent);
-    }
 
     /**
      * Read-only, and transactional on purpose. Without an ambient transaction

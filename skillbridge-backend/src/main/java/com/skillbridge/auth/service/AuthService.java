@@ -1,12 +1,28 @@
 package com.skillbridge.auth.service;
 
 import com.skillbridge.auth.dto.AuthResponse;
+import com.skillbridge.auth.dto.CurrentUserDTO;
 import com.skillbridge.auth.dto.LoginRequest;
 import com.skillbridge.auth.dto.UserDto;
 import com.skillbridge.auth.entity.RefreshToken;
+import com.skillbridge.auth.entity.Role;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.RefreshTokenRepository;
 import com.skillbridge.auth.repository.UserRepository;
+import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.security.PasswordPolicy;
+import com.skillbridge.college.entity.College;
+import com.skillbridge.college.repository.CollegeRepository;
+import com.skillbridge.common.audit.AuditAction;
+import com.skillbridge.common.audit.AuditLogService;
+import com.skillbridge.common.exception.BusinessRuleException;
+import com.skillbridge.common.exception.InternalServerException;
+import com.skillbridge.common.exception.ResourceNotFoundException;
+import com.skillbridge.common.exception.UnauthorizedException;
+import com.skillbridge.student.entity.Student;
+import com.skillbridge.student.repository.StudentRepository;
+import com.skillbridge.trainer.entity.Trainer;
+import com.skillbridge.trainer.repository.TrainerRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,182 +32,288 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.Set;
 import java.util.UUID;
-import com.skillbridge.common.exception.BusinessRuleException;
-import com.skillbridge.common.exception.InternalServerException;
-import com.skillbridge.common.exception.ResourceNotFoundException;
-import com.skillbridge.auth.dto.CurrentUserDTO;
-import com.skillbridge.auth.entity.Role;
-import com.skillbridge.auth.security.AuthenticatedUser;
-import com.skillbridge.college.entity.College;
-import com.skillbridge.college.repository.CollegeRepository;
-import com.skillbridge.student.entity.Student;
-import com.skillbridge.student.repository.StudentRepository;
-import com.skillbridge.trainer.entity.Trainer;
-import com.skillbridge.trainer.repository.TrainerRepository;
-import com.skillbridge.common.audit.AuditAction;
-import com.skillbridge.common.audit.AuditLogService;
-import com.skillbridge.common.exception.UnauthorizedException;
+import java.util.stream.Collectors;
 
+/**
+ * Login, token refresh, logout and password changes.
+ *
+ * <h2>Refresh tokens</h2>
+ * Opaque random values, stored only as SHA-256, sent only in an HttpOnly cookie,
+ * and <b>rotated</b> on every use: each refresh revokes the token it was given
+ * and issues a successor in the same <b>family</b> (one family per login).
+ * <ul>
+ *   <li><b>Rotation is atomic.</b> {@code revokeIfActive} is a conditional
+ *       UPDATE; of two refreshes presenting the same token at once, exactly one
+ *       rotates it and the other is refused.</li>
+ *   <li><b>Reuse means theft.</b> A rotated-away token presented again, after
+ *       {@link #reuseGrace}, revokes the whole family and every access token the
+ *       user holds. The attacker and the victim cannot both be holding a live
+ *       successor, and the server cannot tell which is which.</li>
+ *   <li><b>The grace period is for tabs, not for attackers.</b> Tabs share the
+ *       cookie jar, so two tabs can refresh with the same token a moment apart.
+ *       Within the grace period the late one is refused without the family
+ *       being revoked, and the SPA picks up the other tab's new token.</li>
+ * </ul>
+ *
+ * <h2>Login failures look alike</h2>
+ * An unknown email, a wrong password, and a wrong password for a deactivated
+ * account all get the same 401 and roughly the same latency. The unknown-email
+ * path runs BCrypt against a dummy hash rather than returning early. "Account is
+ * inactive" is said only to someone who proved they know the password.
+ */
 @Service
 @Slf4j
 public class AuthService {
+
+    private static final String INVALID_CREDENTIALS = "Invalid email or password";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
+    private final TokenRevocationService tokenRevocation;
     private final AuditLogService auditLogService;
     private final StudentRepository studentRepository;
     private final TrainerRepository trainerRepository;
     private final CollegeRepository collegeRepository;
 
     private final long refreshTokenTtlSeconds;
+    private final Duration reuseGrace;
+    /** A real BCrypt hash of a random value, so an unknown email costs one BCrypt like a known one. */
+    private final String dummyHash;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             RefreshTokenRepository refreshTokenRepository,
             JwtService jwtService,
+            TokenRevocationService tokenRevocation,
             AuditLogService auditLogService,
             StudentRepository studentRepository,
             TrainerRepository trainerRepository,
             CollegeRepository collegeRepository,
-            @Value("${jwt.refreshTokenTtlSeconds:1209600}") long refreshTokenTtlSeconds
+            @Value("${jwt.refreshTokenTtlSeconds:1209600}") long refreshTokenTtlSeconds,
+            @Value("${jwt.refreshReuseGraceSeconds:10}") long refreshReuseGraceSeconds
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtService = jwtService;
+        this.tokenRevocation = tokenRevocation;
         this.auditLogService = auditLogService;
         this.studentRepository = studentRepository;
         this.trainerRepository = trainerRepository;
         this.collegeRepository = collegeRepository;
         this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
+        this.reuseGrace = Duration.ofSeconds(refreshReuseGraceSeconds);
+        this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
+
+    /** How long the refresh cookie should live: the same as the token behind it. */
+    public long refreshTokenTtlSeconds() {
+        return refreshTokenTtlSeconds;
+    }
+
+    // ------------------------------------------------------------------
+    // Login
+    // ------------------------------------------------------------------
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        log.debug("Attempting login for email: {}", request.getEmail());
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
 
-        // Find user by email
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> {
-                    log.warn("Login failed: User not found with email: {}", request.getEmail());
-                    // Recorded with a null actorUserId: there is no account, and
-                    // repeated misses against invented addresses are themselves
-                    // the signal worth seeing.
-                    auditLogService.recordAnonymous(AuditAction.LOGIN_FAILURE, request.getEmail(),
-                            AuditAction.OUTCOME_FAILURE, "{\"reason\":\"NO_SUCH_USER\"}");
-                    return new UnauthorizedException("Invalid email or password");
-                });
+        if (user == null) {
+            // Same work as a wrong password, so timing does not reveal which emails exist.
+            passwordEncoder.matches(request.getPassword(), dummyHash);
+            auditLogService.recordAnonymous(AuditAction.LOGIN_FAILURE, request.getEmail(),
+                    AuditAction.OUTCOME_FAILURE, "{\"reason\":\"NO_SUCH_USER\"}");
+            throw new UnauthorizedException(INVALID_CREDENTIALS);
+        }
 
-        // Check if user is active
-        if (!user.getIsActive()) {
-            log.warn("Login failed: User account is inactive for email: {}", request.getEmail());
-            // The account is known here, so the row is attributed to it and to
-            // its college -- a college admin needs to see failed attempts
-            // against their own users, which an anonymous row would hide.
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
-                    AuditAction.LOGIN_FAILURE, AuditAction.OUTCOME_DENIED,
-                    "{\"reason\":\"ACCOUNT_INACTIVE\"}");
+                    AuditAction.LOGIN_FAILURE, AuditAction.OUTCOME_FAILURE, "{\"reason\":\"BAD_PASSWORD\"}");
+            throw new UnauthorizedException(INVALID_CREDENTIALS);
+        }
+
+        // Only now, to someone who proved they know the password: telling a
+        // stranger an account is inactive would confirm that it exists.
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
+                    AuditAction.LOGIN_FAILURE, AuditAction.OUTCOME_DENIED, "{\"reason\":\"ACCOUNT_INACTIVE\"}");
             throw new UnauthorizedException("Account is inactive");
         }
 
-        // Verify password
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            log.warn("Login failed: Invalid password for email: {}", request.getEmail());
-            auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
-                    AuditAction.LOGIN_FAILURE, AuditAction.OUTCOME_FAILURE,
-                    "{\"reason\":\"BAD_PASSWORD\"}");
-            throw new UnauthorizedException("Invalid email or password");
-        }
-
         String primaryRole = primaryRoleOf(user);
-
-        log.info("Login successful for user: {} with role: {}", user.getEmail(), primaryRole);
+        log.info("Login successful for user {} with role {}", user.getId(), primaryRole);
         auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
-                AuditAction.LOGIN_SUCCESS, AuditAction.OUTCOME_SUCCESS,
-                "{\"role\":\"" + primaryRole + "\"}");
+                AuditAction.LOGIN_SUCCESS, AuditAction.OUTCOME_SUCCESS, "{\"role\":\"" + primaryRole + "\"}");
 
-        String accessToken = jwtService.generateAccessToken(user, primaryRole, roleNamesOf(user),
-                Boolean.TRUE.equals(user.getMustChangePassword()));
-        String refreshToken = issueRefreshToken(user);
-
-        UserDto userDto = UserDto.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .role(primaryRole)
-                .collegeId(user.getCollegeId())
-                .isActive(user.getIsActive())
-                .mustChangePassword(user.getMustChangePassword())
-                .accountStatus(user.getAccountStatus())
-                .profileCompleted(user.getProfileCompleted())
-                .build();
-
-        return AuthResponse.builder()
-            .accessToken(accessToken)
-            .refreshToken(refreshToken)
-            .expiresIn(jwtService.accessTokenTtlSeconds())
-                .user(userDto)
-                .build();
+        return issueSession(user, UUID.randomUUID());
     }
 
-    @Transactional
+    // ------------------------------------------------------------------
+    // Refresh
+    // ------------------------------------------------------------------
+
+    /**
+     * Rotates a refresh token. Refusals are 401s thrown AFTER the revocations they
+     * cause, so the transaction must not roll those back: {@code noRollbackFor}.
+     */
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthResponse refreshToken(String refreshToken) {
-        log.debug("Attempting token refresh");
         if (refreshToken == null || refreshToken.isBlank()) {
-            log.warn("Missing refresh token");
             throw new UnauthorizedException("Refresh token is required");
         }
 
-        String tokenHash = hashToken(refreshToken);
-        RefreshToken storedToken = refreshTokenRepository.findByTokenHashAndRevokedFalse(tokenHash)
+        RefreshToken stored = refreshTokenRepository.findByTokenHash(hashToken(refreshToken))
                 .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+        LocalDateTime now = LocalDateTime.now();
 
-        if (storedToken.getExpiresAt().isBefore(LocalDateTime.now())) {
-            storedToken.setRevoked(true);
-            refreshTokenRepository.save(storedToken);
+        if (Boolean.TRUE.equals(stored.getRevoked())) {
+            handleReplay(stored, now);
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+
+        if (stored.getExpiresAt().isBefore(now)) {
+            refreshTokenRepository.revokeIfActive(stored.getId(), now);
             throw new UnauthorizedException("Refresh token expired");
         }
 
-        User user = storedToken.getUser();
-        if (!user.getIsActive()) {
-            log.warn("User account is inactive");
+        User user = stored.getUser();
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
             throw new UnauthorizedException("Account is inactive");
         }
 
-        String primaryRole = primaryRoleOf(user);
+        // The lock: whoever flips revoked false -> true owns this rotation.
+        if (refreshTokenRepository.revokeIfActive(stored.getId(), now) == 0) {
+            log.info("Refresh token {} was rotated by a concurrent request; refusing this one", stored.getId());
+            throw new UnauthorizedException("Invalid refresh token");
+        }
 
-        String newAccessToken = jwtService.generateAccessToken(user, primaryRole, roleNamesOf(user),
-                Boolean.TRUE.equals(user.getMustChangePassword()));
-        storedToken.setRevoked(true);
-        refreshTokenRepository.save(storedToken);
-
-        String newRefreshToken = issueRefreshToken(user);
-
-        UserDto userDto = UserDto.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .role(primaryRole)
-                .collegeId(user.getCollegeId())
-                .isActive(user.getIsActive())
-                .mustChangePassword(user.getMustChangePassword())
-                .accountStatus(user.getAccountStatus())
-                .profileCompleted(user.getProfileCompleted())
-                .build();
-
-        log.info("Token refresh successful for user: {}", user.getEmail());
-
-        return AuthResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .expiresIn(jwtService.accessTokenTtlSeconds())
-                .user(userDto)
-                .build();
+        return issueSession(user, stored.getFamilyId());
     }
+
+    /**
+     * A revoked token came back. Inside the grace period it is a second tab that
+     * lost a race: refuse, change nothing. Outside it, someone else holds this
+     * family, so end all of it.
+     */
+    private void handleReplay(RefreshToken stored, LocalDateTime now) {
+        LocalDateTime revokedAt = stored.getRevokedAt();
+        if (revokedAt != null && !revokedAt.plus(reuseGrace).isBefore(now)) {
+            log.info("Refresh token {} replayed {} after rotation, within the grace period; refused, family kept",
+                    stored.getId(), Duration.between(revokedAt, now));
+            return;
+        }
+        // Read everything needed first: the bulk UPDATE below clears the
+        // persistence context, which would leave the lazy user proxy detached.
+        User user = stored.getUser();
+        Long userId = user.getId();
+        String email = user.getEmail();
+        Long collegeId = user.getCollegeId();
+        UUID familyId = stored.getFamilyId();
+
+        int revoked = refreshTokenRepository.revokeFamily(familyId, now);
+        tokenRevocation.revoke(userId);
+        log.warn("Refresh token reuse for user {}: revoked {} token(s) in family {} and every access token",
+                userId, revoked, familyId);
+        auditLogService.recordFor(userId, email, collegeId,
+                AuditAction.REFRESH_TOKEN_REUSE, AuditAction.OUTCOME_DENIED,
+                "{\"familyId\":\"" + familyId + "\",\"revoked\":" + revoked + "}");
+    }
+
+    // ------------------------------------------------------------------
+    // Logout
+    // ------------------------------------------------------------------
+
+    /** Ends this login: every token in the presented token's family. Other devices' logins are untouched. */
+    @Transactional
+    public void logout(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+        refreshTokenRepository.findByTokenHash(hashToken(refreshToken))
+                .ifPresent(token -> refreshTokenRepository.revokeFamily(token.getFamilyId(), LocalDateTime.now()));
+    }
+
+    // ------------------------------------------------------------------
+    // Passwords
+    // ------------------------------------------------------------------
+
+    /**
+     * Changes the password, ends <b>every</b> session of this user (all refresh
+     * tokens, all access tokens), and starts a fresh one for the caller. A
+     * password change is what a user does after suspecting compromise, so it has
+     * to lock out whoever else is signed in.
+     */
+    @Transactional
+    public AuthResponse changePassword(Long userId, String oldPassword, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+
+        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            auditLogService.record(AuditAction.PASSWORD_CHANGED, "User", userId,
+                    AuditAction.OUTCOME_FAILURE, "{\"reason\":\"BAD_OLD_PASSWORD\"}");
+            throw new UnauthorizedException("Invalid current password");
+        }
+        PasswordPolicy.check(newPassword, user.getEmail());
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
+        revokeEverySession(user);
+        auditLogService.record(AuditAction.PASSWORD_CHANGED, "User", userId, AuditAction.OUTCOME_SUCCESS);
+
+        return issueSession(user, UUID.randomUUID());
+    }
+
+    @Transactional
+    public AuthResponse firstLogin(String email, String temporaryPassword, String newPassword) {
+        User user = userRepository.findByEmail(email).orElse(null);
+        // An unknown email and a wrong temporary password must look the same:
+        // this endpoint is public, and a 404 here enumerated accounts.
+        boolean matches = passwordEncoder.matches(temporaryPassword,
+                user == null ? dummyHash : user.getPasswordHash());
+        if (user == null || !matches) {
+            auditLogService.recordAnonymous(AuditAction.FIRST_LOGIN_COMPLETED, email,
+                    AuditAction.OUTCOME_FAILURE, "{\"reason\":\"BAD_CREDENTIALS\"}");
+            throw new UnauthorizedException("Invalid email or temporary password");
+        }
+
+        if (!Boolean.TRUE.equals(user.getMustChangePassword())) {
+            throw new BusinessRuleException("User is not required to change password via first-login flow. Use change-password.");
+        }
+        PasswordPolicy.check(newPassword, user.getEmail());
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        user.setAccountStatus("ACTIVE");
+        user.setFirstLoginAt(LocalDateTime.now());
+        userRepository.save(user);
+        revokeEverySession(user);
+        auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
+                AuditAction.FIRST_LOGIN_COMPLETED, AuditAction.OUTCOME_SUCCESS, null);
+
+        return issueSession(user, UUID.randomUUID());
+    }
+
+    private void revokeEverySession(User user) {
+        int refreshTokens = refreshTokenRepository.revokeAllForUser(user.getId(), LocalDateTime.now());
+        tokenRevocation.revoke(user.getId());
+        auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
+                AuditAction.SESSIONS_REVOKED, AuditAction.OUTCOME_SUCCESS,
+                "{\"refreshTokens\":" + refreshTokens + "}");
+    }
+
+    // ------------------------------------------------------------------
+    // Current user
+    // ------------------------------------------------------------------
 
     /**
      * Describes the authenticated caller.
@@ -235,7 +357,7 @@ public class AuthService {
         return CurrentUserDTO.builder()
                 .id(user.getId())
                 .email(user.getEmail())
-                .roles(user.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet()))
+                .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
                 .primaryRole(primaryRole)
                 .collegeId(user.getCollegeId())
                 .collegeName(collegeName)
@@ -247,52 +369,16 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional
-    public void changePassword(Long userId, String oldPassword, String newPassword) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    // ------------------------------------------------------------------
+    // Issuing
+    // ------------------------------------------------------------------
 
-        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
-            auditLogService.record(AuditAction.PASSWORD_CHANGED, "User", userId,
-                    AuditAction.OUTCOME_FAILURE, "{\"reason\":\"BAD_OLD_PASSWORD\"}");
-            throw new UnauthorizedException("Invalid old password");
-        }
-
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
-        user.setMustChangePassword(false);
-        userRepository.save(user);
-        auditLogService.record(AuditAction.PASSWORD_CHANGED, "User", userId,
-                AuditAction.OUTCOME_SUCCESS);
-    }
-
-    @Transactional
-    public AuthResponse firstLogin(String email, String temporaryPassword, String newPassword) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (!passwordEncoder.matches(temporaryPassword, user.getPasswordHash())) {
-            auditLogService.recordAnonymous(AuditAction.FIRST_LOGIN_COMPLETED, email,
-                    AuditAction.OUTCOME_FAILURE, "{\"reason\":\"BAD_TEMPORARY_PASSWORD\"}");
-            throw new UnauthorizedException("Invalid temporary password");
-        }
-
-        if (!Boolean.TRUE.equals(user.getMustChangePassword())) {
-            throw new BusinessRuleException("User is not required to change password via first-login flow. Use change-password.");
-        }
-
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
-        user.setMustChangePassword(false);
-        user.setAccountStatus("ACTIVE");
-        user.setFirstLoginAt(java.time.LocalDateTime.now());
-        userRepository.save(user);
-        auditLogService.recordFor(user.getId(), user.getEmail(), user.getCollegeId(),
-                AuditAction.FIRST_LOGIN_COMPLETED, AuditAction.OUTCOME_SUCCESS, null);
-
+    /** A new access token plus a new refresh token in {@code familyId}. */
+    private AuthResponse issueSession(User user, UUID familyId) {
         String primaryRole = primaryRoleOf(user);
-
         String accessToken = jwtService.generateAccessToken(user, primaryRole, roleNamesOf(user),
                 Boolean.TRUE.equals(user.getMustChangePassword()));
-        String refreshToken = issueRefreshToken(user);
+        String refreshToken = issueRefreshToken(user, familyId);
 
         UserDto userDto = UserDto.builder()
                 .id(user.getId())
@@ -300,8 +386,8 @@ public class AuthService {
                 .role(primaryRole)
                 .collegeId(user.getCollegeId())
                 .isActive(user.getIsActive())
-                .mustChangePassword(false)
-                .accountStatus("ACTIVE")
+                .mustChangePassword(user.getMustChangePassword())
+                .accountStatus(user.getAccountStatus())
                 .profileCompleted(user.getProfileCompleted())
                 .build();
 
@@ -313,29 +399,16 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional
-    public void logout(String refreshToken) {
-        if (refreshToken == null || refreshToken.isBlank()) {
-            return;
-        }
-        String tokenHash = hashToken(refreshToken);
-        refreshTokenRepository.findByTokenHashAndRevokedFalse(tokenHash)
-                .ifPresent(token -> {
-                    token.setRevoked(true);
-                    refreshTokenRepository.save(token);
-                });
-    }
-
-    private String issueRefreshToken(User user) {
+    private String issueRefreshToken(User user, UUID familyId) {
         refreshTokenRepository.deleteByUserAndExpiresAtBefore(user, LocalDateTime.now());
         String rawToken = generateSecureToken();
-        RefreshToken refreshToken = RefreshToken.builder()
+        refreshTokenRepository.save(RefreshToken.builder()
                 .user(user)
                 .tokenHash(hashToken(rawToken))
+                .familyId(familyId)
                 .expiresAt(LocalDateTime.now().plusSeconds(refreshTokenTtlSeconds))
                 .revoked(false)
-                .build();
-        refreshTokenRepository.save(refreshToken);
+                .build());
         return rawToken;
     }
 
@@ -382,10 +455,9 @@ public class AuthService {
     }
 
     /** Every role name, for the token's {@code roles} claim. */
-    private static java.util.Set<String> roleNamesOf(User user) {
+    private static Set<String> roleNamesOf(User user) {
         return user.getRoles().stream()
                 .map(Role::getName)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                .collect(Collectors.toUnmodifiableSet());
     }
-
 }

@@ -349,12 +349,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     const attempt = (async () => {
+      const tokenBefore = localStorage.getItem(ACCESS_TOKEN_KEY)
       try {
         // No token argument: the browser sends the HttpOnly refresh cookie.
         const response = await authAPI.refreshToken()
         await handleAuthSuccess(response)
       } catch (error) {
-        // Refresh failed, logout user
+        // Tabs share one cookie jar and one localStorage. If another tab
+        // refreshed first, our cookie was already rotated and the server refused
+        // it (within its grace period, without ending the session), but that
+        // tab has stored a new access token. Use it rather than logging out.
+        const tokenNow = localStorage.getItem(ACCESS_TOKEN_KEY)
+        if (tokenNow && tokenNow !== tokenBefore) {
+          return
+        }
         clearAuthState()
         navigate('/login')
         throw error

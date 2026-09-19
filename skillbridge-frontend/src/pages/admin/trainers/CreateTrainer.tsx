@@ -13,6 +13,9 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+
+import { apiErrorMessage } from '@/lib/apiError'
+import { passwordSchema } from '@/lib/password'
 import { useMutation } from '@tanstack/react-query'
 import { AuthenticatedLayout } from '@/shared/components/layout'
 import { PageWrapper } from '@/shared/components/layout'
@@ -36,13 +39,7 @@ import { Link } from 'react-router-dom'
 // Form schema
 const createTrainerSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      'Password must contain uppercase, lowercase, number, and special character'
-    ),
+  password: passwordSchema,
   confirmPassword: z.string(),
   fullName: z.string().min(1, 'Full name is required').max(255, 'Name is too long'),
   phone: z.string().max(20, 'Phone number is too long').optional().or(z.literal('')),
@@ -85,7 +82,7 @@ export function CreateTrainer() {
       navigate('/admin/trainers')
     },
     onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to create trainer. Please try again.')
+      showError(apiErrorMessage(error, 'Failed to create trainer. Please try again.'))
     },
   })
 

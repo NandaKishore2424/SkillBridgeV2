@@ -17,6 +17,9 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+
+import { apiErrorMessage } from '@/lib/apiError'
+import { passwordSchema } from '@/lib/password'
 import * as authAPI from '@/api/auth'
 import { Button, Input, Label, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui'
 import { Header } from '@/shared/components/layout'
@@ -28,9 +31,9 @@ const firstLoginSchema = z
   .object({
     email: z.string().email('Please enter a valid email address'),
     temporaryPassword: z.string().min(1, 'Your temporary password is required'),
-    // Matches the backend: HS256-signed sessions are only as good as the
-    // password behind them, and these accounts were provisioned in bulk.
-    newPassword: z.string().min(8, 'Use at least 8 characters'),
+    // The same rule the server enforces (PasswordPolicy); the server also
+    // refuses email-based and common passwords, shown via apiErrorMessage.
+    newPassword: passwordSchema,
     confirmPassword: z.string().min(1, 'Please confirm your new password'),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
@@ -82,10 +85,8 @@ export function FirstLogin() {
         state: { message: 'Password updated. Please sign in with your new password.' },
       })
     } catch (err: any) {
-      setError(
-        err?.response?.data?.message ??
-          'Could not update your password. Check your temporary password and try again.'
-      )
+      setError(apiErrorMessage(err,
+        'Could not update your password. Check your temporary password and try again.'))
     } finally {
       setSubmitting(false)
     }

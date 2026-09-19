@@ -17,6 +17,7 @@ import com.skillbridge.trainer.repository.TrainerSpecifications;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import com.skillbridge.auth.security.PasswordPolicy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +58,7 @@ public class TrainerService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new ConflictException("User with this email already exists");
         }
+        PasswordPolicy.check(request.getPassword(), request.getEmail());
 
         // Get TRAINER role
         Role trainerRole = roleRepository.findByName("TRAINER")

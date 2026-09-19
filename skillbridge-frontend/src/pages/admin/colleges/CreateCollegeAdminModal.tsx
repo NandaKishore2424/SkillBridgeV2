@@ -8,6 +8,9 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+
+import { apiErrorMessage } from '@/lib/apiError'
+import { passwordSchema } from '@/lib/password'
 import { useMutation } from '@tanstack/react-query'
 import {
   Dialog,
@@ -26,13 +29,7 @@ import { Loader2 } from 'lucide-react'
 
 const createAdminSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      'Password must contain uppercase, lowercase, number, and special character'
-    ),
+  password: passwordSchema,
   confirmPassword: z.string(),
   fullName: z.string().min(1, 'Full name is required'),
   phone: z.string().max(20, 'Phone number is too long').optional().or(z.literal('')),
@@ -83,7 +80,7 @@ export function CreateCollegeAdminModal({
       onSuccess()
     },
     onError: (error: any) => {
-      showError('Failed to create admin.', error?.response?.data?.message || error.message)
+      showError('Failed to create admin.', apiErrorMessage(error, error.message))
     },
   })
 
