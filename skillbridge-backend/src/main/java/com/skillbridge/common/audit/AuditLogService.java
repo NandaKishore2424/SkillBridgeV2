@@ -14,8 +14,10 @@ import java.util.Optional;
 /**
  * Writes the audit trail.
  *
- * <p>Two properties matter more than anything else here, and both come from
- * {@code REQUIRES_NEW}:
+ * <p>Two properties matter more than anything else here. The first comes from
+ * {@link AuditLogWriter} committing each row on a connection of its own (it
+ * used to be {@code REQUIRES_NEW}, which starved the pool); the second from the
+ * try/catch in {@link #write}:
  *
  * <ul>
  *   <li><b>An audit row survives a rolled-back business transaction.</b> The
@@ -106,10 +108,9 @@ public class AuditLogService {
      * Enriches the entry from the current request and hands it to
      * {@link AuditLogWriter}.
      *
-     * <p>The try/catch sits <em>outside</em> the transactional boundary on
-     * purpose. Catching inside a transactional method does not undo the
-     * rollback-only mark a failed save leaves behind, so the commit would throw
-     * at the boundary anyway and the exception would escape after all.
+     * <p>The writer uses its own autocommit connection, so a failed insert
+     * cannot mark the caller's transaction rollback-only; catching it here is
+     * enough to keep it from failing the request.
      */
     private void write(AuditLog entry) {
         try {
