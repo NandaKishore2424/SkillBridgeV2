@@ -18,24 +18,17 @@
 
 spring:
   datasource:
-    # Supabase project ooqxedojvxetpwjldxab.
-    #   Direct connection:   db.<project-ref>.supabase.co        port 5432, username `postgres`
-    #   Session pooler:      aws-0-<region>.pooler.supabase.com  port 5432, username `postgres.<project-ref>`
-    # Take the exact host, port and username from
-    # Supabase dashboard -> Project Settings -> Database -> Connection string.
-    #
-    # Use a session pooler or a direct connection, NOT the transaction pooler
-    # (port 6543): it does not hold a session across statements, which breaks
-    # long-lived connections and any schema work you run through this app.
-    url: jdbc:postgresql://YOUR_SUPABASE_HOST:5432/postgres
-    username: YOUR_SUPABASE_DB_USER
-    password: YOUR_SUPABASE_DB_PASSWORD
+    # The local PostgreSQL from docker-compose.yml (`docker compose up -d`).
+    # Port 5433, not 5432. The password is SKILLBRIDGE_DB_PASSWORD from the
+    # root .env, which is what the container was initialised with.
+    url: jdbc:postgresql://localhost:5433/skillbridge
+    username: skillbridge
+    password: YOUR_SKILLBRIDGE_DB_PASSWORD
 
   rabbitmq:
-    # CloudAMQP, from the instance page. Form: amqps://user:pass@host/vhost
-    #
-    # ROTATE THIS FIRST. The old URL is in public git history at commit 2545669.
-    addresses: YOUR_AMQP_URL
+    # The local RabbitMQ from docker-compose.yml. guest/guest is accepted only
+    # from localhost, which is the only place this file is used.
+    addresses: amqp://guest:guest@localhost:5672/
 
 jwt:
   # Generate a fresh one, do not reuse any value found in the repo or its history:

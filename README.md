@@ -11,8 +11,8 @@ A multi-tenant training management platform for colleges with an AI-powered skil
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, Shadcn UI |
 | Backend | Java 17, Spring Boot 3.5.8, Spring Security, JPA |
 | AI Service | Python 3.12, FastAPI, LangChain, MiniLM, pgvector |
-| Database | PostgreSQL on Supabase |
-| Message Broker | RabbitMQ via CloudAMQP |
+| Database | PostgreSQL 17 with pgvector, in Docker (`docker compose up -d`, port 5433) |
+| Message Broker | RabbitMQ 4, in Docker (same compose file) |
 
 ---
 
@@ -34,15 +34,16 @@ npm run dev
 
 ### Terminal 2 — Spring Boot Backend
 
-Make sure `skillbridge-backend/src/main/resources/application-local.yaml` exists with your Supabase credentials:
+Start PostgreSQL (port 5433) and RabbitMQ first, from the repository root. The
+database password comes from `SKILLBRIDGE_DB_PASSWORD` in the root `.env`:
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://YOUR_SUPABASE_HOST:5432/postgres
-    username: postgres.YOUR_PROJECT_REF
-    password: YOUR_PASSWORD
+```bash
+docker compose up -d
 ```
+
+Copy `skillbridge-backend/src/main/resources/application-local.yaml.example` to
+`application-local.yaml` and fill in its placeholders. Flyway builds the schema
+on first start.
 
 Then run:
 
@@ -80,8 +81,7 @@ python -m uvicorn main:app --reload --port 8000
 
 ## Test Credentials
 
-| Role | Email | Password |
-|---|---|---|
+None are kept in this repository. Log in with accounts from your own database.
 
 ---
 
@@ -95,7 +95,7 @@ curl -X POST http://localhost:8000/api/analyze-skills \
   -d '{"student_id": 1, "skills": ["Python", "SQL", "Pandas", "Tableau"]}'
 ```
 
-Expected response: A JSON object containing the top 5 matching job roles from our Supabase vector database, with a similarity score and a list of missing skills for each job.
+Expected response: A JSON object containing the top 5 matching job roles from the pgvector job corpus, with a similarity score and a list of missing skills for each job.
 
 ---
 
@@ -111,7 +111,7 @@ pip install langchain langchain-community sentence-transformers pandas psycopg2-
 python ingest.py
 ```
 
-> This reads `data/archive/DataAnalyst.csv`, generates 384-dimensional vectors using `all-MiniLM-L6-v2`, and pushes 1,500 job descriptions to Supabase. Run this once only.
+> This reads `data/archive/DataAnalyst.csv`, generates 384-dimensional vectors using `all-MiniLM-L6-v2`, and pushed 1,500 job descriptions to the database. It was run once; the source CSV is no longer available, and the embeddings now live only in the database and its backup.
 
 ---
 
@@ -122,12 +122,12 @@ React Frontend (5173)
         │ REST API
         ▼
 Spring Boot Backend (8080)
-        │ RabbitMQ (CloudAMQP)
+        │ RabbitMQ
         ▼
 Python AI Service (8000)
         │ pgvector cosine similarity search
         ▼
-Supabase PostgreSQL
+PostgreSQL + pgvector
   ├── App Tables (colleges, students, batches...)
   └── industry_job_descriptions (1500 rows + embeddings)
 ```
