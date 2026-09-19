@@ -133,8 +133,9 @@ def analyze_skill_gap(student_id: int, student_skills: list[str]) -> SkillGapRep
     vector_str = "[" + ",".join(str(v) for v in query_vector) + "]"
 
     # ─── Step 3: Vector similarity search in Supabase ─────────────────────────
-    # We call the PostgreSQL function we created in V16 migration.
-    # The <-> operator computes cosine distance. We convert to similarity (1 - distance).
+    # search_similar_jobs (Flyway V4) ranks by pgvector's <=> (cosine distance)
+    # and returns 1 - distance, i.e. cosine similarity. The vector goes in as a
+    # literal, which lets PostgreSQL inline the function and use idx_job_embedding.
     conn = get_connection()
     try:
         cursor = conn.cursor()
