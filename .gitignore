@@ -57,3 +57,6 @@ set-db-password.sh
 
 # Plaintext temporary passwords awaiting distribution. Delete once sent.
 credentials-to-distribute.txt
+
+# Personal interview study notes, generated from this codebase. Not part of the project.
+study-materials/
