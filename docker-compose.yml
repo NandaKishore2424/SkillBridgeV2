@@ -1,0 +1,51 @@
+# Local development infrastructure for SkillBridge.
+#
+#   docker compose up -d        # start
+#   docker compose down         # stop (data is kept in the named volume)
+#
+# PostgreSQL is on 5433, not 5432: 5432 is taken by another project on the
+# development machine. The password comes from SKILLBRIDGE_DB_PASSWORD in the
+# gitignored root .env, which compose reads automatically.
+#
+# The database starts empty. scripts/db/restore-local.sh loads the 2026-09-19
+# backup of the retired Supabase project into it; Flyway then takes over.
+name: skillbridge
+
+services:
+  postgres:
+    # Same major version and extensions (vector, pg_trgm) as the old Supabase
+    # database and the Testcontainers image the integration tests use.
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: skillbridge
+      POSTGRES_USER: skillbridge
+      POSTGRES_PASSWORD: ${SKILLBRIDGE_DB_PASSWORD:?set SKILLBRIDGE_DB_PASSWORD in the root .env}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillbridge -d skillbridge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  rabbitmq:
+    # Matches the image the broker tests run against (RabbitMQContainer).
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  rabbitdata:

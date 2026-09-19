@@ -32,8 +32,10 @@ AMQP_URL: str = _require_env("AMQP_URL")
 # Queue and exchange names live in ai_event_contract.py, checked against
 # contracts/amqp/topology.json. The backend declares them; this service only connects.
 
-# ─── Supabase / PostgreSQL ──────────────────────────────────────────────────────
-SUPABASE_DB_URL: str = _require_env("SUPABASE_DB_URL")
+# ─── PostgreSQL ─────────────────────────────────────────────────────────────────
+# libpq form (postgresql://user:pass@host:port/db). Not DATABASE_URL: the backend
+# reads that name as a jdbc: URL, and both services can share one .env.
+AI_DATABASE_URL: str = _require_env("AI_DATABASE_URL")
 
 # ─── AI Model ──────────────────────────────────────────────────────────────────
 EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"

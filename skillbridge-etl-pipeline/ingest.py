@@ -17,10 +17,10 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 
 # ─── 1. Load Environment Variables ─────────────────────────────────────────────
 load_dotenv()
-DB_URL = os.getenv("SUPABASE_DB_URL")
+DB_URL = os.getenv("AI_DATABASE_URL")
 
 if not DB_URL:
-    raise ValueError("SUPABASE_DB_URL not found in .env file! Create a .env file with your connection string.")
+    raise ValueError("AI_DATABASE_URL not found in .env file! Create a .env file with your connection string.")
 
 # ─── 2. Load the HuggingFace Embedding Model ───────────────────────────────────
 print("Loading MiniLM embedding model (downloading ~90MB the first time)...")

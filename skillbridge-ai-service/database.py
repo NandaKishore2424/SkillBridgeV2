@@ -15,7 +15,7 @@ Senior Engineering Note:
 
 import psycopg2
 from psycopg2 import pool
-from config import SUPABASE_DB_URL
+from config import AI_DATABASE_URL
 
 # Min 2 connections ready at all times; max 2 under load.
 #
@@ -43,7 +43,7 @@ def initialize_pool() -> None:
     _connection_pool = psycopg2.pool.ThreadedConnectionPool(
         minconn=2,
         maxconn=2,
-        dsn=SUPABASE_DB_URL
+        dsn=AI_DATABASE_URL
     )
     print("[DB] ✓ Connection pool ready (2 connections; the shared Supavisor ceiling is 15)")
 
