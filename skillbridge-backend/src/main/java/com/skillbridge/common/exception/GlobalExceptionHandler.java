@@ -7,6 +7,8 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
@@ -43,6 +45,9 @@ import java.util.UUID;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    @Value("${spring.servlet.multipart.max-file-size:1MB}")
+    private String maxFileSize;
 
     // ------------------------------------------------------------------
     // Deliberate application failures
@@ -104,6 +109,17 @@ public class GlobalExceptionHandler {
         log.debug("Validation failed at {}: {}", request.getRequestURI(), fieldErrors);
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR",
                 "Request validation failed", request, fieldErrors);
+    }
+
+    /**
+     * Over {@code spring.servlet.multipart.max-file-size}. Until 2026-09-19 this
+     * fell through to the catch-all and answered 500 (measured at 1.1 MB).
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleTooLarge(MaxUploadSizeExceededException ex,
+                                                        HttpServletRequest request) {
+        return build(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE",
+                "The file is larger than " + maxFileSize + ". Split it and upload each part.", request, null);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)

@@ -1,5 +1,6 @@
 package com.skillbridge.trainer.service;
 
+import com.skillbridge.auth.security.EmailAddress;
 import com.skillbridge.auth.entity.Role;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.RoleRepository;
@@ -55,7 +56,7 @@ public class TrainerService {
                 .orElseThrow(() -> new ResourceNotFoundException("College not found"));
 
         // Check if user with email already exists
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(EmailAddress.normalise(request.getEmail()))) {
             throw new ConflictException("User with this email already exists");
         }
         PasswordPolicy.check(request.getPassword(), request.getEmail());

@@ -66,4 +66,12 @@ public class BulkUpload {
 
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
+
+    /** SHA-256 of the uploaded bytes, hex. Unique per college and entity type unless FAILED (V5). */
+    @Column(name = "file_sha256", length = 64)
+    private String fileSha256;
+
+    /** The importer's heartbeat; see {@code StaleUploadSweeper}. */
+    @Column(name = "last_progress_at")
+    private LocalDateTime lastProgressAt;
 }

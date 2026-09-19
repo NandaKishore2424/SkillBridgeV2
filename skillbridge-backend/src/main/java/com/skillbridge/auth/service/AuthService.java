@@ -1,5 +1,6 @@
 package com.skillbridge.auth.service;
 
+import com.skillbridge.auth.security.EmailAddress;
 import com.skillbridge.auth.dto.AuthResponse;
 import com.skillbridge.auth.dto.CurrentUserDTO;
 import com.skillbridge.auth.dto.LoginRequest;
@@ -145,7 +146,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+        User user = userRepository.findByEmail(EmailAddress.normalise(request.getEmail())).orElse(null);
 
         if (user == null) {
             // Same work as a wrong password, so timing does not reveal which emails exist.
@@ -296,7 +297,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponse firstLogin(String email, String temporaryPassword, String newPassword) {
-        User user = userRepository.findByEmail(email).orElse(null);
+        User user = userRepository.findByEmail(EmailAddress.normalise(email)).orElse(null);
         // An unknown email and a wrong temporary password must look the same:
         // this endpoint is public, and a 404 here enumerated accounts.
         boolean matches = passwordEncoder.matches(temporaryPassword,

@@ -94,5 +94,12 @@ public class User {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+        normaliseEmail();
+    }
+
+    /** Stored lower case, whoever builds the entity; see {@code EmailAddress} and V6. */
+    @PrePersist
+    protected void normaliseEmail() {
+        email = com.skillbridge.auth.security.EmailAddress.normalise(email);
     }
 }

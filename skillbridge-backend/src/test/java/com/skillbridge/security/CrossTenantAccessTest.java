@@ -115,7 +115,7 @@ class CrossTenantAccessTest {
     /** Every id a request might need, for one college. */
     record Tenant(Long collegeId, Long batchId, Long studentId, Long studentUserId, Long trainerId,
                   Long trainerUserId, Long adminUserId, Long companyId, Long moduleId, Long submoduleId,
-                  Long topicId, Long requestId, Long projectId) {
+                  Long topicId, Long requestId, Long projectId, Long uploadId) {
     }
 
     /** One endpoint, as the route table describes it. */
@@ -349,6 +349,7 @@ class CrossTenantAccessTest {
             case "id" -> {
                 if (pattern.endsWith("/students/{id}/resend-invitation")) yield t.studentUserId();
                 if (pattern.endsWith("/trainers/{id}/resend-invitation")) yield t.trainerUserId();
+                if (pattern.startsWith("/api/v1/admin/bulk-uploads/")) yield t.uploadId();
                 if (pattern.startsWith("/api/v1/admin/batches/")) yield t.batchId();
                 if (pattern.startsWith("/api/v1/admin/students/") || pattern.startsWith("/api/v1/students/")) yield t.studentId();
                 if (pattern.startsWith("/api/v1/admin/trainers/") || pattern.startsWith("/api/v1/trainers/")) yield t.trainerId();
@@ -383,6 +384,11 @@ class CrossTenantAccessTest {
                 """, f.studentUserIds.get(0), f.trainerUserId);
         jdbc.update("UPDATE users SET account_status = 'PENDING_SETUP' WHERE id IN (?, ?)",
                 f.studentUserIds.get(0), f.trainerUserId);
+        Long uploadId = jdbc.queryForObject("""
+                INSERT INTO bulk_uploads (college_id, uploaded_by_user_id, entity_type, file_name, total_rows,
+                                          successful_rows, failed_rows, status)
+                VALUES (?, ?, 'STUDENT', 'fixture.csv', 0, 0, 0, 'COMPLETED') RETURNING id
+                """, Long.class, f.collegeId, f.adminUserId);
         Long moduleId = jdbc.queryForObject(
                 "SELECT min(id) FROM syllabus_modules WHERE batch_id = ?", Long.class, batchId);
         Long submoduleId = jdbc.queryForObject(
@@ -392,7 +398,8 @@ class CrossTenantAccessTest {
         Long companyId = jdbc.queryForObject(
                 "SELECT min(id) FROM companies WHERE college_id = ?", Long.class, f.collegeId);
         return new Tenant(f.collegeId, batchId, studentId, f.studentUserIds.get(0), f.trainerId,
-                f.trainerUserId, f.adminUserId, companyId, moduleId, submoduleId, topicId, requestId, projectId);
+                f.trainerUserId, f.adminUserId, companyId, moduleId, submoduleId, topicId, requestId, projectId,
+                uploadId);
     }
 
     private void removeExtras(Long collegeId) {
@@ -402,6 +409,8 @@ class CrossTenantAccessTest {
         jdbc.update("DELETE FROM student_projects WHERE student_id IN (SELECT id FROM students WHERE college_id = ?)", collegeId);
         jdbc.update("DELETE FROM student_skills WHERE student_id IN (SELECT id FROM students WHERE college_id = ?)", collegeId);
         jdbc.update("DELETE FROM enrollment_requests WHERE college_id = ?", collegeId);
+        // Before the users: uploaded_by_user_id is NOT NULL but ON DELETE SET NULL.
+        jdbc.update("DELETE FROM bulk_uploads WHERE college_id = ?", collegeId);
     }
 
     private String token(Long userId, String role) {

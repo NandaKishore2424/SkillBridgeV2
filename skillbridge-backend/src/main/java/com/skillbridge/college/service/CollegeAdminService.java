@@ -1,5 +1,6 @@
 package com.skillbridge.college.service;
 
+import com.skillbridge.auth.security.EmailAddress;
 import com.skillbridge.auth.entity.Role;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.RoleRepository;
@@ -41,7 +42,7 @@ public class CollegeAdminService {
             .orElseThrow(() -> new ResourceNotFoundException("College not found with id: " + collegeId));
 
         // Check if email already exists
-        if (userRepository.existsByEmail(request.email)) {
+        if (userRepository.existsByEmail(EmailAddress.normalise(request.email))) {
             throw new ConflictException("User with email already exists: " + request.email);
         }
         PasswordPolicy.check(request.password, request.email);

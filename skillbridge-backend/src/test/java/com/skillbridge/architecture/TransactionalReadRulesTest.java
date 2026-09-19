@@ -53,16 +53,14 @@ class TransactionalReadRulesTest {
      * a reason that has been checked. Anything added here needs one written down.
      */
     private static final Set<String> ALLOWED = Set.of(
-            // Kicks off an @Async job and returns. Holding a transaction across
-            // the handoff would keep a connection for work on another thread.
-            "com.skillbridge.bulkupload.service.BulkUploadService.startStudentUpload",
-            "com.skillbridge.bulkupload.service.BulkUploadService.startTrainerUpload",
-            // The async job itself. It holds no transaction at all: each
-            // repository call commits on its own, so a row that fails halfway
-            // keeps what it already wrote (an orphan user, measured 2026-09-17).
-            // Phase 2 rebuilds the import with one transaction per row.
-            "com.skillbridge.bulkupload.service.BulkUploadJobService.processStudentUploadAsync",
-            "com.skillbridge.bulkupload.service.BulkUploadJobService.processTrainerUploadAsync",
+            // Records the upload and hands it to an @Async job. The upload row must
+            // be committed before the job's thread looks for it, so this cannot be
+            // one transaction.
+            "com.skillbridge.bulkupload.service.BulkUploadService.start",
+            // The async import. Every write goes through RowImporter, one
+            // REQUIRES_NEW transaction per row, and each invitation is mailed after
+            // its row commits; an enclosing transaction would undo both.
+            "com.skillbridge.bulkupload.importer.BulkUploadJob.run",
             // Commits the new temporary password (InvitationIssuer, transactional)
             // and only then sends it. Inside one transaction the mail could carry a
             // password a rollback discards, and SMTP would hold the connection.

@@ -28,7 +28,11 @@ public class BulkUploadResult {
     private Integer rowNumber;
 
     @Column(name = "status", nullable = false, length = 20)
-    private String status; // SUCCESS, FAILED, SKIPPED
+    /**
+     * SUCCESS; EMAIL_FAILED (the account exists but its invitation was not
+     * sent, so the admin resends it); FAILED (nothing was written for the row).
+     */
+    private String status;
 
     @Column(name = "entity_id")
     private Long entityId; // student_id or trainer_id if created

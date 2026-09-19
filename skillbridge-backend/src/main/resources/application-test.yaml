@@ -119,6 +119,11 @@ messaging:
     enabled: false
 
 app:
+  # Off for the reason the outbox relay is: its background UPDATE lands in the
+  # statement count of whichever test is measuring. CsvImportTest sweeps by hand.
+  import:
+    sweeper:
+      enabled: false
   mail:
     # Tests activate `local` too, and a developer's application-local.yaml may
     # point mail at a real SMTP server. Nothing is sent from a test unless the

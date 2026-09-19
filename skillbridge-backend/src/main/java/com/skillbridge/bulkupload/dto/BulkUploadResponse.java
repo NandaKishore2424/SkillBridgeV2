@@ -1,32 +1,15 @@
 package com.skillbridge.bulkupload.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import java.util.List;
-import java.util.Map;
-
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class BulkUploadResponse {
-    private Long uploadId;
-    private Integer totalRows;
-    private Integer successfulRows;
-    private Integer failedRows;
-    private List<UploadError> errors;
-    private String status;
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class UploadError {
-        private Integer rowNumber;
-        private String errorMessage;
-        private Map<String, String> rowData;
-    }
+/**
+ * The answer to an upload: accepted, and queued or already known.
+ *
+ * <p>No row errors here. The import runs after this response is sent, so the
+ * list this DTO used to carry was always empty; they are at
+ * {@code GET /admin/bulk-uploads/{id}/rows}.
+ *
+ * @param rows            data rows in the file
+ * @param alreadyUploaded this exact file was uploaded before and was not
+ *                        imported again; {@code uploadId} is that upload
+ */
+public record BulkUploadResponse(Long uploadId, String status, int rows, boolean alreadyUploaded) {
 }

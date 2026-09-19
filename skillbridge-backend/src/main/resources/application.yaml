@@ -23,6 +23,13 @@ spring:
   application:
     name: skillbridge-backend
 
+  # CSV import is the only upload. 1 MB is about 10,000 student rows, well past
+  # app.import.max-rows, and the importer holds the file in memory for its run.
+  servlet:
+    multipart:
+      max-file-size: 1MB
+      max-request-size: 2MB
+
   # Active profile. Override with SPRING_PROFILES_ACTIVE.
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
@@ -298,6 +305,13 @@ app:
     invitation-ttl: ${INVITATION_TTL:7d}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+  import:
+    # Rows per CSV file. Each row is a bcrypt hash and three inserts, so this
+    # bounds how long one upload occupies an import thread.
+    max-rows: ${IMPORT_MAX_ROWS:2000}
+    # An upload whose importer has not reported progress for this long is
+    # declared dead (StaleUploadSweeper).
+    stale-after: 10m
   mail:
     # LOG sends nothing and records only recipient and subject, so the app starts
     # anywhere. SMTP needs spring.mail.host (SPRING_MAIL_HOST, SPRING_MAIL_PORT):
