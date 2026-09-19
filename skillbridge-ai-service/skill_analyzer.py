@@ -5,7 +5,7 @@ Senior Engineering Note:
   This is the heart of the RAG (Retrieval-Augmented Generation) system.
   The pattern is:
     1. RETRIEVE — Use the student's skill vector to find mathematically similar
-                  job descriptions from Supabase using pgvector cosine similarity.
+                  job descriptions from PostgreSQL using pgvector cosine similarity.
     2. ANALYZE  — Extract the required skills text from those top matches and
                   compare against what the student already has.
     3. RETURN   — A structured gap analysis report.
@@ -96,7 +96,7 @@ def _format_student_skills_as_text(skills: list[str]) -> str:
 def analyze_skill_gap(student_id: int, student_skills: list[str]) -> SkillGapReport:
     """
     Core RAG function: Given a student's skills, find the top matching jobs
-    in Supabase and calculate the skill gaps.
+    in PostgreSQL and calculate the skill gaps.
 
     Args:
         student_id: The student's database ID (for logging/tracking)
@@ -132,7 +132,7 @@ def analyze_skill_gap(student_id: int, student_skills: list[str]) -> SkillGapRep
     query_vector = embed_text(skill_text)
     vector_str = "[" + ",".join(str(v) for v in query_vector) + "]"
 
-    # ─── Step 3: Vector similarity search in Supabase ─────────────────────────
+    # ─── Step 3: Vector similarity search in PostgreSQL ───────────────────────
     # search_similar_jobs (Flyway V4) ranks by pgvector's <=> (cosine distance)
     # and returns 1 - distance, i.e. cosine similarity. The vector goes in as a
     # literal, which lets PostgreSQL inline the function and use idx_job_embedding.
@@ -145,7 +145,7 @@ def analyze_skill_gap(student_id: int, student_skills: list[str]) -> SkillGapRep
         )
         rows = cursor.fetchall()
         cursor.close()
-        print(f"[ANALYZER] Supabase returned {len(rows)} matching jobs above threshold {SIMILARITY_THRESHOLD}")
+        print(f"[ANALYZER] Database returned {len(rows)} matching jobs above threshold {SIMILARITY_THRESHOLD}")
     except Exception as e:
         print(f"[ANALYZER] ✗ DB query failed: {e}")
         return SkillGapReport(
