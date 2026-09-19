@@ -41,6 +41,9 @@ database password comes from `SKILLBRIDGE_DB_PASSWORD` in the root `.env`:
 docker compose up -d
 ```
 
+This also starts Mailpit, which catches every email the app sends (invitations
+from CSV import): read them at http://localhost:8026.
+
 Copy `skillbridge-backend/src/main/resources/application-local.yaml.example` to
 `application-local.yaml` and fill in its placeholders. Flyway builds the schema
 on first start.
