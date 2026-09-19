@@ -7,7 +7,8 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.SQLRestriction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
 
@@ -19,7 +20,8 @@ import java.util.List;
 @Table(name = "students")
 @SQLRestriction("deleted_at IS NULL")
 @Filter(name = "collegeFilter", condition = "college_id = :collegeId")
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

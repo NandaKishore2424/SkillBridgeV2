@@ -4,7 +4,8 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.BatchSize;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
@@ -17,7 +18,8 @@ import java.util.Set;
         @Index(name = "idx_users_college_id", columnList = "college_id"),
         @Index(name = "idx_users_is_active", columnList = "is_active")
 })
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

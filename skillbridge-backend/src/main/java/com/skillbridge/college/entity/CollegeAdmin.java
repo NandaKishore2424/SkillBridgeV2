@@ -4,7 +4,8 @@ import com.skillbridge.auth.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Filter;
 
@@ -13,7 +14,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "college_admins")
 @Filter(name = "collegeFilter", condition = "college_id = :collegeId")
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

@@ -3,7 +3,8 @@ package com.skillbridge.auth.entity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -17,7 +18,8 @@ import java.util.UUID;
         @Index(name = "idx_refresh_tokens_expires_at", columnList = "expires_at"),
         @Index(name = "idx_refresh_tokens_revoked", columnList = "revoked")
 })
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
