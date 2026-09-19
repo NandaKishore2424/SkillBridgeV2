@@ -27,7 +27,6 @@ import com.skillbridge.auth.security.SecurityUtils;
 @RequestMapping("/api/v1/admin/dashboard")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class DashboardController {
 
     private final BatchRepository batchRepository;

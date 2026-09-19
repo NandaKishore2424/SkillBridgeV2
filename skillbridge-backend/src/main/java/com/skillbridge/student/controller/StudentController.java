@@ -26,7 +26,6 @@ import com.skillbridge.common.dto.Pagination;
 @RequestMapping("/api/v1/students")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class StudentController {
     private final StudentService studentService;
 

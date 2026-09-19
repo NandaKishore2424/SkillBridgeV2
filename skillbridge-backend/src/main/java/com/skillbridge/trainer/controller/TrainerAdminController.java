@@ -28,7 +28,6 @@ import com.skillbridge.auth.security.SecurityUtils;
 @RequestMapping("/api/v1/admin/trainers")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class TrainerAdminController {
     private final TrainerService trainerService;
 

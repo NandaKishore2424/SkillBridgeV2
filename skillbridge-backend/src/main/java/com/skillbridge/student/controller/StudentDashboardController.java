@@ -34,7 +34,6 @@ import org.springframework.http.HttpStatus;
 @RequestMapping("/api/v1/student")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class StudentDashboardController {
 
     private final StudentDashboardService dashboardService;

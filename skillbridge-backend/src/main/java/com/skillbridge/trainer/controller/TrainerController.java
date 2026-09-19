@@ -18,7 +18,6 @@ import com.skillbridge.common.api.DeprecatedEndpoint;
 @RequestMapping("/api/v1/trainers")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class TrainerController {
     private final TrainerService trainerService;
 

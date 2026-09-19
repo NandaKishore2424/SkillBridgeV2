@@ -27,7 +27,6 @@ import com.skillbridge.auth.security.SecurityUtils;
 @RequestMapping("/api/v1/admin/students")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class StudentAdminController {
     private final StudentService studentService;
     private final SoftDeleteService softDeleteService;

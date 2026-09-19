@@ -5,6 +5,7 @@ import com.skillbridge.auth.filter.TokenAuthenticationFilter;
 import com.skillbridge.auth.security.JsonSecurityErrorHandler;
 import com.skillbridge.common.observability.UserContextLogFilter;
 import com.skillbridge.common.throttle.RateLimitingFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -19,7 +20,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -48,7 +48,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   CorsConfigurationSource corsConfigurationSource) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             // Spring Security already sends X-Content-Type-Options, X-Frame-Options
@@ -74,7 +75,11 @@ public class SecurityConfig {
                 .addHeaderWriter(new StaticHeadersWriter("Permissions-Policy",
                         "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
                         + "magnetometer=(), microphone=(), payment=(), usb=()")))
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            // The only CORS policy in the application. This filter answers every
+            // preflight and rejects a disallowed origin before any controller is
+            // reached, so a controller-level @CrossOrigin could only mislead the
+            // reader. CorsPolicyTest fails the build if one appears.
+            .cors(cors -> cors.configurationSource(corsConfigurationSource))
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
@@ -119,28 +124,43 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * CORS from {@code app.cors.allowed-origins} ({@code CORS_ALLOWED_ORIGINS}),
+     * a comma-separated list of exact origins.
+     */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
+        return corsConfigurationSourceFor(allowedOrigins);
+    }
+
+    /**
+     * Fails at startup on a list that would fail every request. With
+     * credentials allowed -- the refresh token is a cookie -- the CORS spec
+     * forbids a wildcard origin, and Spring enforces that only when the first
+     * cross-origin request arrives, as a 500.
+     */
+    static CorsConfigurationSource corsConfigurationSourceFor(List<String> allowedOrigins) {
+        List<String> origins = allowedOrigins.stream().map(String::trim).filter(o -> !o.isEmpty()).toList();
+        if (origins.isEmpty()) {
+            throw new IllegalStateException("app.cors.allowed-origins is empty; the frontend could not call the API");
+        }
+        if (origins.stream().anyMatch(o -> o.contains("*"))) {
+            throw new IllegalStateException("app.cors.allowed-origins must list exact origins, not a wildcard: "
+                    + "credentials are allowed, and a wildcard with credentials is refused by every browser");
+        }
+
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // Allow frontend origin
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:3000"));
-        
-        // Allow all HTTP methods
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        
-        // Allow all headers
+        configuration.setAllowedOrigins(origins);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
-        
-        // Allow credentials (cookies, authorization headers)
+        // The refresh token travels as an HttpOnly cookie.
         configuration.setAllowCredentials(true);
-        
-        // Cache preflight response for 1 hour
+        // Browsers cap this lower (Chromium at 2 hours); an hour is well inside.
         configuration.setMaxAge(3600L);
-        
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-        
         return source;
     }
 }

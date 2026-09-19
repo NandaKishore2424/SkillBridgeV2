@@ -32,7 +32,6 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/trainer")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
 public class TrainerEnrollmentController {
 
     private final EnrollmentManagementService enrollmentService;

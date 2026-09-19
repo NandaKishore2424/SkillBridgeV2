@@ -31,7 +31,6 @@ import java.util.Optional;
 @RequestMapping("/api/v1/admin/colleges")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 public class CollegeController {
 
     private final CollegeRepository collegeRepository;

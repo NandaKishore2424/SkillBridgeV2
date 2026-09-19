@@ -29,7 +29,6 @@ import java.util.List;
 @RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
 public class AdminEnrollmentController {
 
     private final EnrollmentManagementService enrollmentService;

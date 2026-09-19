@@ -22,7 +22,6 @@ import java.util.List;
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
 public class SyllabusController {
 
     private final SyllabusService syllabusService;

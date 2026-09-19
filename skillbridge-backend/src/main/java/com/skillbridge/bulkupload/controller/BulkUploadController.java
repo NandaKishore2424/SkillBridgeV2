@@ -28,7 +28,6 @@ import com.skillbridge.common.exception.BadRequestException;
 @RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class BulkUploadController {
 
     private final BulkUploadService bulkUploadService;

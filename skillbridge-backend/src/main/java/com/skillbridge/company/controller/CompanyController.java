@@ -39,7 +39,6 @@ import com.skillbridge.auth.security.SecurityUtils;
 @RequestMapping("/api/v1/admin/companies")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = { "http://localhost:5173", "http://localhost:3000" })
 public class CompanyController {
 
     private final CompanyRepository companyRepository;
