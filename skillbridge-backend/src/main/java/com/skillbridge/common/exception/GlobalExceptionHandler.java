@@ -147,23 +147,26 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * {@code IllegalArgumentException} is what a lot of pre-existing code throws
-     * for bad input, and Spring itself throws it from {@code Enum.valueOf}. It is
-     * kept as a 400 for compatibility, but new code should throw
-     * {@link BadRequestException} so the error code is meaningful.
+     * {@code IllegalArgumentException} and {@code IllegalStateException} are
+     * <b>not</b> ways to say "bad request" or "conflict" here.
+     *
+     * <p>They used to be answered 400 and 409 with {@code ex.getMessage()}
+     * echoed to the client, which is two problems. A library's message is
+     * written for a developer and can name internals -- a column, a class, a
+     * parsed value -- to whoever sent the request. And a genuine bug
+     * (an invariant broken deep in the code, a {@code List.of} with a null)
+     * answered 400, which reads as the caller's fault and hides the fault from
+     * whoever is watching for 500s.
+     *
+     * <p>Every path a caller can actually reach converts its own input problems
+     * first: {@code BadRequestException} from {@code SortParameter} and the
+     * enrollment request type, bean validation on the request bodies (checked
+     * 2026-09-20). So anything arriving here is ours, and is treated exactly
+     * like an unhandled exception.
      */
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex,
-                                                                HttpServletRequest request) {
-        log.debug("Illegal argument at {}: {}", request.getRequestURI(), ex.getMessage());
-        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request, null);
-    }
-
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex,
-                                                             HttpServletRequest request) {
-        log.warn("Illegal state at {}: {}", request.getRequestURI(), ex.getMessage());
-        return build(HttpStatus.CONFLICT, "INVALID_STATE", ex.getMessage(), request, null);
+    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
+    public ResponseEntity<ErrorResponse> handleBrokenInvariant(RuntimeException ex, HttpServletRequest request) {
+        return handleUnexpected(ex, request);
     }
 
     // ------------------------------------------------------------------
