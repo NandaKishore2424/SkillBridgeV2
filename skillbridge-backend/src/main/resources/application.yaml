@@ -254,7 +254,17 @@ logging:
   level:
     # Statistics are collected (see generate_statistics) but the per-session
     # summary Hibernate logs is not wanted in normal output.
+    #
+    # `org.hibernate.stat` alone did NOT do this, and the comment above it said
+    # it did. The class that writes the summary is
+    # org.hibernate.engine.internal.StatisticalLoggingSessionEventListener --
+    # a different package entirely -- so the setting muted nothing. Measured
+    # 2026-09-20 against the running application: the outbox relay polls twice a
+    # second, and each poll wrote a 13-line "Session Metrics" block at INFO.
+    # That is roughly 100 lines a minute of a log nobody can read, into which a
+    # real error disappears. `LoggingNoiseTest` now pins it.
     org.hibernate.stat: WARN
+    org.hibernate.engine.internal.StatisticalLoggingSessionEventListener: WARN
 
 jwt:
   secret: ${JWT_SECRET}
