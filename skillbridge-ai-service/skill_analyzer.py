@@ -19,6 +19,7 @@ Senior Engineering Note:
 import re
 from dataclasses import dataclass, field
 from embedder import embed_text
+import job_fields
 from skill_extraction import extract_skills
 from database import get_connection, return_connection
 from config import TOP_JOBS_TO_RETURN, SIMILARITY_THRESHOLD
@@ -142,7 +143,9 @@ def analyze_skill_gap(student_id: int, student_skills: list[str]) -> SkillGapRep
 
         matched_jobs.append(MatchedJob(
             title=title,
-            company=company,
+            # The scrape put the employer's star rating in this column, after a
+            # newline. See job_fields.
+            company=job_fields.employer_name(company),
             similarity_score=round(float(similarity), 3),
             matched_keywords=matched_keywords,
             missing_skills=missing_skills
