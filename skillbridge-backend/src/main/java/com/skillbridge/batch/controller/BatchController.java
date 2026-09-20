@@ -1,15 +1,16 @@
 package com.skillbridge.batch.controller;
 
-import com.skillbridge.common.exception.ForbiddenException;
 import com.skillbridge.common.idempotency.Idempotent;
 import com.skillbridge.auth.entity.User;
 import com.skillbridge.batch.dto.BatchDTO;
+import com.skillbridge.batch.dto.BatchStatusRequest;
+import com.skillbridge.batch.dto.CreateBatchRequest;
+import com.skillbridge.batch.dto.UpdateBatchRequest;
+import com.skillbridge.batch.service.BatchService;
+import jakarta.validation.Valid;
 import com.skillbridge.batch.entity.Batch;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.batch.service.BatchAssignmentService;
-import com.skillbridge.college.entity.CollegeAdmin;
-import com.skillbridge.college.repository.CollegeAdminRepository;
-import com.skillbridge.college.repository.CollegeRepository;
 import com.skillbridge.common.tenant.TenantGuard;
 import com.skillbridge.common.dto.PagedResponse;
 import com.skillbridge.common.dto.SortParameter;
@@ -29,18 +30,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import com.skillbridge.common.tenant.SoftDeleteService;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import com.skillbridge.common.exception.BusinessRuleException;
-import com.skillbridge.common.exception.InternalServerException;
 import com.skillbridge.common.exception.ResourceNotFoundException;
 import com.skillbridge.common.exception.UnauthorizedException;
 import com.skillbridge.auth.security.AuthenticatedUser;
@@ -52,11 +48,10 @@ import com.skillbridge.auth.security.SecurityUtils;
 @Slf4j
 public class BatchController {
 
+    private final BatchService batchService;
     private final BatchRepository batchRepository;
     private final SoftDeleteService softDeleteService;
-    private final CollegeRepository collegeRepository;
     private final BatchAssignmentService batchAssignmentService;
-    private final CollegeAdminRepository collegeAdminRepository;
     private final TrainerRepository trainerRepository;
     private final CompanyRepository companyRepository;
 
@@ -93,22 +88,10 @@ public class BatchController {
             @RequestParam(required = false) String sort
     ) {
         log.info("Fetching all batches for college admin");
-        // Get college ID from authenticated user
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
-        Long collegeId = user.getCollegeId();
-
-        // If collegeId is null, try to get it from CollegeAdmin entity
-        if (collegeId == null) {
-            Optional<CollegeAdmin> collegeAdminOpt = collegeAdminRepository.findByUserId(user.getId());
-            if (collegeAdminOpt.isPresent()) {
-                collegeId = collegeAdminOpt.get().getCollege().getId();
-            }
-        }
-
-        if (collegeId == null) {
-            throw new ForbiddenException("This action requires an account scoped to a college.");
-        }
+        // 403 for an account with no college. The college_admins fallback that
+        // used to be here is gone: every college admin has users.college_id
+        // (measured 2026-09-19).
+        Long collegeId = SecurityUtils.requireCollegeId();
 
         Specification<Batch> spec = Specification.allOf(
                 BatchSpecifications.withCollege(),
@@ -188,155 +171,23 @@ public class BatchController {
     @Idempotent
     @PostMapping
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<BatchDTO> createBatch(@RequestBody CreateBatchRequest request) {
-        log.info("Creating batch: {}", request.name);
-
-        try {
-            // Get college ID from authenticated user
-            // requirePrincipal already raises 401 for a missing or unexpected
-            // principal, so the hand-rolled instanceof check that used to live
-            // here (and logged the whole principal object) is redundant.
-            AuthenticatedUser user = SecurityUtils.currentUser();
-            Long collegeId = user.getCollegeId();
-
-            // If collegeId is null, try to get it from CollegeAdmin entity
-            if (collegeId == null) {
-                log.warn("User {} does not have collegeId in User entity, checking CollegeAdmin", user.getEmail());
-                Optional<CollegeAdmin> collegeAdminOpt = collegeAdminRepository.findByUserId(user.getId());
-                if (collegeAdminOpt.isPresent()) {
-                    collegeId = collegeAdminOpt.get().getCollege().getId();
-                    log.info("Found collegeId from CollegeAdmin: {}", collegeId);
-                }
-            }
-
-            log.info("User: {}, College ID: {}", user.getEmail(), collegeId);
-
-            if (collegeId == null) {
-                log.error("User {} does not have a collegeId", user.getEmail());
-                throw new BusinessRuleException("User does not have a college assigned");
-            }
-
-            // Make final for lambda expression
-            final Long finalCollegeId = collegeId;
-
-            // Verify college exists
-            var college = collegeRepository.findById(finalCollegeId)
-                    .orElseThrow(() -> new ResourceNotFoundException("College not found with id: " + finalCollegeId));
-
-            // Parse dates from strings if provided
-            LocalDate startDate = null;
-            LocalDate endDate = null;
-
-            if (request.startDate != null && !request.startDate.isEmpty()) {
-                try {
-                    // Try ISO format first (YYYY-MM-DD)
-                    startDate = LocalDate.parse(request.startDate);
-                    log.debug("Parsed start date: {}", startDate);
-                } catch (Exception e) {
-                    try {
-                        // Try MM/DD/YYYY format
-                        startDate = LocalDate.parse(request.startDate, DateTimeFormatter.ofPattern("MM/dd/yyyy"));
-                        log.debug("Parsed start date (MM/dd/yyyy): {}", startDate);
-                    } catch (Exception e2) {
-                        log.warn("Failed to parse start date: {}", request.startDate);
-                    }
-                }
-            }
-
-            if (request.endDate != null && !request.endDate.isEmpty()) {
-                try {
-                    endDate = LocalDate.parse(request.endDate);
-                    log.debug("Parsed end date: {}", endDate);
-                } catch (Exception e) {
-                    try {
-                        endDate = LocalDate.parse(request.endDate, DateTimeFormatter.ofPattern("MM/dd/yyyy"));
-                        log.debug("Parsed end date (MM/dd/yyyy): {}", endDate);
-                    } catch (Exception e2) {
-                        log.warn("Failed to parse end date: {}", request.endDate);
-                    }
-                }
-            }
-
-            Batch batch = Batch.builder()
-                    .college(college)
-                    .name(request.name)
-                    .description(request.description)
-                    .status(request.status != null ? request.status : "UPCOMING")
-                    .startDate(startDate)
-                    .endDate(endDate)
-                    .build();
-
-            Batch savedBatch = batchRepository.save(batch);
-            log.info("Successfully created batch with id: {}", savedBatch.getId());
-            return ResponseEntity.ok(convertToDTO(savedBatch));
-        } catch (RuntimeException e) {
-            log.error("Failed to create batch: {}", e.getMessage(), e);
-            throw e;
-        } catch (Exception e) {
-            log.error("Unexpected error creating batch: {}", e.getMessage(), e);
-            throw new InternalServerException("Failed to create batch: " + e.getMessage(), e);
-        }
+    public ResponseEntity<BatchDTO> createBatch(@Valid @RequestBody CreateBatchRequest request) {
+        Batch batch = batchService.create(request, SecurityUtils.requireCollegeId());
+        log.info("Created batch {}", batch.getId());
+        return ResponseEntity.ok(convertToDTO(batch));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<BatchDTO> updateBatch(@PathVariable Long id, @RequestBody CreateBatchRequest request) {
-        log.info("Updating batch with id: {}", id);
-        Optional<Batch> batchOpt = findVisibleBatch(id);
-        if (batchOpt.isEmpty()) {
-            throw ResourceNotFoundException.of("Batch", id);
-        }
-
-        Batch batch = batchOpt.get();
-        batch.setName(request.name);
-        batch.setDescription(request.description);
-        if (request.status != null) {
-            batch.setStatus(request.status);
-        }
-
-        // Parse dates
-        if (request.startDate != null && !request.startDate.isEmpty()) {
-            try {
-                batch.setStartDate(LocalDate.parse(request.startDate));
-            } catch (Exception e) {
-                try {
-                    batch.setStartDate(LocalDate.parse(request.startDate, DateTimeFormatter.ofPattern("MM/dd/yyyy")));
-                } catch (Exception e2) {
-                    log.warn("Failed to parse start date: {}", request.startDate);
-                }
-            }
-        }
-
-        if (request.endDate != null && !request.endDate.isEmpty()) {
-            try {
-                batch.setEndDate(LocalDate.parse(request.endDate));
-            } catch (Exception e) {
-                try {
-                    batch.setEndDate(LocalDate.parse(request.endDate, DateTimeFormatter.ofPattern("MM/dd/yyyy")));
-                } catch (Exception e2) {
-                    log.warn("Failed to parse end date: {}", request.endDate);
-                }
-            }
-        }
-
-        Batch updatedBatch = batchRepository.save(batch);
-        return ResponseEntity.ok(convertToDTO(updatedBatch));
+    public ResponseEntity<BatchDTO> updateBatch(@PathVariable Long id, @Valid @RequestBody UpdateBatchRequest request) {
+        return ResponseEntity.ok(convertToDTO(batchService.update(id, request)));
     }
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('COLLEGE_ADMIN')")
-    public ResponseEntity<BatchDTO> updateBatchStatus(
-            @PathVariable Long id,
-            @RequestBody StatusUpdateRequest request) {
-        log.info("Updating batch status for id: {} to {}", id, request.status);
-        Optional<Batch> batchOpt = findVisibleBatch(id);
-        if (batchOpt.isEmpty()) {
-            throw ResourceNotFoundException.of("Batch", id);
-        }
-        Batch batch = batchOpt.get();
-        batch.setStatus(request.status);
-        Batch updatedBatch = batchRepository.save(batch);
-        return ResponseEntity.ok(convertToDTO(updatedBatch));
+    public ResponseEntity<BatchDTO> updateBatchStatus(@PathVariable Long id,
+                                                      @Valid @RequestBody BatchStatusRequest request) {
+        return ResponseEntity.ok(convertToDTO(batchService.updateStatus(id, request.status)));
     }
 
     @PostMapping("/{id}/trainers")
@@ -496,18 +347,7 @@ public class BatchController {
     }
 
     // DTOs
-    public static class CreateBatchRequest {
-        public String name;
-        public String description;
-        public String status;
-        public String startDate; // Accept as string, parse in controller
-        public String endDate; // Accept as string, parse in controller
-        public Integer maxEnrollments; // Ignored for now (not in DB schema)
-    }
 
-    public static class StatusUpdateRequest {
-        public String status;
-    }
 
     public static class AssignTrainersRequest {
         public List<Long> trainerIds;
