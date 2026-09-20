@@ -19,8 +19,6 @@ import {
   CardHeader,
   CardTitle,
   Button,
-  Alert,
-  AlertDescription,
   Badge,
 } from '@/shared/components/ui'
 import { StatCardSkeleton, ListSkeleton } from '@/shared/components/ui/loading-skeleton'
@@ -28,47 +26,9 @@ import {
   getTrainerDashboardStats,
   getTrainerBatches,
 } from '@/api/trainer'
-import {
-  BookOpen,
-  Users,
-  Clock,
-  AlertCircle,
-  ArrowRight,
-  GraduationCap,
-} from 'lucide-react'
-import { itemsOf } from '@/api/paging';
-
-interface StatCardProps {
-  title: string
-  value: number | string
-  description?: string
-  icon: React.ReactNode
-  link?: string
-}
-
-function StatCard({ title, value, description, icon, link }: StatCardProps) {
-  return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <div className="text-muted-foreground">{icon}</div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
-        {link && (
-          <Button variant="link" className="p-0 h-auto mt-2" asChild>
-            <Link to={link}>
-              View all <ArrowRight className="ml-1 h-3 w-3" />
-            </Link>
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
+import { ArrowRight, BookOpen, Clock, GraduationCap, Users } from 'lucide-react'
+import { itemsOf } from '@/api/paging'
+import { EmptyState, ErrorState, PageHeader, StatCard } from '@/shared/components/page'
 
 const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'outline'> = {
   UPCOMING: 'outline',
@@ -103,60 +63,48 @@ export function TrainerDashboard() {
       <AuthenticatedLayout>
         <PageWrapper>
           <div className="space-y-6">
-            {/* Header */}
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Trainer Dashboard</h1>
-              <p className="text-muted-foreground">
-                Manage your assigned batches and track student progress
-              </p>
-            </div>
+            <PageHeader
+              title="Your batches"
+              description="What you are teaching, and who is waiting on a grade."
+              actions={
+                <Button variant="outline" asChild>
+                  <Link to="/trainer/students">
+                    My students
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              }
+            />
 
-            {/* Error Alerts */}
-            {statsError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Failed to load dashboard statistics. Please try again.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {batchesError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Failed to load batches. Please try again.
-                </AlertDescription>
-              </Alert>
-            )}
+            {statsError && <ErrorState error={statsError} title="Could not load your figures" />}
+            {batchesError && <ErrorState error={batchesError} title="Could not load your batches" />}
 
             {/* Statistics Cards */}
             {statsLoading ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCardSkeleton />
-                <StatCardSkeleton />
-                <StatCardSkeleton />
+              <div className="grid gap-4 sm:grid-cols-3">
+                {[0, 1, 2].map((index) => (
+                  <StatCardSkeleton key={index} />
+                ))}
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <StatCard
-                  title="Assigned Batches"
-                  value={stats?.assignedBatches || 0}
-                  description={`${stats?.activeBatches || 0} active`}
-                  icon={<BookOpen className="h-4 w-4" />}
-                  link="/trainer/batches"
+                  label="Batches"
+                  value={stats?.assignedBatches ?? 0}
+                  hint={`${stats?.activeBatches ?? 0} running now`}
+                  icon={BookOpen}
                 />
                 <StatCard
-                  title="Total Students"
-                  value={stats?.totalStudents || 0}
-                  description="Across all batches"
-                  icon={<Users className="h-4 w-4" />}
+                  label="Students"
+                  value={stats?.totalStudents ?? 0}
+                  hint="Across every batch you teach"
+                  icon={Users}
                 />
                 <StatCard
-                  title="Pending Updates"
-                  value={stats?.pendingProgressUpdates || 0}
-                  description="Progress updates needed"
-                  icon={<Clock className="h-4 w-4" />}
+                  label="Topics to grade"
+                  value={stats?.pendingProgressUpdates ?? 0}
+                  hint="Nobody has recorded an outcome yet"
+                  icon={Clock}
                 />
               </div>
             )}
@@ -164,9 +112,9 @@ export function TrainerDashboard() {
             {/* Assigned Batches */}
             <Card>
               <CardHeader>
-                <CardTitle>My Assigned Batches</CardTitle>
+                <CardTitle>Batches you teach</CardTitle>
                 <CardDescription>
-                  Batches you are assigned to teach
+                  Open one to see its syllabus and grade a topic.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -211,7 +159,7 @@ export function TrainerDashboard() {
                             </div>
                             <Button asChild variant="outline">
                               <Link to={`/trainer/batches/${batch.id}`}>
-                                View Details
+                                Open
                                 <ArrowRight className="ml-2 h-4 w-4" />
                               </Link>
                             </Button>
@@ -221,13 +169,11 @@ export function TrainerDashboard() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No batches assigned</h3>
-                    <p className="text-muted-foreground">
-                      You will see batches here once they are assigned to you
-                    </p>
-                  </div>
+                  <EmptyState
+                    icon={BookOpen}
+                    title="No batches assigned yet"
+                    description="A college admin assigns trainers on the batch itself. They will appear here."
+                  />
                 )}
               </CardContent>
             </Card>

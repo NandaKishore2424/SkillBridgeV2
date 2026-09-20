@@ -10,11 +10,33 @@ import type { PagedResponse, PageParams } from './paging'
 
 // ==================== Student Dashboard ====================
 
+/**
+ * What `GET /student/dashboard/stats` returns, in full.
+ *
+ * Four of these were missing here while the backend was sending them, so the
+ * dashboard could not show them -- including `overallProgressPercent`, which is
+ * the one number a student opens the page for. A type that lists a subset of a
+ * response is not wrong in any way a compiler can see; the fields simply become
+ * invisible.
+ */
 export interface StudentDashboardStats {
   enrolledBatches: number
   activeBatches: number
   completedBatches: number
+  upcomingBatches: number
+  /** Applications submitted and not yet reviewed by an admin. */
+  pendingApplications: number
   totalTopicsCompleted: number
+  totalTopicsAssigned: number
+  /**
+   * Weighted completion across every enrolled batch, 0-100.
+   *
+   * Weighted rather than completed/assigned, so partly finished work counts for
+   * something. The server computes it; nothing here recomputes it, because two
+   * implementations of a percentage is how a bar starts disagreeing with the
+   * number printed beside it.
+   */
+  overallProgressPercent: number
 }
 
 export interface RecommendedBatch extends Batch {

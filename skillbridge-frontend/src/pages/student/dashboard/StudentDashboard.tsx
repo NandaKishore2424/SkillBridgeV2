@@ -21,8 +21,6 @@ import {
   CardHeader,
   CardTitle,
   Button,
-  Alert,
-  AlertDescription,
   Badge,
   Tabs,
   TabsList,
@@ -40,43 +38,20 @@ import {
 import { itemsOf } from '@/api/paging'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import { MySkillGapCard } from '@/shared/components/skill-gap/SkillGapCard'
+import { ErrorState, PageHeader, StatCard } from '@/shared/components/page'
 import {
   BookOpen,
   TrendingUp,
   CheckCircle,
   Loader2,
-  AlertCircle,
   ArrowRight,
+  Clock,
   GraduationCap,
   Users,
   Briefcase,
   Star,
   Plus,
 } from 'lucide-react'
-
-interface StatCardProps {
-  title: string
-  value: number | string
-  description?: string
-  icon: React.ReactNode
-}
-
-function StatCard({ title, value, description, icon }: StatCardProps) {
-  return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <div className="text-muted-foreground">{icon}</div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
 
 const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'outline'> = {
   UPCOMING: 'outline',
@@ -152,50 +127,60 @@ export function StudentDashboard() {
       <AuthenticatedLayout>
         <PageWrapper>
           <div className="space-y-6">
-            {/* Header */}
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Student Dashboard</h1>
-              <p className="text-muted-foreground">
-                Discover batches, track your progress, and advance your skills
-              </p>
-            </div>
+            <PageHeader
+              title="Your dashboard"
+              description="Where you stand, and what to do next."
+              actions={
+                <Button variant="outline" asChild>
+                  <Link to="/student/progress">
+                    My progress
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              }
+            />
 
-            {/* Error Alert */}
-            {statsError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Failed to load dashboard statistics. Please try again.
-                </AlertDescription>
-              </Alert>
-            )}
+            {statsError && <ErrorState error={statsError} title="Could not load your figures" />}
 
             {/* Statistics Cards */}
             {statsLoading ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCardSkeleton />
-                <StatCardSkeleton />
-                <StatCardSkeleton />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[0, 1, 2, 3].map((index) => (
+                  <StatCardSkeleton key={index} />
+                ))}
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {/*
+                  Overall progress leads, because it is the one number a student
+                  opens this page for. The server sends it and the frontend type
+                  did not declare it, so it could not be shown at all until now
+                  -- along with `upcomingBatches`, `pendingApplications` and
+                  `totalTopicsAssigned`.
+                */}
                 <StatCard
-                  title="Enrolled Batches"
-                  value={stats?.enrolledBatches || 0}
-                  description={`${stats?.activeBatches || 0} active`}
-                  icon={<BookOpen className="h-4 w-4" />}
+                  label="Overall progress"
+                  value={`${stats?.overallProgressPercent ?? 0}%`}
+                  hint="Weighted across every batch you are in"
+                  icon={TrendingUp}
                 />
                 <StatCard
-                  title="Completed Batches"
-                  value={stats?.completedBatches || 0}
-                  description="Successfully finished"
-                  icon={<CheckCircle className="h-4 w-4" />}
+                  label="Topics done"
+                  value={stats?.totalTopicsCompleted ?? 0}
+                  hint={`of ${stats?.totalTopicsAssigned ?? 0} assigned`}
+                  icon={CheckCircle}
                 />
                 <StatCard
-                  title="Topics Completed"
-                  value={stats?.totalTopicsCompleted || 0}
-                  description="Across all batches"
-                  icon={<TrendingUp className="h-4 w-4" />}
+                  label="Batches"
+                  value={stats?.enrolledBatches ?? 0}
+                  hint={`${stats?.activeBatches ?? 0} running, ${stats?.completedBatches ?? 0} finished`}
+                  icon={BookOpen}
+                />
+                <StatCard
+                  label="Applications pending"
+                  value={stats?.pendingApplications ?? 0}
+                  hint="Waiting on an admin"
+                  icon={Clock}
                 />
               </div>
             )}

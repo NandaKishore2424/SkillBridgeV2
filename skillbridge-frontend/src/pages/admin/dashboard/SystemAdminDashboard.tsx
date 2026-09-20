@@ -21,69 +21,13 @@ import {
   CardTitle,
   Button,
   Badge,
-  Alert,
-  AlertDescription,
 } from '@/shared/components/ui'
 import { StatCardSkeleton, CardSkeleton } from '@/shared/components/ui'
 import { getAllColleges } from '@/api/admin'
 import type { College } from '@/shared/types'
-import {
-  Building2,
-  Users,
-  GraduationCap,
-  Plus,
-  ArrowRight,
-  AlertCircle,
-  TrendingUp,
-  CheckCircle2,
-  XCircle,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { ArrowRight, Building2, CheckCircle2, Plus, Users, XCircle } from 'lucide-react'
+import { ErrorState, PageHeader, StatCard } from '@/shared/components/page'
 import { itemsOf } from '@/api/paging'
-
-interface StatCardProps {
-  title: string
-  value: number | string
-  description?: string
-  icon: React.ReactNode
-  trend?: {
-    value: number
-    label: string
-  }
-}
-
-function StatCard({ title, value, description, icon, trend }: StatCardProps) {
-  return (
-    <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-primary">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-          {icon}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold tracking-tight">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
-        {trend && (
-          <div className="flex items-center gap-1 mt-2">
-            <TrendingUp className={cn(
-              "h-3 w-3",
-              trend.value >= 0 ? "text-green-500" : "text-red-500"
-            )} />
-            <span className={cn(
-              "text-xs font-medium",
-              trend.value >= 0 ? "text-green-500" : "text-red-500"
-            )}>
-              {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
-            </span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
 
 interface CollegeCardProps {
   college: College
@@ -174,72 +118,62 @@ export function SystemAdminDashboard() {
       <AuthenticatedLayout>
         <PageWrapper>
           <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                  System Dashboard
-                </h1>
-                <p className="text-muted-foreground mt-2">
-                  Overview of all colleges and system-wide statistics
-                </p>
-              </div>
-              <Button asChild size="lg" className="shadow-md hover:shadow-lg transition-shadow">
-                <Link to="/admin/colleges/create">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create College
-                </Link>
-              </Button>
-            </div>
+            <PageHeader
+              title="Colleges"
+              description="Every college on this installation."
+              actions={
+                <Button asChild>
+                  <Link to="/admin/colleges/create">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add a college
+                  </Link>
+                </Button>
+              }
+            />
 
-            {/* Error Alert */}
-            {error && (
-              <Alert variant="destructive" className="border-l-4 border-l-destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Failed to load colleges. Please try again.
-                </AlertDescription>
-              </Alert>
-            )}
+            {error && <ErrorState error={error} title="Could not load the colleges" />}
 
-            {/* Statistics Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {/*
+              Two of the four cards that used to be here were invented.
+
+              "Total Students" printed the string "0" -- not a count that
+              happened to be zero, a hardcoded zero labelled "Across all
+              colleges". `GET /admin/colleges` returns id, name, code, email,
+              phone, status and address; there is no student count in it and no
+              endpoint that gives one, so the number cannot be shown honestly
+              and is not shown at all.
+
+              "System Health: 100% -- All systems operational" measured nothing
+              whatsoever. It would have read 100% with the database down. The
+              real signal is `/actuator/health`, which is public and not wired
+              to this page; showing a green tick that cannot go red is worse
+              than showing none.
+            */}
+            <section aria-label="At a glance" className="grid gap-4 sm:grid-cols-3">
               {isLoading ? (
                 <>
-                  <StatCardSkeleton />
                   <StatCardSkeleton />
                   <StatCardSkeleton />
                   <StatCardSkeleton />
                 </>
               ) : (
                 <>
+                  <StatCard label="Colleges" value={totalColleges} icon={Building2} />
                   <StatCard
-                    title="Total Colleges"
-                    value={totalColleges}
-                    description="All registered colleges"
-                    icon={<Building2 className="h-4 w-4" />}
-                  />
-                  <StatCard
-                    title="Active Colleges"
+                    label="Active"
                     value={activeColleges}
-                    description={`${inactiveColleges} inactive`}
-                    icon={<CheckCircle2 className="h-4 w-4" />}
+                    hint="Can sign in and be administered"
+                    icon={CheckCircle2}
                   />
                   <StatCard
-                    title="Total Students"
-                    value="0"
-                    description="Across all colleges"
-                    icon={<GraduationCap className="h-4 w-4" />}
-                  />
-                  <StatCard
-                    title="System Health"
-                    value="100%"
-                    description="All systems operational"
-                    icon={<TrendingUp className="h-4 w-4" />}
+                    label="Inactive"
+                    value={inactiveColleges}
+                    hint="Deactivated; their users cannot sign in"
+                    icon={Building2}
                   />
                 </>
               )}
-            </div>
+            </section>
 
             {/* Colleges Section */}
             <div>

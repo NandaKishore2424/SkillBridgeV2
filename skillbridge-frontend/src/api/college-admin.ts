@@ -24,17 +24,22 @@ export interface PagedResponse<T> {
 
 // ==================== Dashboard ====================
 
+/**
+ * Exactly what `DashboardController.getDashboardStats` returns: five counts.
+ *
+ * It used to declare an optional `recentActivity` array as well. Nothing in the
+ * backend has ever produced one -- the string appears nowhere in the Java -- so
+ * the dashboard's "Recent Activity" card was unreachable, and being optional
+ * meant no type error and no failing test ever said so. An optional field is a
+ * claim that the server *might* send it; this one was a claim that it might not
+ * have been written yet.
+ */
 export interface DashboardStats {
   totalBatches: number
   activeBatches: number
   totalStudents: number
   totalTrainers: number
   totalCompanies: number
-  recentActivity?: Array<{
-    type: string
-    message: string
-    timestamp: string
-  }>
 }
 
 export const getDashboardStats = async (): Promise<DashboardStats> => {
