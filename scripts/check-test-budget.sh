@@ -13,19 +13,25 @@
 #      THE BUDGET IS CALIBRATED ON CI, NOT ON A LAPTOP. It was 30s, from 4.9s
 #      over 108 tests measured on the development machine on 2026-09-13, and it
 #      was never tested against the hardware that enforces it -- this job had
-#      not run in CI at anything like the current size. On 2026-09-20 the tier
-#      is 276 tests and takes:
+#      not run in CI at anything like the current size. On 2026-09-20 the same
+#      276 tests took:
 #
 #          13.9s  development machine
-#          32.1s  ubuntu-latest, 2 cores
+#          32.1s  ubuntu-latest, run 35518760368
+#          22.2s  ubuntu-latest, run 35519089800
 #
 #      -- so the first CI run of a green suite failed on the budget alone, with
 #      276 passes and no skips. A budget that only the fast machine can meet
 #      tells you about the machine.
 #
-#      60s is twice what CI measures, so the tier can roughly double before this
-#      speaks. Re-measure on CI before changing it, and record both numbers
-#      here.
+#      Note the last two: the same suite, the same commit's test code, 45%
+#      apart. A shared runner's speed varies that much by itself, so the budget
+#      has to clear the slow end of that spread and not the average, or it will
+#      fail a green suite now and then and teach everyone to re-run CI until it
+#      is green -- which is how a real failure gets re-run away.
+#
+#      60s is roughly twice the slower CI measurement. Re-measure on CI before
+#      changing it, and record the numbers here.
 #
 #      What it is really watching for is a class that costs seconds rather than
 #      milliseconds. Note that the tier legitimately contains some already: the
