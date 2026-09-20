@@ -1,5 +1,7 @@
 package com.skillbridge.auth.service;
 
+import com.skillbridge.auth.JwtProperties;
+
 import com.skillbridge.auth.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -38,15 +40,12 @@ public class JwtService {
     private final SecretKey signingKey;
     private final long accessTokenTtlSeconds;
 
-    public JwtService(
-            @Value("${jwt.secret}") String secret,
-            @Value("${jwt.accessTokenTtlSeconds:3600}") long accessTokenTtlSeconds
-    ) {
+    public JwtService(JwtProperties jwt) {
         // Throws WeakKeyException below 256 bits, which is the correct outcome:
         // an HS256 token signed with a short key is not worth issuing, and
         // failing at startup is better than failing per request.
-        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(encodeIfPlain(secret)));
-        this.accessTokenTtlSeconds = accessTokenTtlSeconds;
+        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(encodeIfPlain(jwt.secret())));
+        this.accessTokenTtlSeconds = jwt.accessTokenTtlSeconds();
     }
 
     /**

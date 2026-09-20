@@ -32,13 +32,11 @@ public class StaleUploadSweeper {
     private final Duration staleAfter;
     private final boolean scheduled;
 
-    public StaleUploadSweeper(BulkUploadRepository uploads, SingleRunGuard singleRun,
-                              @Value("${app.import.stale-after:10m}") Duration staleAfter,
-                              @Value("${app.import.sweeper.enabled:true}") boolean scheduled) {
+    public StaleUploadSweeper(BulkUploadRepository uploads, SingleRunGuard singleRun, ImportProperties settings) {
         this.uploads = uploads;
         this.singleRun = singleRun;
-        this.staleAfter = staleAfter;
-        this.scheduled = scheduled;
+        this.staleAfter = settings.staleAfter();
+        this.scheduled = settings.sweeper().enabled();
     }
 
     /**

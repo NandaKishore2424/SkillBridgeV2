@@ -1,5 +1,8 @@
 package com.skillbridge.auth.service;
 
+import com.skillbridge.auth.AuthProperties;
+import com.skillbridge.auth.JwtProperties;
+
 import com.skillbridge.auth.security.EmailAddress;
 import com.skillbridge.auth.dto.AuthResponse;
 import com.skillbridge.auth.dto.CurrentUserDTO;
@@ -99,9 +102,8 @@ public class AuthService {
             StudentRepository studentRepository,
             TrainerRepository trainerRepository,
             CollegeRepository collegeRepository,
-            @Value("${jwt.refreshTokenTtlSeconds:1209600}") long refreshTokenTtlSeconds,
-            @Value("${jwt.refreshReuseGraceSeconds:10}") long refreshReuseGraceSeconds,
-            @Value("${app.auth.invitation-ttl}") Duration invitationTtl
+            JwtProperties jwt,
+            AuthProperties auth
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -112,9 +114,9 @@ public class AuthService {
         this.studentRepository = studentRepository;
         this.trainerRepository = trainerRepository;
         this.collegeRepository = collegeRepository;
-        this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
-        this.reuseGrace = Duration.ofSeconds(refreshReuseGraceSeconds);
-        this.invitationTtl = invitationTtl;
+        this.refreshTokenTtlSeconds = jwt.refreshTokenTtlSeconds();
+        this.reuseGrace = jwt.reuseGrace();
+        this.invitationTtl = auth.invitationTtl();
         this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 

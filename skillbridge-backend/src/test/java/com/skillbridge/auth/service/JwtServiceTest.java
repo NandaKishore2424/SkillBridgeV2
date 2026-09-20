@@ -1,5 +1,6 @@
 package com.skillbridge.auth.service;
 
+import com.skillbridge.auth.JwtProperties;
 import com.skillbridge.auth.entity.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,7 +30,7 @@ class JwtServiceTest {
                     + "0123456789abcdef0123456789abcdef").getBytes());
 
     private static JwtService service(long ttlSeconds) {
-        return new JwtService(SECRET, ttlSeconds);
+        return new JwtService(new JwtProperties(SECRET, ttlSeconds, 1209600, 10));
     }
 
     private static User user(Long id, String email, Long collegeId) {
@@ -121,7 +122,7 @@ class JwtServiceTest {
             String foreign = Base64.getEncoder().encodeToString(
                     ("a-completely-different-key-of-sufficient-length-"
                             + "0123456789abcdef0123456789abcdef").getBytes());
-            String token = new JwtService(foreign, 3600)
+            String token = new JwtService(new JwtProperties(foreign, 3600, 1209600, 10))
                     .generateAccessToken(user(1L, "a@b.test", 1L), "STUDENT", java.util.Set.of("STUDENT"), false);
 
             assertFalse(service(3600).isTokenValid(token),
@@ -176,22 +177,22 @@ class JwtServiceTest {
 
         @Test
         void refuses_a_missing_secret() {
-            assertThrows(IllegalArgumentException.class, () -> new JwtService(null, 3600));
-            assertThrows(IllegalArgumentException.class, () -> new JwtService("  ", 3600));
+            assertThrows(IllegalArgumentException.class, () -> new JwtService(new JwtProperties(null, 3600, 1209600, 10)));
+            assertThrows(IllegalArgumentException.class, () -> new JwtService(new JwtProperties("  ", 3600, 1209600, 10)));
         }
 
         @Test
         void refuses_a_secret_too_short_for_HS256() {
             // Under 256 bits JJWT raises WeakKeyException. Failing here, at
             // construction, is what stops a weak key reaching production.
-            assertThrows(Exception.class, () -> new JwtService("c2hvcnQ=", 3600));
+            assertThrows(Exception.class, () -> new JwtService(new JwtProperties("c2hvcnQ=", 3600, 1209600, 10)));
         }
 
         @Test
         void accepts_a_plain_non_base64_secret_by_encoding_it() {
             String plain = "this is a plain text secret that is comfortably long enough for HS256!";
             assertDoesNotThrow(() -> {
-                JwtService jwt = new JwtService(plain, 3600);
+                JwtService jwt = new JwtService(new JwtProperties(plain, 3600, 1209600, 10));
                 String token = jwt.generateAccessToken(user(5L, "a@b.test", 1L), "STUDENT", java.util.Set.of("STUDENT"), false);
                 assertTrue(jwt.isTokenValid(token));
             });

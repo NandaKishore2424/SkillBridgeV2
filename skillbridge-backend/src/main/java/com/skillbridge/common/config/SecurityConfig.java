@@ -5,7 +5,6 @@ import com.skillbridge.auth.filter.TokenAuthenticationFilter;
 import com.skillbridge.auth.security.JsonSecurityErrorHandler;
 import com.skillbridge.common.observability.UserContextLogFilter;
 import com.skillbridge.common.throttle.RateLimitingFilter;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -129,9 +128,8 @@ public class SecurityConfig {
      * a comma-separated list of exact origins.
      */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource(
-            @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
-        return corsConfigurationSourceFor(allowedOrigins);
+    public CorsConfigurationSource corsConfigurationSource(CorsProperties cors) {
+        return corsConfigurationSourceFor(cors.allowedOrigins());
     }
 
     /**

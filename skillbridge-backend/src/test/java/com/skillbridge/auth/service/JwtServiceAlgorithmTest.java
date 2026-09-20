@@ -1,5 +1,6 @@
 package com.skillbridge.auth.service;
 
+import com.skillbridge.auth.JwtProperties;
 import com.skillbridge.auth.entity.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ class JwtServiceAlgorithmTest {
         assertThat(Base64.getDecoder().decode(KEY_48)).hasSize(48);
 
         User user = User.builder().id(1L).email("u@example.invalid").collegeId(1L).isActive(true).build();
-        String token = new JwtService(KEY_48, 900).generateAccessToken(user, "STUDENT", Set.of("STUDENT"), false);
+        String token = new JwtService(new JwtProperties(KEY_48, 900, 1209600, 10)).generateAccessToken(user, "STUDENT", Set.of("STUDENT"), false);
 
         String header = new String(Base64.getUrlDecoder().decode(token.split("\\.")[0]), StandardCharsets.UTF_8);
         assertThat(header).contains("\"alg\":\"HS384\"");

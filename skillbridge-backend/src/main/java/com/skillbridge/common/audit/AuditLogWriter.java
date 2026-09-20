@@ -51,14 +51,12 @@ public class AuditLogWriter {
     private final HikariDataSource pool;
     private final JdbcTemplate jdbc;
 
-    public AuditLogWriter(DataSourceProperties main,
-                          @Value("${app.audit.pool-size:2}") int poolSize,
-                          @Value("${app.audit.connection-timeout-ms:1000}") long connectionTimeoutMs) {
+    public AuditLogWriter(DataSourceProperties main, AuditProperties settings) {
         this.pool = main.initializeDataSourceBuilder().type(HikariDataSource.class).build();
         pool.setPoolName("audit");
-        pool.setMaximumPoolSize(poolSize);
+        pool.setMaximumPoolSize(settings.poolSize());
         pool.setMinimumIdle(0);
-        pool.setConnectionTimeout(connectionTimeoutMs);
+        pool.setConnectionTimeout(settings.connectionTimeout().toMillis());
         pool.setAutoCommit(true);
         this.jdbc = new JdbcTemplate(pool);
     }

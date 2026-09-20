@@ -1,5 +1,7 @@
 package com.skillbridge.auth.controller;
 
+import com.skillbridge.auth.AuthProperties;
+
 import com.skillbridge.auth.dto.AuthResponse;
 import com.skillbridge.auth.dto.ChangePasswordRequest;
 import com.skillbridge.auth.dto.CurrentUserDTO;
@@ -45,10 +47,9 @@ public class AuthController {
     private final AuthService authService;
     private final boolean secureCookie;
 
-    public AuthController(AuthService authService,
-                          @Value("${app.auth.refresh-cookie-secure:true}") boolean secureCookie) {
+    public AuthController(AuthService authService, AuthProperties auth) {
         this.authService = authService;
-        this.secureCookie = secureCookie;
+        this.secureCookie = auth.refreshCookieSecure();
     }
 
     @PostMapping("/login")

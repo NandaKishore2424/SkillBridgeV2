@@ -1,5 +1,7 @@
 package com.skillbridge.bulkupload.service;
 
+import com.skillbridge.bulkupload.importer.ImportProperties;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skillbridge.auth.repository.UserRepository;
@@ -53,8 +55,7 @@ public class BulkUploadService {
     public BulkUploadService(BulkUploadRepository uploads, BulkUploadResultRepository results,
                              UserRepository userRepository, CollegeRepository collegeRepository,
                              StudentRepository studentRepository, TrainerRepository trainerRepository,
-                             BulkUploadJob job, ObjectMapper objectMapper,
-                             @Value("${app.import.max-rows:2000}") int maxRows) {
+                             BulkUploadJob job, ObjectMapper objectMapper, ImportProperties settings) {
         this.uploads = uploads;
         this.results = results;
         this.userRepository = userRepository;
@@ -63,7 +64,7 @@ public class BulkUploadService {
         this.trainerRepository = trainerRepository;
         this.job = job;
         this.objectMapper = objectMapper;
-        this.maxRows = maxRows;
+        this.maxRows = settings.maxRows();
     }
 
     /**

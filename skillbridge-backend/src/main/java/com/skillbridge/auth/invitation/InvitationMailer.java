@@ -1,5 +1,7 @@
 package com.skillbridge.auth.invitation;
 
+import com.skillbridge.auth.AuthProperties;
+
 import com.skillbridge.shared.mail.MailGateway;
 import com.skillbridge.shared.mail.MailMessage;
 import com.skillbridge.shared.mail.MailSettings;
@@ -25,11 +27,10 @@ public class InvitationMailer {
     private final String loginUrl;
     private final Duration ttl;
 
-    public InvitationMailer(MailGateway gateway, MailSettings settings,
-                            @Value("${app.auth.invitation-ttl}") Duration ttl) {
+    public InvitationMailer(MailGateway gateway, MailSettings settings, AuthProperties auth) {
         this.gateway = gateway;
         this.loginUrl = settings.loginUrl();
-        this.ttl = ttl;
+        this.ttl = auth.invitationTtl();
     }
 
     /** @throws com.skillbridge.shared.mail.MailDeliveryException if it was not sent */

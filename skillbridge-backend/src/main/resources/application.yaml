@@ -291,8 +291,9 @@ jwt:
   # AuthService.
   refreshReuseGraceSeconds: ${JWT_REFRESH_REUSE_GRACE:10}
 
-rateLimit:
-  requestsPerMinute: ${RATE_LIMIT_RPM:120}
+# rateLimit.requestsPerMinute was here and nothing read it: the limits are per
+# endpoint class, in RateLimitTier. rateLimit.enabled (default true) is the only
+# switch, and application-test.yaml uses it.
 
 app:
   auth:
@@ -312,6 +313,16 @@ app:
     # An upload whose importer has not reported progress for this long is
     # declared dead (StaleUploadSweeper).
     stale-after: 10m
+    sweeper:
+      # The sweep itself. Off under the test profile, where a background UPDATE
+      # lands in whatever statement count a test is measuring.
+      enabled: ${IMPORT_SWEEPER_ENABLED:true}
+  audit:
+    # The audit trail's own pool: small, and impatient. A request holds one
+    # connection from the main pool and at most one from here, which is what
+    # keeps audit writes from starving logins (AuditLogWriter).
+    pool-size: ${AUDIT_POOL_SIZE:2}
+    connection-timeout: ${AUDIT_CONNECTION_TIMEOUT:1s}
   mail:
     # LOG sends nothing and records only recipient and subject, so the app starts
     # anywhere. SMTP needs spring.mail.host (SPRING_MAIL_HOST, SPRING_MAIL_PORT):
