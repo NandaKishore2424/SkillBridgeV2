@@ -1,0 +1,23 @@
+# Everything the build does not need. Without this the context includes
+# target/ -- hundreds of megabytes of classes, jars and JaCoCo data -- which is
+# uploaded to the daemon on every build and then thrown away.
+target/
+*.log
+
+# Profile configuration that has no business in a production image.
+#
+# application-local.yaml is the real one: gitignored, holds live credentials,
+# and an image carrying it would put them wherever the image goes.
+#
+# The .example templates hold only placeholders, so they leak nothing -- they
+# are excluded because they are dead weight that reads like configuration, and
+# because the rule "no profile files in the image" is easier to hold than "no
+# profile files except the harmless ones".
+#
+# application-test.yaml is the test profile. It is in src/main/resources, so
+# Maven packages it into the jar; excluding it here keeps it out. It is the one
+# with teeth: left in the image, a mistyped SPRING_PROFILES_ACTIVE could
+# activate a configuration written for a throwaway database.
+src/main/resources/application-local.yaml
+src/main/resources/application-test.yaml
+src/main/resources/*.example

@@ -206,6 +206,80 @@ jobs:
           AI_TEST_DATABASE_URL: postgresql://dedup:dedup@localhost:5432/dedup
         run: python -m unittest discover -s tests_integration -t . -v
 
+  images:
+    name: Deployment images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Only after the backend tests pass: a broken image is not worth the runner
+    # time if the code itself is red.
+    needs: backend
+    # packages: write lets this job publish to GHCR with the built-in token;
+    # nothing else in the workflow gets it.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # Structure only -- whether the hostname is filled in is a property of a
+      # deployment, not of the code. `--deploy` is the stricter run, and
+      # docs/DEPLOYMENT.md says where to use it.
+      - name: vercel.json still proxies the API and falls back to the SPA
+        run: ./deploy/vercel.test.sh
+
+      - name: Build the backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./skillbridge-backend
+          push: false
+          load: true
+          tags: skillbridge-backend:local
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      # The slow one: it downloads PyTorch and bakes in the MiniLM weights.
+      # Built anyway, because it is the image most able to break quietly -- the
+      # CPU-only index and the baked-in model are each one edit away from
+      # silently becoming a gigabyte of unusable CUDA, or a HuggingFace call on
+      # every cold start.
+      - name: Build the AI image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./skillbridge-ai-service
+          push: false
+          load: true
+          tags: skillbridge-ai:local
+          cache-from: type=gha,scope=ai
+          cache-to: type=gha,mode=max,scope=ai
+
+      - name: What the images actually do
+        run: ./deploy/images.test.sh
+
+      # Only a push to main publishes. The EC2 host never builds: it pulls
+      # :main on boot, and :sha-<commit> stays available to roll back to. The
+      # layers are already in the cache from the builds above, so this only
+      # uploads.
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          for svc in backend ai; do
+            for tag in main "sha-${{ github.sha }}"; do
+              docker tag "skillbridge-$svc:local" "ghcr.io/$owner/skillbridge-$svc:$tag"
+              docker push "ghcr.io/$owner/skillbridge-$svc:$tag"
+            done
+          done
+
   frontend:
     name: Frontend build
     runs-on: ubuntu-latest

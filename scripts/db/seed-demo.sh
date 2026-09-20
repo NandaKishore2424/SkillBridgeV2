@@ -16,8 +16,9 @@
 #
 # Every demo account shares one, read from SKILLBRIDGE_DEMO_PASSWORD in the
 # gitignored root .env. Nothing in git has ever held it. If it is not set, the
-# script generates one, prints it once, and tells you where to put it so the
-# next run is the same.
+# script generates one and appends it to that file -- it is never printed, so it
+# cannot be read off a recording, a screenshot or a terminal transcript. Open
+# .env to see it.
 #
 # WAITING FOR THE REPORTS
 #
@@ -43,7 +44,16 @@ for arg in "$@"; do
     esac
 done
 
-psql_local() { docker compose exec -T postgres psql -U skillbridge -d skillbridge -v ON_ERROR_STOP=1 "$@"; }
+# Which stack to seed. Empty means the development compose file in the
+# repository root; on the deployed host it is deploy/docker-compose.prod.yml.
+# Without this the script would silently target whichever compose file happens
+# to be in the working directory, which on the EC2 host is the wrong one -- and
+# "wrong" there means it finds no postgres service and fails, rather than
+# seeding something it should not.
+COMPOSE_ARGS=()
+[[ -n "${SKILLBRIDGE_COMPOSE_FILE:-}" ]] && COMPOSE_ARGS=(-f "$SKILLBRIDGE_COMPOSE_FILE")
+
+psql_local() { docker compose "${COMPOSE_ARGS[@]}" exec -T postgres psql -U skillbridge -d skillbridge -v ON_ERROR_STOP=1 "$@"; }
 ask()        { psql_local -tAc "$1"; }
 
 # ---------------------------------------------------------------------------
@@ -51,7 +61,7 @@ ask()        { psql_local -tAc "$1"; }
 # ---------------------------------------------------------------------------
 
 echo "1/6 Checking the database"
-docker compose up -d --wait postgres >/dev/null
+docker compose "${COMPOSE_ARGS[@]}" up -d --wait postgres >/dev/null
 missing=$(ask "SELECT count(*) FROM (VALUES ('colleges'),('students'),('student_skills'),('outbox_events'))
                AS t(name) WHERE to_regclass('public.' || name) IS NULL")
 if [[ "$missing" != "0" ]]; then

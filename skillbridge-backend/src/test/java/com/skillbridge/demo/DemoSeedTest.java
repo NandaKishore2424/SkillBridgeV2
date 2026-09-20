@@ -205,9 +205,15 @@ class DemoSeedTest {
                     .isFalse();
         }
 
+        // Exactly one, and on purpose. Everyone else is already onboarded -- a
+        // demo that opens with twenty forced password changes is a demo of that
+        // screen. The one is the student left in PENDING_SETUP, which is the
+        // only state where "resend invitation" does anything but 409.
         assertThat(count("SELECT count(*) FROM users WHERE must_change_password"))
-                .as("a demo that opens with twenty forced password changes is a demo of that screen")
-                .isZero();
+                .isEqualTo(1);
+        assertThat(column("SELECT email FROM users WHERE account_status = 'PENDING_SETUP'"))
+                .as("the invited-but-never-signed-in student, so the email path can be shown")
+                .containsExactly("sneha@hillview.test");
     }
 
     // -------------------------------------------------------------- isolation

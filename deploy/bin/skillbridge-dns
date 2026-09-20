@@ -1,0 +1,53 @@
+#!/bin/bash
+# Point the SkillBridge hostname at this instance's current public IPv4.
+#
+# Installed at /usr/local/sbin/skillbridge-dns, run at boot and every 6 hours
+# by skillbridge-dns.timer.
+#
+# WHY THIS EXISTS INSTEAD OF AN ELASTIC IP
+#
+# EC2 gives a stopped instance a new public IP every time it starts. The usual
+# answer is an Elastic IP, which is stable -- and which AWS bills for every
+# hour it is not attached to a running instance. On a host that is running for
+# perhaps four hours a week, that is paying a standing charge for the other
+# 164, against a credit that expires 2027-01-27.
+#
+# A dynamic DNS record costs nothing and updates in seconds. The name stays
+# fixed, which is what the certificate and the Vercel rewrite actually need;
+# only the address behind it moves.
+#
+# Integronix does the same thing with the same provider, so the account and the
+# habit already exist.
+#
+# CONFIGURATION
+#   /etc/skillbridge/dns-host    the hostname, e.g. skillbridge.dedyn.io
+#   /etc/skillbridge/dns-token   the deSEC token (root, 0600)
+set -euo pipefail
+
+HOST_FILE=/etc/skillbridge/dns-host
+TOKEN_FILE=/etc/skillbridge/dns-token
+
+[[ -r "$HOST_FILE"  ]] || { echo "missing $HOST_FILE" >&2; exit 2; }
+[[ -r "$TOKEN_FILE" ]] || { echo "missing $TOKEN_FILE" >&2; exit 2; }
+
+HOST=$(tr -d '[:space:]' < "$HOST_FILE")
+
+# IMDSv2: a session token first, then the address. IMDSv1 is a plain GET that
+# any process on the box -- or anything that can talk it into making one -- can
+# issue, which is how instance metadata has been exfiltrated through SSRF.
+imds=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token \
+  -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')
+ip=$(curl -fsS -H "X-aws-ec2-metadata-token: $imds" \
+  http://169.254.169.254/latest/meta-data/public-ipv4)
+
+# A metadata service that answers with something unexpected must not be allowed
+# to publish that something as this host's address.
+[[ $ip =~ ^[0-9]+(\.[0-9]+){3}$ ]] || { echo "bad IP from metadata: $ip" >&2; exit 1; }
+
+# The token goes to curl on stdin (-K -), never on the command line where `ps`
+# would show it to every user on the box.
+result=$(printf 'header = "Authorization: Token %s"\n' "$(tr -d '[:space:]' < "$TOKEN_FILE")" |
+  curl -fsS --max-time 20 -K - \
+  "https://update.dedyn.io/?hostname=${HOST}&myipv4=${ip}&myipv6=")
+
+echo "deSEC update ${HOST} -> ${ip}: ${result}"

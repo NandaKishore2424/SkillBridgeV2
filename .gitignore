@@ -63,3 +63,11 @@ study-materials/
 
 # Working local logins; never committed (2026-09-19)
 further-plans/LOCAL-LOGINS.md
+
+# --- Phase 7 deployment ------------------------------------------------------
+# Host-side configuration and anything a backup run leaves behind. app.env
+# lives on the EC2 host, not in a checkout, but ignore it here too in case
+# somebody copies one back to look at it.
+deploy/instance.env
+deploy/app.env
+deploy/backups/

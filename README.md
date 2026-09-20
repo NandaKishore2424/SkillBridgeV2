@@ -16,6 +16,16 @@ A multi-tenant training management platform for colleges with an AI-powered skil
 
 ---
 
+## Documentation
+
+**[docs/README.md](docs/README.md) is the reading order.** The two that matter
+most: [docs/DECISIONS.md](docs/DECISIONS.md) — every design decision, the
+alternative rejected, and a closing list of what is wrong with this project —
+and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), which covers how it runs on one
+EC2 host and what that deliberately does not do.
+
+---
+
 ## Running the Full Stack
 
 Open **3 separate terminals** and run each service.
@@ -84,7 +94,12 @@ python -m uvicorn main:app --reload --port 8000
 
 ## Test Credentials
 
-None are kept in this repository. Log in with accounts from your own database.
+None are kept in this repository, and none ever will be.
+
+`scripts/db/seed-demo.sh` creates the demo accounts and gives them all one
+password, generated on first run and written to the gitignored `.env` as
+`SKILLBRIDGE_DEMO_PASSWORD`. It is never printed, so it cannot be read off a
+screenshot or a terminal recording.
 
 ---
 

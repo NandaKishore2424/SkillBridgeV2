@@ -1,0 +1,12 @@
+[Unit]
+Description=Update the SkillBridge DNS record at boot and every 6 hours
+
+[Timer]
+# 20s after boot, so the address is right before Caddy asks Let's Encrypt to
+# verify it. Caddy retries anyway, but a first attempt against a stale record
+# is a wasted ACME failure.
+OnBootSec=20s
+OnUnitActiveSec=6h
+
+[Install]
+WantedBy=timers.target

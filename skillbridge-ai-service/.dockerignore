@@ -1,0 +1,13 @@
+# venv/ is this machine's interpreter and its compiled wheels, several
+# gigabytes of them, none of it valid inside the image.
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# The tests run in CI, not in the image.
+tests/
+tests_broker/
+tests_integration/
+
+.env

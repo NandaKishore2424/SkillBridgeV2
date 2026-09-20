@@ -1,0 +1,8 @@
+[Unit]
+Description=Point the SkillBridge hostname at this instance's current public IP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/skillbridge-dns

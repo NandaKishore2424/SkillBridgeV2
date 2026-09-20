@@ -265,6 +265,20 @@ FROM demo_person p
 CROSS JOIN demo_secret s
 LEFT JOIN colleges c ON c.code = p.college_code;
 
+-- One student is left as invited-but-never-signed-in, which is what a bulk CSV
+-- import leaves behind when somebody does not act on their email. It is also
+-- the only state in which "resend invitation" works: InvitationIssuer refuses
+-- anything that is not PENDING_SETUP, with a 409.
+--
+-- Without this row that button answers 409 for every student in the database,
+-- and the email step of docs/DEMO.md cannot be demonstrated at all. Found by
+-- running the demo script against seeded data on 2026-09-20.
+UPDATE users SET account_status = 'PENDING_SETUP',
+                 must_change_password = true,
+                 first_login_at = NULL,
+                 profile_completed = false
+ WHERE email = 'sneha@hillview.test';
+
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.id, r.id
 FROM demo_person p

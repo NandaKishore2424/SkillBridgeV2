@@ -1,0 +1,77 @@
+# The only thing on this host listening to the internet. Copied to
+# /opt/skillbridge/Caddyfile.
+#
+# Caddy terminates TLS, obtains and renews the certificate by itself, and
+# passes everything to the backend. SITE_ADDRESS comes from app.env.
+#
+# WHAT REACHES THIS
+#
+# Only the Vercel rewrite. The SPA is served by Vercel, which proxies /api/* to
+# this host, so the browser talks to Vercel and Vercel talks to Caddy. The SPA
+# is not served from here at all.
+#
+# WHY CADDY AND NOT NGINX + CERTBOT
+#
+# Integronix, deployed the same shape, uses nginx with certbot and a renewal
+# hook. That works and is entirely defensible. This uses Caddy because it does
+# ACME itself: no certbot package, no renewal hook, no webroot for the
+# challenge, no second config file, and no cron entry that has to survive an
+# instance that is switched off most of the time. One container and one file.
+#
+# The cost is that TLS is inside Docker rather than on the host, so a container
+# runtime problem takes the certificate with it. On a host whose only job is to
+# run these containers, that is not a meaningful additional failure.
+#
+# THE RENEWAL CATCH, ON A HOST THAT IS USUALLY OFF
+#
+# Caddy renews about 30 days before expiry, which needs the instance running
+# when that window comes round. For a box started only for interviews, the
+# renewal happens on whichever interview day falls inside the window. Caddy
+# retries on every start, so this self-corrects; it is worth knowing before the
+# first time a certificate looks older than expected.
+{
+	# Where Let's Encrypt sends expiry warnings. Without it Caddy registers an
+	# anonymous ACME account and nobody is told when something is wrong.
+	email {$ACME_EMAIL}
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# On, deliberately. This host is off most of the time and has one viewer
+	# when it is on, so the volume is nothing and the record of what reached it
+	# is the only evidence available afterwards that anything did.
+	log {
+		output stderr
+		format console
+	}
+
+	header {
+		# max-age is a fortnight rather than a year: the hostname here is a
+		# free dynamic-DNS name that may well change, and a year-long HSTS
+		# entry on a name you no longer control is unpleasant for whoever gets
+		# it next.
+		Strict-Transport-Security "max-age=1209600"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Caddy advertises itself by default. Free information for anyone
+		# scanning, and no browser needs it.
+		-Server
+	}
+
+	# Actuator is NOT exposed. /actuator/health is unauthenticated by design and
+	# harmless, but metrics and prometheus are a map of the system's internals
+	# and have no reason to leave the host. Read them over SSH:
+	#   docker compose exec backend wget -qO- localhost:8080/actuator/prometheus
+	handle /actuator/* {
+		respond 404
+	}
+
+	# Everything else is the API. handle_path would strip the prefix; handle
+	# keeps it, because the controllers are mapped on /api/v1 and expect to see
+	# it.
+	handle {
+		reverse_proxy backend:8080
+	}
+}

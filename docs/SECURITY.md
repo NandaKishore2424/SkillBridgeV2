@@ -84,6 +84,14 @@ database access.
   link is the stronger design; recorded in START-HERE.
 - **No WAF, no intrusion detection, no secret manager.** The deploy is a single
   host started for interviews (Phase 7); secrets come from a gitignored `.env`.
-- **`/actuator/health` is public** and reports component status to an
-  unauthenticated caller by design, for the load balancer. Details are
-  `when-authorized`.
+- **`/actuator/health` answers an unauthenticated caller**, with a bare status;
+  details are `when-authorized`. It is reached over the container's own
+  loopback by the Docker healthcheck, and **not from the internet**: Caddy
+  returns 404 for the whole of `/actuator/*` (`deploy/Caddyfile`), so `metrics`
+  and `prometheus` — which are a map of the system's internals — never leave
+  the host. Read them over SSH.
+- **Port 443 is open to the world while the demo host is running.** The control
+  is that the host is switched off except during an interview, so the exposure
+  window is the interview itself, and a nightly EventBridge rule stops it if
+  nobody does. That is a real acceptance, not a mitigation; `docs/DEPLOYMENT.md`
+  says what to do if it is not good enough for a given situation.

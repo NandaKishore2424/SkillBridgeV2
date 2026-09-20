@@ -1,0 +1,49 @@
+#!/bin/bash
+# Pull the images CI published and roll the stack onto them.
+#
+#   sudo skillbridge-deploy               # newest main
+#   sudo skillbridge-deploy sha-<commit>  # roll back / pin to a specific build
+#
+# Installed at /usr/local/bin/skillbridge-deploy.
+#
+# The host never builds; CI does. This only pulls and restarts, then waits for
+# the backend to report healthy before saying it worked -- because `docker
+# compose up -d` returns as soon as the containers are *started*, which is
+# several seconds before the JVM has connected to Supabase and run Flyway, and
+# a minute or more before the AI service has loaded its model.
+set -euo pipefail
+
+cd /opt/skillbridge
+export IMAGE_TAG="${1:-main}"
+
+echo "rolling onto :${IMAGE_TAG}"
+docker compose pull --quiet
+docker compose up -d --remove-orphans
+
+# The backend is the one worth gating on: if it is healthy, the database is
+# reachable and the migrations ran. The AI service takes longer and its absence
+# degrades the report rather than the application, so it is reported but not
+# waited for.
+echo "waiting for the backend…"
+for i in $(seq 1 60); do
+    status=$(docker inspect -f '{{.State.Health.Status}}' skillbridge-backend-1 2>/dev/null || echo none)
+    if [ "$status" = healthy ]; then
+        echo "backend healthy after $((i * 5))s: $(docker inspect -f '{{.Config.Image}}' skillbridge-backend-1)"
+
+        ai=$(docker inspect -f '{{.State.Health.Status}}' skillbridge-ai-1 2>/dev/null || echo none)
+        echo "ai: $ai (it loads the model on start; give it another minute if 'starting')"
+
+        # Only once something healthy is running. Pruning before this would
+        # throw away the image you may be about to roll back to.
+        docker image prune -f >/dev/null
+        exit 0
+    fi
+    sleep 5
+done
+
+echo "backend not healthy after 5 minutes (status: $status)" >&2
+docker compose logs --tail 40 backend >&2
+echo >&2
+echo "Most likely: Supabase is paused, or app.env has the wrong connection string." >&2
+echo "  docker compose exec backend wget -qO- localhost:8080/actuator/health" >&2
+exit 1

@@ -1,0 +1,22 @@
+# Starts the stack at boot from the newest images CI published.
+# If GHCR is unreachable the pull fails harmlessly ("-") and the cached images
+# run, so an instance with no network still comes up with what it had.
+[Unit]
+Description=SkillBridge API stack (docker compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/skillbridge
+ExecStartPre=-/usr/bin/docker compose pull --quiet
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose down
+# The AI image is 2.3 GB. A cold pull on a fresh instance is not quick, and a
+# shorter timeout would kill it halfway and leave the stack down.
+TimeoutStartSec=1200
+
+[Install]
+WantedBy=multi-user.target

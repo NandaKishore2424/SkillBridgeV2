@@ -1,0 +1,123 @@
+# The backend half, on one EC2 host. Copied to /opt/skillbridge/compose.yml.
+#
+#   sudo skillbridge-deploy               # roll onto the newest :main
+#   sudo skillbridge-deploy sha-<commit>  # roll back to a specific build
+#
+# Everything in docs/DEPLOYMENT.md.
+#
+# WHERE THE PIECES LIVE
+#
+#   frontend   Vercel, which proxies /api/* to this host
+#              (skillbridge-frontend/vercel.json, and VERCEL.md for why)
+#   database   Supabase
+#   this host  backend, AI service, RabbitMQ, Mailpit, Caddy
+#
+# THE HOST NEVER BUILDS
+#
+# CI builds both images, smoke-tests them, and publishes to GHCR; this file
+# only names tags. That is not a preference. The AI image is 2.3 GB because it
+# carries PyTorch and the MiniLM weights, and building it on a t3.medium would
+# take a long time and might not finish at all. Pulling is minutes.
+#
+# Secrets come from /opt/skillbridge/app.env (root, 0600) and never from this
+# file, so this file is safe to read in a public repository.
+#
+# MEMORY, on a t3.medium (4 GiB)
+#
+#   ai 1536m + backend 768m + rabbitmq 384m + caddy 128m + mailpit 64m = 2880m
+#
+# leaving about 1.2 GiB for the OS and page cache. PostgreSQL is absent from
+# that list because the database is Supabase now, and that is most of why this
+# fits. It still does NOT fit on a t3.small: the AI service alone wants 1.5 GiB.
+
+name: skillbridge
+
+services:
+
+  backend:
+    image: ghcr.io/nandakishore2424/skillbridge-backend:${IMAGE_TAG:-main}
+    env_file: /opt/skillbridge/app.env
+    environment:
+      # No application-prod.yaml exists, deliberately: in a container the
+      # configuration IS the environment. A profile file in the image would be
+      # a second place for settings to live and a thing to rebuild to change --
+      # and the image now carries no profile files at all, which
+      # deploy/images.test.sh enforces.
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    # No `ports:`. Caddy reaches this over the compose network by name, and
+    # nothing outside the host can reach it at all. The absence is the point.
+    mem_limit: 768m
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  ai:
+    image: ghcr.io/nandakishore2424/skillbridge-ai:${IMAGE_TAG:-main}
+    env_file: /opt/skillbridge/app.env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      # The backend declares the exchanges, queues and bindings. Starting the
+      # consumer first means it connects, finds no queue and retries -- which
+      # works, and fills the log with failures that look like a fault.
+      backend:
+        condition: service_started
+    mem_limit: 1536m
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    env_file: /opt/skillbridge/app.env
+    environment:
+      # Without this the broker sizes its watermark against the HOST's memory
+      # rather than the container's limit, grows past mem_limit, and is killed
+      # by the kernel -- which from outside looks like a random crash.
+      RABBITMQ_VM_MEMORY_HIGH_WATERMARK: 256MiB
+    volumes:
+      - rabbitdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 384m
+    restart: unless-stopped
+
+  mailpit:
+    # Every invitation and notification lands here and goes no further. On a
+    # demo host that is the point: real delivery would mean mailing addresses
+    # belonging to people, from an instance with no domain reputation.
+    # ResendMailGateway is the path for real mail, once a verified domain
+    # exists to send from.
+    image: axllent/mailpit:v1.27
+    mem_limit: 64m
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"    # the ACME challenge, and the redirect to 443
+      - "443:443"
+    env_file: /opt/skillbridge/app.env
+    volumes:
+      - /opt/skillbridge/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The certificate and the ACME account key. Losing this volume means
+      # re-issuing on the next boot: fine once, rate-limited as a habit.
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - backend
+    mem_limit: 128m
+    restart: unless-stopped
+
+volumes:
+  rabbitdata:
+  caddydata:
+  caddyconfig:

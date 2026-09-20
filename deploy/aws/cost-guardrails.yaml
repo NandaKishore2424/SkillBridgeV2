@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >-
+  Two things that stop a demo host quietly eating a $100 credit: a budget that
+  emails before the money is gone, and a nightly rule that switches the instance
+  off whether or not anyone remembered to.
+
+# Apply from the development machine, once:
+#
+#   aws cloudformation deploy \
+#     --template-file deploy/aws/cost-guardrails.yaml \
+#     --stack-name skillbridge-cost-guardrails \
+#     --region ap-south-1 \
+#     --capabilities CAPABILITY_IAM \
+#     --parameter-overrides InstanceId=i-0... NotifyEmail=you@example.com
+#
+# WHY THE AUTO-STOP MATTERS MORE THAN THE BUDGET
+#
+# The budget tells you after the fact. On a $100 credit that expires
+# 2027-01-27, a t3.medium left running costs about $30 a month and the first
+# notification arrives when half the credit is already spent.
+#
+# Forgetting to stop it is not a hypothetical -- it is the normal outcome of an
+# interview that ends with a conversation. The nightly rule makes that mistake
+# cost hours instead of months, and it is the whole reason this file exists.
+#
+# WHY LONG-FORM INTRINSICS
+#
+# `Ref:` and `Fn::Sub:` rather than `!Ref` and `!Sub`. The short forms are YAML
+# tags that only CloudFormation's parser understands, so a plain YAML parser
+# cannot read this file -- and cost-guardrails.test.sh, which checks the
+# structure without an AWS account, is a plain YAML parser. The long forms are
+# identical to CloudFormation and readable by everything.
+
+Parameters:
+
+  InstanceId:
+    Type: String
+    Description: The EC2 instance to stop each night, e.g. i-0123456789abcdef0
+    AllowedPattern: '^i-[0-9a-f]{8,17}$'
+    ConstraintDescription: must be an EC2 instance id
+
+  NotifyEmail:
+    Type: String
+    Description: Where budget warnings go. AWS sends a subscription confirmation first.
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 15
+    MinValue: 1
+    Description: >-
+      Monthly ceiling. 15 is deliberately well under the credit: this host is
+      meant to cost a few dollars a month, so the alert should fire when
+      something is wrong, not when the money is nearly gone.
+
+  AutoStopCron:
+    Type: String
+    Default: 'cron(30 17 * * ? *)'
+    Description: >-
+      When to force the instance off. UTC -- 17:30 UTC is 23:00 in India, late
+      enough not to interrupt an interview and early enough that an instance
+      left on in the morning is off the same day. Change it if your interviews
+      run later; do not remove it.
+
+Resources:
+
+  # ----------------------------------------------------------------- budget
+
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: skillbridge-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount:
+            Ref: MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        # 50% of a small budget is an early warning, not an emergency -- which
+        # is the point of setting the budget low.
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 50
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address:
+                Ref: NotifyEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address:
+                Ref: NotifyEmail
+        # FORECASTED, not ACTUAL. This is the one that arrives in time to do
+        # something: it fires when the current rate of spend would breach the
+        # budget by month end, which on a host left running is within hours of
+        # leaving it running.
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address:
+                Ref: NotifyEmail
+
+  # -------------------------------------------------------------- auto-stop
+
+  AutoStopRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: stop-the-demo-instance
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # StopInstances only, on one instance id. Not ec2:* and not "*":
+              # this role exists to turn one machine off, so that is the whole
+              # of what it can do. If it is ever compromised, the worst
+              # available outcome is a stopped demo host.
+              - Effect: Allow
+                Action: ec2:StopInstances
+                Resource:
+                  Fn::Sub: 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${InstanceId}'
+
+  AutoStopSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: skillbridge-nightly-stop
+      Description: Stops the demo instance whether or not anyone remembered to.
+      ScheduleExpression:
+        Ref: AutoStopCron
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      State: ENABLED
+      Target:
+        # The universal target for the EC2 API. Stopping an already-stopped
+        # instance is not an error, so this is safe to run every night for ever.
+        Arn: 'arn:aws:scheduler:::aws-sdk:ec2:stopInstances'
+        RoleArn:
+          Fn::GetAtt: [AutoStopRole, Arn]
+        Input:
+          Fn::Sub: '{"InstanceIds": ["${InstanceId}"]}'
+
+Outputs:
+
+  BudgetName:
+    Description: Check it under Billing -> Budgets
+    Value: skillbridge-monthly
+
+  AutoStopSchedule:
+    Description: Disable this only if you have something better
+    Value:
+      Ref: AutoStopSchedule
+
+  ConfirmTheEmail:
+    Description: >-
+      AWS sends a subscription confirmation to NotifyEmail. Until it is
+      accepted, the budget exists and notifies nobody.
+    Value:
+      Ref: NotifyEmail
