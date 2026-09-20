@@ -5,7 +5,7 @@
  */
 
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { Landing } from './pages/Landing'
+import { Landing } from './pages/landing/Landing'
 import { Login } from './pages/auth/Login'
 import { FirstLogin } from './pages/auth/FirstLogin'
 import { ProtectedRoute } from './shared/components/auth'

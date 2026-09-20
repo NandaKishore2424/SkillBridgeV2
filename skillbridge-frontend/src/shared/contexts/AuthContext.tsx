@@ -19,6 +19,7 @@ import type { User, UserRole } from '@/shared/types'
 import * as authAPI from '@/api/auth'
 import apiClient from '@/api/client'
 import { clearAccessToken, getAccessToken, onTokenFromAnotherTab, setAccessToken } from '@/shared/auth/accessTokenStore'
+import { dashboardPathFor } from '@/shared/auth/dashboardPath'
 
 // Create context with undefined default (will be set by Provider)
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -276,26 +277,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return
         }
 
-        switch (user.role) {
-          case 'SYSTEM_ADMIN':
-            redirectPath = '/admin/dashboard'
-            break
-          case 'COLLEGE_ADMIN':
-            redirectPath = '/admin/college-admin/dashboard'
-            break
-          case 'TRAINER':
-            redirectPath = '/trainer/dashboard'
-            break
-          case 'STUDENT':
-            // Check if student needs to complete profile setup
-            if (user.accountStatus === 'PENDING_SETUP' || !user.profileCompleted) {
-              redirectPath = '/student/profile-setup'
-            } else {
-              redirectPath = '/student/dashboard'
-            }
-            break
-          default:
-            redirectPath = '/dashboard'
+        // A student who has not finished their profile goes there first;
+        // everybody else goes to their dashboard. The table is in
+        // `shared/auth/dashboardPath` so that this is the only special case
+        // rather than a fifth copy of the mapping.
+        //
+        // The `default` this replaced sent an unrecognised role to
+        // `/dashboard`, which has never been a route: the catch-all turned it
+        // into a silent redirect to the public page, so a successful login
+        // looked like a failed one.
+        if (user.role === 'STUDENT' && (user.accountStatus === 'PENDING_SETUP' || !user.profileCompleted)) {
+          redirectPath = '/student/profile-setup'
+        } else {
+          redirectPath = dashboardPathFor(user.role)
         }
         console.log('[AuthContext] Navigating to:', redirectPath)
         navigate(redirectPath, { replace: true })

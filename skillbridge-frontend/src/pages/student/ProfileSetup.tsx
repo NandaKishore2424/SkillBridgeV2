@@ -24,6 +24,7 @@ import {
     Alert,
     AlertDescription,
 } from '@/shared/components/ui'
+import { DASHBOARD_PATH } from '@/shared/auth/dashboardPath'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import {
     completeProfile,
@@ -123,7 +124,7 @@ export function ProfileSetup() {
         onSuccess: () => {
             showSuccess('Profile completed successfully! Welcome to SkillBridge.')
             setTimeout(() => {
-                navigate('/student/dashboard')
+                navigate(DASHBOARD_PATH.STUDENT)
             }, 1500)
         },
         onError: (error: any) => {

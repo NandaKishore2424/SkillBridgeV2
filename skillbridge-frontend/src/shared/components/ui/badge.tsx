@@ -15,6 +15,13 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
+        success:
+          "border-transparent bg-success text-success-foreground hover:bg-success/80",
+        warning:
+          "border-transparent bg-warning text-warning-foreground hover:bg-warning/80",
+        // A quiet chip in the brand colour, for a count or a label that should
+        // read as information rather than as a call to action.
+        accent: "border-transparent bg-accent text-accent-foreground",
       },
     },
     defaultVariants: {
