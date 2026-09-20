@@ -1,6 +1,8 @@
 package com.skillbridge.testsupport;
 
+import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.security.AuthenticatedUser;
+import com.skillbridge.auth.service.JwtService;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -25,6 +27,23 @@ public final class TestAuthentication {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+    }
+
+    /**
+     * An {@code Authorization} header value for {@code user} acting in one role.
+     *
+     * <p>Eight test classes wrote this themselves. Each has to agree with the
+     * token the application issues -- the claims authentication reads since
+     * 2026-09-10 -- and eight copies is eight places to forget a claim when it
+     * changes.
+     */
+    public static String bearer(JwtService jwtService, User user, String role) {
+        return "Bearer " + token(jwtService, user, role);
+    }
+
+    /** The raw token, for a test that takes it apart. */
+    public static String token(JwtService jwtService, User user, String role) {
+        return jwtService.generateAccessToken(user, role, Set.of(role), false);
     }
 
     public static void clear() {

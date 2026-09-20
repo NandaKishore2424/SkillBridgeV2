@@ -9,6 +9,7 @@ import com.skillbridge.auth.service.AuthService;
 import com.skillbridge.auth.service.JwtService;
 import com.skillbridge.common.exception.UnauthorizedException;
 import com.skillbridge.testsupport.IntegrationTest;
+import com.skillbridge.testsupport.TestAuthentication;
 import com.skillbridge.testsupport.TenantFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -134,9 +135,8 @@ class InvitationEmailTest {
 
     private void resend() throws Exception {
         User admin = userRepository.findById(fixture.adminUserId).orElseThrow();
-        String token = jwtService.generateAccessToken(admin, "COLLEGE_ADMIN", Set.of("COLLEGE_ADMIN"), false);
         mvc.perform(post("/api/v1/admin/students/{id}/resend-invitation", studentUserId)
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", TestAuthentication.bearer(jwtService, admin, "COLLEGE_ADMIN")))
                 .andExpect(status().isOk());
     }
 

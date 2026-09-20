@@ -243,7 +243,14 @@
 				Dialect without JDBC metadata", which reads like a driver or config
 				problem rather than "there were no connections left".
 
-				`local` stays first: it carries the datasource. `test` only overrides.
+				`local` was listed first here, for its datasource. It is gone
+				(2026-09-20): `local` means a developer's gitignored
+				application-local.yaml, which no two machines share and CI does not
+				have at all, so tests ran against settings nobody else could
+				reproduce. It aimed mail at whatever SMTP server that file named,
+				for one. The Testcontainers initializer supplies the datasource and
+				application-test.yaml everything else, so a test run is now the same
+				here and in CI. `ProfileRulesTest` keeps it that way.
 			-->
 			<!--
 				THE TWO TIERS.
@@ -271,7 +278,7 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<systemPropertyVariables>
-						<spring.profiles.active>local,test</spring.profiles.active>
+						<spring.profiles.active>test</spring.profiles.active>
 					</systemPropertyVariables>
 					<excludedGroups>integration</excludedGroups>
 					<!--
@@ -299,7 +306,7 @@
 				<artifactId>maven-failsafe-plugin</artifactId>
 				<configuration>
 					<systemPropertyVariables>
-						<spring.profiles.active>local,test</spring.profiles.active>
+						<spring.profiles.active>test</spring.profiles.active>
 					</systemPropertyVariables>
 					<groups>integration</groups>
 					<includes>

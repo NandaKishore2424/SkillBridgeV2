@@ -10,6 +10,7 @@ import com.skillbridge.shared.mail.MailDeliveryException;
 import com.skillbridge.shared.mail.MailGateway;
 import com.skillbridge.shared.mail.MailMessage;
 import com.skillbridge.testsupport.IntegrationTest;
+import com.skillbridge.testsupport.TestAuthentication;
 import com.skillbridge.testsupport.TenantFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,16 +79,14 @@ class CsvImportTest {
     void seed() {
         fixture = new TenantFixture(jdbc, COLLEGE_CODE);
         fixture.seed(1, 1);
-        User admin = userRepository.findById(fixture.adminUserId).orElseThrow();
-        token = jwtService.generateAccessToken(admin, "COLLEGE_ADMIN", Set.of("COLLEGE_ADMIN"), false);
+        token = TestAuthentication.bearer(jwtService,
+                userRepository.findById(fixture.adminUserId).orElseThrow(), "COLLEGE_ADMIN");
     }
 
     @AfterEach
     void cleanUp() {
         jdbc.execute("DROP TRIGGER IF EXISTS csv_import_test_explode ON students");
         jdbc.execute("DROP FUNCTION IF EXISTS csv_import_test_explode()");
-        // bulk_uploads.uploaded_by_user_id is NOT NULL with ON DELETE SET NULL, so
-        // the uploads have to go before the fixture deletes the admin.
         jdbc.update("DELETE FROM bulk_uploads WHERE college_id = ?", fixture.collegeId);
         fixture.remove();
     }
@@ -223,7 +222,7 @@ class CsvImportTest {
         byte[] body = multipartBody("x".repeat(1_100_000));
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/admin/students/bulk-upload"))
-                        .header("Authorization", "Bearer " + token)
+                        .header("Authorization", token)
                         .header("Content-Type", "multipart/form-data; boundary=csvimporttest")
                         .POST(HttpRequest.BodyPublishers.ofByteArray(body))
                         .build(),
@@ -281,7 +280,7 @@ class CsvImportTest {
     }
 
     private <T extends org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder> T auth(T request) {
-        request.header("Authorization", "Bearer " + token);
+        request.header("Authorization", token);
         return request;
     }
 

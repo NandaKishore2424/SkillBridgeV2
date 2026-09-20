@@ -5,6 +5,7 @@ import com.skillbridge.auth.repository.UserRepository;
 import com.skillbridge.auth.service.JwtService;
 import com.skillbridge.batch.service.BatchService;
 import com.skillbridge.testsupport.IntegrationTest;
+import com.skillbridge.testsupport.TestAuthentication;
 import com.skillbridge.testsupport.TenantFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,8 +59,8 @@ class BatchWriteTest {
     void seed() {
         fixture = new TenantFixture(jdbc, "BATCHWRITE");
         fixture.seed(0, 0);
-        User admin = userRepository.findById(fixture.adminUserId).orElseThrow();
-        token = jwtService.generateAccessToken(admin, "COLLEGE_ADMIN", Set.of("COLLEGE_ADMIN"), false);
+        token = TestAuthentication.bearer(jwtService,
+                userRepository.findById(fixture.adminUserId).orElseThrow(), "COLLEGE_ADMIN");
     }
 
     @AfterEach
@@ -181,7 +182,7 @@ class BatchWriteTest {
     }
 
     private MockHttpServletRequestBuilder auth(MockHttpServletRequestBuilder request) {
-        return request.header("Authorization", "Bearer " + token);
+        return request.header("Authorization", token);
     }
 
     private Integer batchCount() {

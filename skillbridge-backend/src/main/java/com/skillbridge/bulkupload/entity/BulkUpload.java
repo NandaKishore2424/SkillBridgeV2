@@ -32,8 +32,9 @@ public class BulkUpload {
     @JoinColumn(name = "college_id", nullable = false)
     private College college;
 
+    /** Null once that account is deleted: the upload's history outlives it (V9). */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "uploaded_by_user_id", nullable = false)
+    @JoinColumn(name = "uploaded_by_user_id")
     private User uploadedBy;
 
     @Column(name = "entity_type", nullable = false, length = 20)

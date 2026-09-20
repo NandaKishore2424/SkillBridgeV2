@@ -6,6 +6,7 @@ import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.UserRepository;
 import com.skillbridge.auth.service.JwtService;
 import com.skillbridge.testsupport.IntegrationTest;
+import com.skillbridge.testsupport.TestAuthentication;
 import com.skillbridge.testsupport.TenantFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,7 +65,7 @@ class SkillGapReportTest {
     @Test
     @DisplayName("before any analysis the student gets 204, not an error and not an empty report")
     void noReportYet() throws Exception {
-        mvc.perform(get("/api/v1/students/me/skill-gap").header("Authorization", bearer(student())))
+        mvc.perform(get("/api/v1/students/me/skill-gap").header("Authorization", student()))
                 .andExpect(status().isNoContent());
     }
 
@@ -73,11 +74,11 @@ class SkillGapReportTest {
     void reportIsShown() throws Exception {
         storeReport("success.example.json");
 
-        for (String token : new String[]{bearer(student()), bearer(admin())}) {
-            String path = token.equals(bearer(student()))
-                    ? "/api/v1/students/me/skill-gap"
-                    : "/api/v1/admin/students/" + studentId + "/skill-gap";
-            mvc.perform(get(path).header("Authorization", token))
+        record Caller(String authorization, String path) { }
+        for (Caller caller : new Caller[]{
+                new Caller(student(), "/api/v1/students/me/skill-gap"),
+                new Caller(admin(), "/api/v1/admin/students/" + studentId + "/skill-gap")}) {
+            mvc.perform(get(caller.path()).header("Authorization", caller.authorization()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("SUCCESS"))
                     .andExpect(jsonPath("$.matchedJobs[0].title").value("Sr. Programmer Analyst - Big Data"))
@@ -91,7 +92,7 @@ class SkillGapReportTest {
     @Test
     @DisplayName("asking for a fresh analysis queues a PROFILE_UPDATED event for the AI service")
     void refreshQueuesAnEvent() throws Exception {
-        mvc.perform(post("/api/v1/students/me/skill-gap/refresh").header("Authorization", bearer(student())))
+        mvc.perform(post("/api/v1/students/me/skill-gap/refresh").header("Authorization", student()))
                 .andExpect(status().isAccepted());
 
         assertThat(jdbc.queryForList(
@@ -110,17 +111,13 @@ class SkillGapReportTest {
     }
 
     private String student() {
-        User user = userRepository.findById(fixture.studentUserIds.get(0)).orElseThrow();
-        return jwtService.generateAccessToken(user, "STUDENT", Set.of("STUDENT"), false);
+        return TestAuthentication.bearer(jwtService,
+                userRepository.findById(fixture.studentUserIds.get(0)).orElseThrow(), "STUDENT");
     }
 
     private String admin() {
-        User user = userRepository.findById(fixture.adminUserId).orElseThrow();
-        return jwtService.generateAccessToken(user, "COLLEGE_ADMIN", Set.of("COLLEGE_ADMIN"), false);
-    }
-
-    private static String bearer(String token) {
-        return "Bearer " + token;
+        return TestAuthentication.bearer(jwtService,
+                userRepository.findById(fixture.adminUserId).orElseThrow(), "COLLEGE_ADMIN");
     }
 
     private static Path contract() {

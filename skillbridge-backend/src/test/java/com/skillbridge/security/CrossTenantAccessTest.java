@@ -6,6 +6,7 @@ import com.skillbridge.auth.entity.User;
 import com.skillbridge.auth.repository.UserRepository;
 import com.skillbridge.auth.service.JwtService;
 import com.skillbridge.testsupport.IntegrationTest;
+import com.skillbridge.testsupport.TestAuthentication;
 import com.skillbridge.testsupport.TenantFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -431,13 +432,11 @@ class CrossTenantAccessTest {
         jdbc.update("DELETE FROM student_projects WHERE student_id IN (SELECT id FROM students WHERE college_id = ?)", collegeId);
         jdbc.update("DELETE FROM student_skills WHERE student_id IN (SELECT id FROM students WHERE college_id = ?)", collegeId);
         jdbc.update("DELETE FROM enrollment_requests WHERE college_id = ?", collegeId);
-        // Before the users: uploaded_by_user_id is NOT NULL but ON DELETE SET NULL.
         jdbc.update("DELETE FROM bulk_uploads WHERE college_id = ?", collegeId);
     }
 
     private String token(Long userId, String role) {
-        User user = userRepository.findById(userId).orElseThrow();
-        return jwtService.generateAccessToken(user, role, Set.of(role), false);
+        return TestAuthentication.token(jwtService, userRepository.findById(userId).orElseThrow(), role);
     }
 
     /**
