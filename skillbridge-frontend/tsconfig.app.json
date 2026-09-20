@@ -5,7 +5,12 @@
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "types": ["vite/client"],
+    /* "node" is here for the test files only: three of them read the
+       real index.css, index.html and tailwind.config.js off disk rather than
+       duplicating their contents, which is what makes those tests worth
+       having. Application code that imports "node:fs" fails at runtime in a
+       browser; `ArchitectureRules` in the suite keeps it to tests. */
+    "types": ["vite/client", "node"],
     "skipLibCheck": true,
 
     /* Bundler mode */
@@ -30,5 +35,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "tailwind.config.d.ts"]
 }

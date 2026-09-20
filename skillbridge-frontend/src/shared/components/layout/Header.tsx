@@ -20,6 +20,7 @@ import {
 } from '@/shared/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar'
 import { Badge } from '@/shared/components/ui/badge'
+import { ThemeToggle } from '@/shared/theme'
 
 interface HeaderProps {
   /** Whether sidebar is open (for mobile) */
@@ -112,8 +113,9 @@ export function Header({
           </Link>
         </div>
 
-        {/* Right: User Menu */}
-        <div className="flex items-center gap-4">
+        {/* Right: Theme and User Menu */}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 
 import { setAccessToken } from '@/shared/auth/accessTokenStore'
 import { AuthProvider } from '@/shared/contexts/AuthContext'
+import { ThemeProvider } from '@/shared/theme'
 
 import { userPayload } from './handlers'
 
@@ -62,9 +63,11 @@ export function renderWithProviders(ui: ReactElement, { route = '/' }: Options =
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <MemoryRouter initialEntries={[route]}>
-        <QueryClientProvider client={client}>
-          <AuthProvider>{children}</AuthProvider>
-        </QueryClientProvider>
+        <ThemeProvider>
+          <QueryClientProvider client={client}>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryClientProvider>
+        </ThemeProvider>
       </MemoryRouter>
     )
   }

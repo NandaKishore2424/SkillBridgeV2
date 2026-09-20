@@ -2,50 +2,113 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * The design tokens.
+ *
+ * Every colour in the application comes from here, as `H S% L%` triples that
+ * `tailwind.config.js` wraps in `hsl(...)`. Nothing writes a hex value in a
+ * component, which is what makes the dark theme a matter of redefining this
+ * block rather than editing every screen.
+ *
+ * `src/shared/design/tokens.test.ts` holds the rules: every token Tailwind
+ * names exists in both themes, and every foreground/background pair the UI
+ * actually renders meets WCAG AA (4.5:1 for text, 3:1 for borders and large
+ * text). The numbers below were chosen by running that test, not by eye.
+ */
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 224 71% 4%;
+
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 224 71% 4%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --popover-foreground: 224 71% 4%;
+
+    /* Indigo. The brand colour, and the only strongly saturated thing on a
+       page: a screen full of accent colours has no accent. */
+    --primary: 243 72% 51%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 224 71% 11%;
+
+    --muted: 220 14% 96%;
+    /* Reads on both --background and --muted; the darker of the two pairs is
+       what the test checks. */
+    --muted-foreground: 220 9% 38%;
+
+    --accent: 243 70% 96%;
+    --accent-foreground: 243 72% 34%;
+
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 69% 27%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 32 95% 30%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 13% 88%;
+    --input: 220 13% 58%;
+    --ring: 243 72% 51%;
+
+    --radius: 0.625rem;
+
+    /* Named series for anything that plots more than one thing at once. Their
+       job is to be distinguishable from each other, so the test checks that
+       too, not only that they read against the page. */
+    --chart-1: 243 72% 51%;
+    --chart-2: 174 72% 29%;
+    --chart-3: 32 90% 38%;
+    --chart-4: 322 65% 44%;
+    --chart-5: 206 86% 31%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 224 71% 4%;
+    --foreground: 210 20% 98%;
+
+    --card: 224 50% 7%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 224 50% 7%;
+    --popover-foreground: 210 20% 98%;
+
+    /* Lighter than the light theme's indigo: the same colour on a dark page is
+       a dark shape on a dark page. */
+    --primary: 243 90% 76%;
+    --primary-foreground: 224 71% 6%;
+
+    --secondary: 223 35% 16%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 223 35% 16%;
+    --muted-foreground: 218 15% 72%;
+
+    --accent: 223 40% 20%;
+    --accent-foreground: 210 20% 98%;
+
+    --destructive: 0 84% 71%;
+    --destructive-foreground: 224 71% 6%;
+
+    --success: 152 60% 62%;
+    --success-foreground: 224 71% 6%;
+
+    --warning: 38 92% 66%;
+    --warning-foreground: 224 71% 6%;
+
+    --border: 223 28% 22%;
+    --input: 223 28% 43%;
+    --ring: 243 90% 76%;
+
+    --chart-1: 243 90% 76%;
+    --chart-2: 174 60% 55%;
+    --chart-3: 32 90% 62%;
+    --chart-4: 322 75% 72%;
+    --chart-5: 206 85% 62%;
   }
 }
 
@@ -54,6 +117,31 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  /* Every focusable thing gets the same visible ring. Radix and the native
+     controls disagree about focus styling otherwise, and a keyboard user ends
+     up guessing on half the screens. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer utilities {
+  /* The landing page's hero wash. A single radial tint of the brand colour,
+     defined once so it cannot drift between sections. */
+  .bg-brand-wash {
+    background-image:
+      radial-gradient(60rem 30rem at 50% -10%, hsl(var(--primary) / 0.14), transparent 70%),
+      radial-gradient(40rem 24rem at 90% 10%, hsl(var(--chart-2) / 0.10), transparent 70%);
+  }
+
+  /* Hairline grid behind the hero. Uses --border so it follows the theme. */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.7) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.7) 1px, transparent 1px);
+    background-size: 3.5rem 3.5rem;
   }
 }

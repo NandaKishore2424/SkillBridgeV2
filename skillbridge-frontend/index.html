@@ -2,9 +2,36 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="SkillBridge is a training management platform for colleges: batches, syllabus progress, and an AI skill-gap analysis against a live job corpus."
+    />
     <title>SkillBridge</title>
+    <script>
+      /*
+        Runs before first paint, on purpose.
+        React applies the theme in an effect, which is after the browser has
+        already painted -- so a person who prefers dark sees a white page for a
+        frame on every load. This is the same decision the ThemeProvider makes,
+        duplicated here because there is nowhere earlier to put it.
+        `src/shared/theme/noFlash.test.ts` asserts the two stay in step.
+      */
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('skillbridge_theme')
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', dark)
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (e) {
+          /* private mode, blocked storage, no matchMedia: keep the light default */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
