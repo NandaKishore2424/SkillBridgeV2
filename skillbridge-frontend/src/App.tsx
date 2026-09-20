@@ -4,8 +4,9 @@
  * Sets up routing for the entire application
  */
 
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { Landing } from './pages/landing/Landing'
+import { NotFound } from './pages/NotFound'
 import { Login } from './pages/auth/Login'
 import { FirstLogin } from './pages/auth/FirstLogin'
 import { ProtectedRoute } from './shared/components/auth'
@@ -23,10 +24,13 @@ import { BatchesList } from './pages/admin/batches/BatchesList'
 import { CreateBatch } from './pages/admin/batches/CreateBatch'
 import { BatchDetails } from './pages/admin/batches/BatchDetails'
 import { CompaniesList } from './pages/admin/companies/CompaniesList'
+import { CompanyDetail } from './pages/admin/companies/CompanyDetail'
 import { CreateCompany } from './pages/admin/companies/CreateCompany'
 import { TrainersList } from './pages/admin/trainers/TrainersList'
+import { TrainerDetail } from './pages/admin/trainers/TrainerDetail'
 import { CreateTrainer } from './pages/admin/trainers/CreateTrainer'
 import { StudentsList } from './pages/admin/students/StudentsList'
+import { StudentDetail } from './pages/admin/students/StudentDetail'
 import { StudentBulkUploadPage } from './pages/admin/students/StudentBulkUploadPage'
 import { TrainerBulkUploadPage } from './pages/admin/trainers/TrainerBulkUploadPage'
 
@@ -150,6 +154,14 @@ function App() {
         }
       />
       <Route
+        path="/admin/companies/:id"
+        element={
+          <ProtectedRoute>
+            <CompanyDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/trainers"
         element={
           <ProtectedRoute>
@@ -174,10 +186,26 @@ function App() {
         }
       />
       <Route
+        path="/admin/students/:id"
+        element={
+          <ProtectedRoute>
+            <StudentDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/students/upload"
         element={
           <ProtectedRoute>
             <StudentBulkUploadPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/trainers/:id"
+        element={
+          <ProtectedRoute>
+            <TrainerDetail />
           </ProtectedRoute>
         }
       />
@@ -269,8 +297,15 @@ function App() {
         }
       />
 
-      {/* Catch all - redirect to home */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/*
+        A 404 page, not a redirect home.
+        `<Navigate to="/" replace />` here is why four dead links survived in
+        this application unnoticed: a link to a path with no route did not warn,
+        log or fail -- it quietly showed the landing page, which reads as having
+        been signed out. `shared/rules/routes.test.ts` checks every link in the
+        source against this table so a fifth cannot appear.
+      */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

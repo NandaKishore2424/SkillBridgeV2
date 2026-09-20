@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, type RenderResult } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import { setAccessToken } from '@/shared/auth/accessTokenStore'
 import { AuthProvider } from '@/shared/contexts/AuthContext'
@@ -47,6 +47,16 @@ function testQueryClient() {
 interface Options {
   /** Initial router entry, for a component that reads route params. */
   route?: string
+  /**
+   * The route pattern to mount the component under, e.g.
+   * `/admin/students/:id`.
+   *
+   * Needed by anything that calls `useParams`. Without it the component renders
+   * outside any `<Route>`, `useParams()` returns `{}`, and a detail page under
+   * test silently behaves as though the id in the URL were missing -- so the
+   * test exercises its error branch while looking like it exercises the page.
+   */
+  path?: string
 }
 
 /**
@@ -57,7 +67,10 @@ interface Options {
  * the axios interceptors, the query cache and the role guard all behave as they
  * do in the browser.
  */
-export function renderWithProviders(ui: ReactElement, { route = '/' }: Options = {}): RenderResult {
+export function renderWithProviders(
+  ui: ReactElement,
+  { route = '/', path }: Options = {},
+): RenderResult {
   const client = testQueryClient()
 
   function Wrapper({ children }: { children: ReactNode }) {
@@ -65,7 +78,9 @@ export function renderWithProviders(ui: ReactElement, { route = '/' }: Options =
       <MemoryRouter initialEntries={[route]}>
         <ThemeProvider>
           <QueryClientProvider client={client}>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              {path ? <Routes><Route path={path} element={children} /></Routes> : children}
+            </AuthProvider>
           </QueryClientProvider>
         </ThemeProvider>
       </MemoryRouter>

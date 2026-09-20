@@ -294,6 +294,16 @@ export function StudentDashboard() {
                                   </div>
                                 </div>
                                 <div className="flex flex-col gap-2">
+                                  {/*
+                                    "View Details" used to sit here, pointing at
+                                    `/student/batches/{id}`, which has never had
+                                    a route -- so it returned the student to the
+                                    landing page. It is gone rather than
+                                    repointed: this card already shows the name,
+                                    description, status, trainers, companies and
+                                    enrolment count, and there is no student-side
+                                    screen with more.
+                                  */}
                                   <Button
                                     onClick={() => handleApply(batch.id)}
                                     disabled={applyMutation.isPending || batch.status !== 'OPEN'}
@@ -310,11 +320,7 @@ export function StudentDashboard() {
                                       </>
                                     )}
                                   </Button>
-                                  <Button variant="outline" asChild>
-                                    <Link to={`/student/batches/${batch.id}`}>
-                                      View Details
-                                    </Link>
-                                  </Button>
+
                                 </div>
                               </div>
                             </CardContent>
@@ -406,9 +412,17 @@ export function StudentDashboard() {
                                     )}
                                   </div>
                                 </div>
+                                {/*
+                                  `/student/batches/{id}` had no route: this
+                                  button quietly returned the student to the
+                                  landing page. `/student/progress` is the
+                                  screen that shows a batch's curriculum and
+                                  status, selected by query parameter, so it is
+                                  where "View progress" always meant to go.
+                                */}
                                 <Button variant="outline" asChild>
-                                  <Link to={`/student/batches/${batch.id}`}>
-                                    View Progress
+                                  <Link to={`/student/progress?batchId=${batch.id}`}>
+                                    View progress
                                     <ArrowRight className="ml-2 h-4 w-4" />
                                   </Link>
                                 </Button>
@@ -465,6 +479,16 @@ export function StudentDashboard() {
                                   )}
                                 </div>
                                 <div className="flex flex-col gap-2">
+                                  {/*
+                                    "View Details" used to sit here, pointing at
+                                    `/student/batches/{id}`, which has never had
+                                    a route -- so it returned the student to the
+                                    landing page. It is gone rather than
+                                    repointed: this card already shows the name,
+                                    description, status, trainers, companies and
+                                    enrolment count, and there is no student-side
+                                    screen with more.
+                                  */}
                                   <Button
                                     onClick={() => handleApply(batch.id)}
                                     disabled={applyMutation.isPending || batch.status !== 'OPEN'}
@@ -481,11 +505,7 @@ export function StudentDashboard() {
                                       </>
                                     )}
                                   </Button>
-                                  <Button variant="outline" asChild>
-                                    <Link to={`/student/batches/${batch.id}`}>
-                                      View Details
-                                    </Link>
-                                  </Button>
+
                                 </div>
                               </div>
                             </CardContent>
