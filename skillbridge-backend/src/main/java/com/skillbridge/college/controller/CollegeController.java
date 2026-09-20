@@ -3,6 +3,7 @@ package com.skillbridge.college.controller;
 import com.skillbridge.batch.dto.BatchDTO;
 import com.skillbridge.batch.repository.BatchRepository;
 import com.skillbridge.college.dto.CollegeDTO;
+import com.skillbridge.college.dto.CollegeWriteRequest;
 import com.skillbridge.college.entity.College;
 import com.skillbridge.college.entity.CollegeAdmin;
 import com.skillbridge.college.repository.CollegeAdminRepository;
@@ -16,6 +17,7 @@ import com.skillbridge.student.dto.StudentDTO;
 import com.skillbridge.student.service.StudentService;
 import com.skillbridge.trainer.dto.TrainerDTO;
 import com.skillbridge.trainer.service.TrainerService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -70,24 +72,72 @@ public class CollegeController {
             .orElseThrow(() -> ResourceNotFoundException.of("College", id));
     }
 
+    /**
+     * Create a college.
+     *
+     * <p>Binds a DTO, not the {@code College} entity. Binding the entity handed
+     * the client every column on it, including {@code id}, {@code createdAt}
+     * and the {@code deletedAt} / {@code deletedBy} pair a soft delete depends
+     * on.
+     */
     @PostMapping
     @SystemAdminOnly
-    public ResponseEntity<CollegeDTO> createCollege(@RequestBody College college) {
-        log.info("Creating college: {}", college.getName());
-        College savedCollege = collegeDirectory.save(college);
-        return ResponseEntity.ok(CollegeDTO.from(savedCollege));
+    public ResponseEntity<CollegeDTO> createCollege(
+            @Valid @RequestBody CollegeWriteRequest.Create request) {
+        log.info("Creating college: {}", request.name());
+
+        College college = College.builder()
+                .name(request.name())
+                .code(request.code())
+                .email(request.email())
+                .phone(request.phone())
+                .address(request.address())
+                .build();
+
+        return ResponseEntity.ok(CollegeDTO.from(collegeDirectory.save(college)));
     }
 
+    /**
+     * Change a college. A field the body omits is left alone.
+     *
+     * <p>This used to bind the entity, set its id and save it — a full replace.
+     * The edit form sends only what changed, so {@code {"name": "..."}} nulled
+     * the code, which is NOT NULL, and the request came back <b>409
+     * CONSTRAINT_VIOLATION</b>: "This operation conflicts with existing data.
+     * The record may already exist." Renaming a college from the UI was
+     * impossible, and the message sent the admin looking for a duplicate that
+     * did not exist. {@code CollegeWriteTest} covers it.
+     *
+     * <p>Status is not settable here on purpose — {@code PATCH /{id}/status} is
+     * the one way to deactivate a college, so the eviction and the audit around
+     * it cannot be bypassed by an edit form.
+     */
     @PutMapping("/{id}")
     @SystemAdminOnly
-    public ResponseEntity<CollegeDTO> updateCollege(@PathVariable Long id, @RequestBody College college) {
+    public ResponseEntity<CollegeDTO> updateCollege(
+            @PathVariable Long id,
+            @Valid @RequestBody CollegeWriteRequest.Update request) {
         log.info("Updating college with id: {}", id);
-        if (!collegeRepository.existsById(id)) {
-            throw ResourceNotFoundException.of("College", id);
+
+        College college = collegeRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("College", id));
+
+        // The id comes from the path. Taking it from the body would let one
+        // college's edit form overwrite another.
+        applyIfPresent(request.name(), college::setName);
+        applyIfPresent(request.code(), college::setCode);
+        applyIfPresent(request.email(), college::setEmail);
+        applyIfPresent(request.phone(), college::setPhone);
+        applyIfPresent(request.address(), college::setAddress);
+
+        return ResponseEntity.ok(CollegeDTO.from(collegeDirectory.save(college)));
+    }
+
+    /** Null means "not sent"; blank means "clear it", which only free text allows. */
+    private static void applyIfPresent(String value, java.util.function.Consumer<String> setter) {
+        if (value != null) {
+            setter.accept(value);
         }
-        college.setId(id);
-        College updatedCollege = collegeDirectory.save(college);
-        return ResponseEntity.ok(CollegeDTO.from(updatedCollege));
     }
 
     @PatchMapping("/{id}/status")
