@@ -1,10 +1,24 @@
-fastapi
-uvicorn
-pika
-python-dotenv
-langchain
-langchain-community
-langchain-huggingface
-sentence-transformers
-psycopg2-binary
-prometheus-client
+# Pinned, exactly (2026-09-20).
+#
+# This file listed bare names. Every install -- a new machine, a rebuilt venv,
+# the Phase 7 deploy -- then resolved to whatever was newest that day: a
+# different set of versions from the one this service was tested against, and
+# an open door for a compromised release to arrive unnoticed. These are the
+# versions running here, with the whole test suite green against them.
+#
+# Transitive dependencies are deliberately not pinned here; pip resolves them.
+# A full lock (pip-compile, or a hash-checking requirements.lock) is the next
+# step if this is ever deployed for real users.
+#
+# To move a version: change it here, run the tests, commit both together.
+
+fastapi==0.141.1
+uvicorn==0.53.0
+pika==1.4.4
+python-dotenv==1.2.3
+langchain==1.4.2
+langchain-community==0.4.2
+langchain-huggingface==1.2.2
+sentence-transformers==6.1.0
+psycopg2-binary==2.9.13
+prometheus-client==0.26.0
