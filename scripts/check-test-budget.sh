@@ -7,11 +7,31 @@
 #
 # Two checks, and the second is the one that matters:
 #
-#   1. The fast tier must finish inside FAST_TIER_BUDGET_SECONDS (default 30).
-#      A suite that takes 40 minutes gets skipped, then disabled. Measured at
-#      4.9s over 108 tests on 2026-09-13, so there is room -- the budget exists
-#      to notice the day someone puts a Spring context in the fast tier, which
-#      costs seconds, not milliseconds.
+#   1. The fast tier must finish inside FAST_TIER_BUDGET_SECONDS (default 60).
+#      A suite that takes 40 minutes gets skipped, then disabled.
+#
+#      THE BUDGET IS CALIBRATED ON CI, NOT ON A LAPTOP. It was 30s, from 4.9s
+#      over 108 tests measured on the development machine on 2026-09-13, and it
+#      was never tested against the hardware that enforces it -- this job had
+#      not run in CI at anything like the current size. On 2026-09-20 the tier
+#      is 276 tests and takes:
+#
+#          13.9s  development machine
+#          32.1s  ubuntu-latest, 2 cores
+#
+#      -- so the first CI run of a green suite failed on the budget alone, with
+#      276 passes and no skips. A budget that only the fast machine can meet
+#      tells you about the machine.
+#
+#      60s is twice what CI measures, so the tier can roughly double before this
+#      speaks. Re-measure on CI before changing it, and record both numbers
+#      here.
+#
+#      What it is really watching for is a class that costs seconds rather than
+#      milliseconds. Note that the tier legitimately contains some already: the
+#      @WebMvcTest slices build a Spring context (5.9s for the slowest on CI),
+#      and the ArchUnit rules scan the bytecode of the whole project (5.5s).
+#      Those are the two shapes to look at first when this number grows.
 #
 #   2. The fast tier must skip NOTHING. Nothing in it is conditional, so a skip
 #      is either a mistake or a test quietly gating itself -- the defect that let
@@ -35,7 +55,7 @@
 
 set -euo pipefail
 
-BUDGET="${FAST_TIER_BUDGET_SECONDS:-30}"
+BUDGET="${FAST_TIER_BUDGET_SECONDS:-60}"
 REPORTS="${1:-skillbridge-backend/target/surefire-reports}"
 
 if [[ ! -d "$REPORTS" ]]; then
@@ -103,6 +123,10 @@ if skippers:
 if total_time > budget:
     print(f"\nFAIL: fast tier took {total_time:.3f}s against a {budget:g}s budget.", file=sys.stderr)
     print("      Move the slow classes to the integration tier, or make them faster.", file=sys.stderr)
+    print(f"      ({total_tests} tests, {1000 * total_time / max(total_tests, 1):.0f}ms each on average.)",
+          file=sys.stderr)
+    print("      A CI runner is about 2.3x slower than the development machine, so", file=sys.stderr)
+    print("      passing locally does not mean passing here. See the header.", file=sys.stderr)
     status = 1
 
 if status == 0:
