@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import com.skillbridge.auth.security.SecurityUtils;
 import com.skillbridge.common.security.CollegeOrSystemAdmin;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -91,34 +92,54 @@ public class AdminEnrollmentController {
     }
 
     /**
-     * Approve an enrollment request
-     * POST /api/v1/admin/enrollment-requests/{requestId}/approve
+     * Approve an enrollment request.
+     *
+     * <p>POST /api/v1/admin/enrollment-requests/{requestId}/approve
+     *
+     * <p><b>The reviewer is the caller.</b> Both of these used to read
+     * {@code Long adminUserId = 1L; // TODO: Extract from authentication}, which
+     * did three things at once. It recorded every approval and rejection in
+     * {@code enrollment_requests.reviewed_by} and in the audit log as user id 1
+     * — for a system whose point is knowing who decided what. It made both
+     * endpoints answer <b>404</b> on any database without a user id 1, because
+     * {@code requireUser(1L)} misses: nothing was wrong on the developer's
+     * restored copy, and approval was simply broken everywhere else. And
+     * {@code rejectRequest} dropped the reason the admin typed, because the
+     * two-argument overload has none to pass on.
      */
     @PostMapping("/enrollment-requests/{requestId}/approve")
     @CollegeOrSystemAdmin
     public ResponseEntity<EnrollmentRequestDTO> approveRequest(
             @PathVariable Long requestId,
             Authentication authentication) {
+        Long adminUserId = SecurityUtils.requirePrincipal(authentication).getId();
         log.info("Admin API: Approve request {}", requestId);
-        // In real app, extract admin user ID from authentication
-        Long adminUserId = 1L; // TODO: Extract from authentication
         EnrollmentRequestDTO request = enrollmentService.approveRequest(requestId, adminUserId);
         return ResponseEntity.ok(request);
     }
 
     /**
-     * Reject an enrollment request
-     * POST /api/v1/admin/enrollment-requests/{requestId}/reject
+     * Reject an enrollment request.
+     *
+     * <p>POST /api/v1/admin/enrollment-requests/{requestId}/reject
+     *
+     * <p>The body is optional: the frontend sends {@code {"reason": "..."}} when
+     * the admin typed one and {@code {}} when they did not.
      */
     @PostMapping("/enrollment-requests/{requestId}/reject")
     @CollegeOrSystemAdmin
     public ResponseEntity<EnrollmentRequestDTO> rejectRequest(
             @PathVariable Long requestId,
+            @RequestBody(required = false) RejectionRequest body,
             Authentication authentication) {
+        Long adminUserId = SecurityUtils.requirePrincipal(authentication).getId();
         log.info("Admin API: Reject request {}", requestId);
-        // In real app, extract admin user ID from authentication
-        Long adminUserId = 1L; // TODO: Extract from authentication
-        EnrollmentRequestDTO request = enrollmentService.rejectRequest(requestId, adminUserId);
+        EnrollmentRequestDTO request = enrollmentService.rejectRequest(
+                requestId, adminUserId, body == null ? null : body.reason());
         return ResponseEntity.ok(request);
+    }
+
+    /** Why the request was declined. The applicant will ask. */
+    public record RejectionRequest(String reason) {
     }
 }

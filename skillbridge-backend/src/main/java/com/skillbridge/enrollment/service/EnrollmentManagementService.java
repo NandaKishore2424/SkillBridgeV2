@@ -197,8 +197,19 @@ public class EnrollmentManagementService {
      * used to call {@code findAllPending()}, which has no college predicate, so
      * a college admin was served every college's pending requests — student
      * names, roll numbers and batch names included. It went unnoticed because
-     * {@code collegeFilter} was assumed to be scoping it, and that filter has
-     * never actually applied.
+     * {@code collegeFilter} was assumed to be scoping it, and at the time that
+     * filter was not applying at all.
+     *
+     * <p><b>It applies now</b>, since {@link com.skillbridge.common.tenant.TenantFilterAspect}
+     * began enabling it on the session inside the transaction. Measured
+     * 2026-09-20: with the {@code collegeId} predicate taken back out of the
+     * query, this endpoint still returned one college's rows, because the
+     * filter caught it. Both layers had to be removed before the leak
+     * reappeared — see {@code EnrollmentLifecycleTest}.
+     *
+     * <p>The predicate stays, and stays first. The filter is a net, not the
+     * control: it does nothing for a SYSTEM_ADMIN, nothing outside a
+     * transaction, and nothing for a {@code findById}.
      */
     @Transactional(readOnly = true)
     public Page<EnrollmentRequestDTO> getPendingRequests(Pageable pageable) {
@@ -362,6 +373,7 @@ public class EnrollmentManagementService {
                 .requestType(request.getRequestType().name())
                 .status(request.getStatus().name())
                 .reason(request.getReason())
+                .decisionReason(request.getDecisionReason())
                 .reviewedBy(reviewer == null ? null : reviewer.getId())
                 .reviewedByName(reviewer == null ? null : reviewer.getEmail())
                 .reviewedAt(request.getReviewedAt())
