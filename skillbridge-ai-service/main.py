@@ -12,7 +12,7 @@ Senior Engineering Note:
   main.py ORCHESTRATES but does not IMPLEMENT.
 """
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel
@@ -24,6 +24,7 @@ import embedder
 from skill_analyzer import analyze_skill_gap
 import analysis_handler
 import report_store
+import service_auth
 import ai_event_contract as contract
 import amqp_consumer
 import dedup
@@ -203,7 +204,18 @@ def health():
     )
 
 
-@app.get("/metrics")
+def require_service_token(x_service_token: str = Header(default=None, alias=service_auth.HEADER)):
+    """
+    The guard on everything but the probes. See service_auth: no token
+    configured means 503, not an open endpoint.
+    """
+    try:
+        service_auth.check(x_service_token, service_auth.expected_token())
+    except service_auth.TokenRejected as rejected:
+        raise HTTPException(status_code=rejected.status_code, detail=rejected.detail) from None
+
+
+@app.get("/metrics", dependencies=[Depends(require_service_token)])
 def metrics():
     """
     Prometheus metrics: ai_events_consumed_total by event type, schema version and
@@ -212,15 +224,17 @@ def metrics():
     return Response(generate_latest(_metrics.registry), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.post("/api/analyze-skills")
+@app.post("/api/analyze-skills", dependencies=[Depends(require_service_token)])
 def analyze_skills(request: SkillAnalysisRequest):
     """
     REST endpoint to trigger skill gap analysis directly via HTTP.
     
-    This is incredibly useful for:
-    - Testing without needing to fire a RabbitMQ event
-    - Future integration with other services
-    - Quick debugging via curl or Postman
+    Needs the X-Service-Token header (service_auth): the analysis costs an
+    embedding and a vector search per call, and its reply describes what a named
+    student can and cannot do.
+
+    Useful for testing without firing a RabbitMQ event, and for debugging with
+    curl once the token is to hand.
     
     Example request body:
     {

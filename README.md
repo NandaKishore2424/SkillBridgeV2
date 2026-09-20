@@ -95,6 +95,7 @@ Once the AI service is running, you can test it directly without needing to fire
 ```bash
 curl -X POST http://localhost:8000/api/analyze-skills \
   -H "Content-Type: application/json" \
+  -H "X-Service-Token: $AI_API_TOKEN" \
   -d '{"student_id": 1, "skills": ["Python", "SQL", "Pandas", "Tableau"]}'
 ```
 

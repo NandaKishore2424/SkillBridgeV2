@@ -102,6 +102,12 @@ public class SecurityConfig {
             // TokenAuthenticationFilter there is no identity to copy.
             .addFilterAfter(userContextLogFilter, TokenAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
+                // Two endpoints under /auth are for someone already signed in.
+                // Listed before the prefix rule below, or they inherit permitAll and
+                // an anonymous request reaches body parsing before the controller
+                // refuses it -- change-password answered 400 rather than 401
+                // (UnauthenticatedAccessTest, 2026-09-20).
+                .requestMatchers("/api/v1/auth/me", "/api/v1/auth/change-password").authenticated()
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/colleges/active").permitAll() // Public endpoint for registration
                 // Probes need health and info without a token. Everything else
@@ -113,9 +119,14 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/health/**",
                                  "/actuator/info").permitAll()
                 .requestMatchers("/actuator/**").hasRole("SYSTEM_ADMIN")
-                // The contract itself is public; the interactive UI is gated by
-                // SWAGGER_ENABLED and simply is not mapped when that is false.
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                // The same argument as /actuator/metrics above, applied honestly:
+                // /v3/api-docs IS the complete map of the attack surface -- every
+                // route, every request and response schema -- and it was public
+                // while the UI that merely renders it was gated. Admin-only now
+                // (2026-09-20). Nothing automated reads it; the UI is additionally
+                // not mapped at all unless SWAGGER_ENABLED.
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                    .hasRole("SYSTEM_ADMIN")
                 .requestMatchers("/api/v1/admin/**").authenticated()
                 .anyRequest().authenticated()
             );
