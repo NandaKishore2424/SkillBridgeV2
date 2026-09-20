@@ -10,7 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import com.skillbridge.common.dto.SortParameter;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.CollegeAdminOnly;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -47,7 +47,7 @@ public class StudentAdminController {
             "createdAt", "createdAt");
 
     @GetMapping
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<PagedResponse<StudentDTO>> getAllStudents(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -64,7 +64,7 @@ public class StudentAdminController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<StudentDTO> getStudentById(@PathVariable Long id) {
         StudentDTO student = studentService.getStudentById(id);
         return ResponseEntity.ok(student);
@@ -75,7 +75,7 @@ public class StudentAdminController {
      * PUT /api/v1/admin/students/{id}
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<StudentDTO> updateStudent(
             @PathVariable Long id,
             @Valid @RequestBody UpdateStudentAdminRequest request) {
@@ -87,7 +87,7 @@ public class StudentAdminController {
      * PATCH /api/v1/admin/students/{id}/status
      */
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<Void> updateStudentStatus(
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> request) {
@@ -110,7 +110,7 @@ public class StudentAdminController {
      * <p>Refused with 409 STUDENT_HAS_ENROLLMENTS while the student is in an active batch. Also deactivates the login.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<Void> deleteStudent(@PathVariable Long id, Authentication auth) {
         softDeleteService.deleteStudent(id, SecurityUtils.requirePrincipal(auth).getId());
         return ResponseEntity.noContent().build();

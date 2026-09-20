@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.CollegeOrSystemAdmin;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,7 +38,7 @@ public class AdminEnrollmentController {
      * GET /api/v1/admin/batches/{batchId}/enrollments
      */
     @GetMapping("/batches/{batchId}/enrollments")
-    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<BatchEnrollmentDTO> getBatchEnrollments(@PathVariable Long batchId) {
         log.info("Admin API: Get enrollments for batch {}", batchId);
         BatchEnrollmentDTO enrollments = enrollmentService.getBatchEnrollments(batchId);
@@ -50,7 +50,7 @@ public class AdminEnrollmentController {
      * POST /api/v1/admin/batches/{batchId}/enrollments/{studentId}
      */
     @PostMapping("/batches/{batchId}/enrollments/{studentId}")
-    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<EnrolledStudentDTO> enrollStudent(
             @PathVariable Long batchId,
             @PathVariable Long studentId) {
@@ -64,7 +64,7 @@ public class AdminEnrollmentController {
      * DELETE /api/v1/admin/batches/{batchId}/enrollments/{studentId}
      */
     @DeleteMapping("/batches/{batchId}/enrollments/{studentId}")
-    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<Void> removeStudent(
             @PathVariable Long batchId,
             @PathVariable Long studentId) {
@@ -81,7 +81,7 @@ public class AdminEnrollmentController {
      * with the college. For a SYSTEM_ADMIN it grows with the whole platform.
      */
     @GetMapping("/enrollment-requests/pending")
-    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<PagedResponse<EnrollmentRequestDTO>> getPendingRequests(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -95,7 +95,7 @@ public class AdminEnrollmentController {
      * POST /api/v1/admin/enrollment-requests/{requestId}/approve
      */
     @PostMapping("/enrollment-requests/{requestId}/approve")
-    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<EnrollmentRequestDTO> approveRequest(
             @PathVariable Long requestId,
             Authentication authentication) {
@@ -111,7 +111,7 @@ public class AdminEnrollmentController {
      * POST /api/v1/admin/enrollment-requests/{requestId}/reject
      */
     @PostMapping("/enrollment-requests/{requestId}/reject")
-    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<EnrollmentRequestDTO> rejectRequest(
             @PathVariable Long requestId,
             Authentication authentication) {

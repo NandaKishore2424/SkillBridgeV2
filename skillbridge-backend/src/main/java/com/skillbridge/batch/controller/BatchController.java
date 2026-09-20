@@ -28,7 +28,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.CollegeAdminOnly;
+import com.skillbridge.common.security.TrainerOrCollegeAdmin;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import com.skillbridge.common.tenant.SoftDeleteService;
@@ -79,7 +80,7 @@ public class BatchController {
      * query". Filtering has to happen where the whole result set is.
      */
     @GetMapping
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<PagedResponse<BatchDTO>> getAllBatches(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -116,7 +117,7 @@ public class BatchController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'TRAINER')")
+    @TrainerOrCollegeAdmin
     public ResponseEntity<BatchDTO> getBatchById(@PathVariable Long id) {
         log.info("Fetching batch with id: {}", id);
         // Filtered, not checked after the fact: a batch in another college and a
@@ -136,7 +137,7 @@ public class BatchController {
      * LIMIT/OFFSET into a collection fetch.
      */
     @GetMapping("/{id}/trainers")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<PagedResponse<TrainerDTO>> getBatchTrainers(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int page,
@@ -151,7 +152,7 @@ public class BatchController {
     }
 
     @GetMapping("/{id}/companies")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<PagedResponse<CompanyDTO>> getBatchCompanies(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int page,
@@ -170,7 +171,7 @@ public class BatchController {
     // tell them apart afterwards. Requires an Idempotency-Key header.
     @Idempotent
     @PostMapping
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<BatchDTO> createBatch(@Valid @RequestBody CreateBatchRequest request) {
         Batch batch = batchService.create(request, SecurityUtils.requireCollegeId());
         log.info("Created batch {}", batch.getId());
@@ -178,20 +179,20 @@ public class BatchController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<BatchDTO> updateBatch(@PathVariable Long id, @Valid @RequestBody UpdateBatchRequest request) {
         return ResponseEntity.ok(convertToDTO(batchService.update(id, request)));
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<BatchDTO> updateBatchStatus(@PathVariable Long id,
                                                       @Valid @RequestBody BatchStatusRequest request) {
         return ResponseEntity.ok(convertToDTO(batchService.updateStatus(id, request.status)));
     }
 
     @PostMapping("/{id}/trainers")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<?> assignTrainers(
             @PathVariable Long id,
             @RequestBody AssignTrainersRequest request) {
@@ -212,7 +213,7 @@ public class BatchController {
      * did not exist.
      */
     @DeleteMapping("/{id}/trainers/{trainerId}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<?> unassignTrainer(@PathVariable Long id, @PathVariable Long trainerId) {
         int count = batchAssignmentService.unassignTrainer(id, trainerId);
         return ResponseEntity.ok(Map.of(
@@ -220,7 +221,7 @@ public class BatchController {
     }
 
     @PostMapping("/{id}/companies")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<?> assignCompanies(
             @PathVariable Long id,
             @RequestBody AssignCompaniesRequest request) {
@@ -233,7 +234,7 @@ public class BatchController {
     }
 
     @DeleteMapping("/{id}/companies/{companyId}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<?> unassignCompany(@PathVariable Long id, @PathVariable Long companyId) {
         int count = batchAssignmentService.unassignCompany(id, companyId);
         return ResponseEntity.ok(Map.of(
@@ -368,7 +369,7 @@ public class BatchController {
      * <p>Refused with 409 BATCH_HAS_ENROLLMENTS if students are actively enrolled and the batch is not COMPLETED.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<Void> deleteBatch(@PathVariable Long id, Authentication auth) {
         softDeleteService.deleteBatch(id, SecurityUtils.requirePrincipal(auth).getId());
         return ResponseEntity.noContent().build();

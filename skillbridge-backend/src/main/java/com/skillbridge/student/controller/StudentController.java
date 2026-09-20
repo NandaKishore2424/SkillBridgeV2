@@ -9,7 +9,8 @@ import com.skillbridge.student.service.StudentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.StudentOnly;
+import com.skillbridge.common.security.TrainerOrCollegeAdmin;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -30,7 +31,7 @@ public class StudentController {
     private final StudentService studentService;
 
     @GetMapping("/me")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<StudentDTO> getMyProfile() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -51,7 +52,7 @@ public class StudentController {
      * and the correct guard, so this one is on its way out.
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'TRAINER')")
+    @TrainerOrCollegeAdmin
     @DeprecatedEndpoint(
             since = "2026-09-06",
             sunset = "2026-12-31",
@@ -63,7 +64,7 @@ public class StudentController {
     }
 
     @PutMapping("/me")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<StudentDTO> updateMyProfile(@RequestBody UpdateStudentProfileRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -79,7 +80,7 @@ public class StudentController {
      * @return StudentProfileDTO with updated profile
      */
     @PutMapping("/profile/complete")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<StudentProfileDTO> completeProfile(
             @Valid @RequestBody StudentProfileUpdateDTO profileData) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -93,7 +94,7 @@ public class StudentController {
     }
 
     @PostMapping("/me/skills")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<Void> addSkill(@RequestBody AddStudentSkillRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -102,7 +103,7 @@ public class StudentController {
     }
 
     @PutMapping("/me/skills/{skillId}")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<Void> updateSkillProficiency(
             @PathVariable Long skillId,
             @RequestBody Map<String, Integer> request) {
@@ -113,7 +114,7 @@ public class StudentController {
     }
 
     @DeleteMapping("/me/skills/{skillId}")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<Void> removeSkill(@PathVariable Long skillId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -126,7 +127,7 @@ public class StudentController {
     // tell them apart afterwards. Requires an Idempotency-Key header.
     @Idempotent
     @PostMapping("/me/projects")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<StudentProjectDTO> addProject(@RequestBody CreateStudentProjectRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -135,7 +136,7 @@ public class StudentController {
     }
 
     @DeleteMapping("/me/projects/{projectId}")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<Void> deleteProject(@PathVariable Long projectId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);

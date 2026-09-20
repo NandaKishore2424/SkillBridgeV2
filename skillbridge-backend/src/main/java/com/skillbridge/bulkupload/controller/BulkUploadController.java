@@ -16,7 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.CollegeAdminOnly;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -51,32 +51,32 @@ public class BulkUploadController {
     private final InvitationService invitationService;
 
     @PostMapping("/students/bulk-upload")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<BulkUploadResponse> uploadStudents(@RequestParam("file") MultipartFile file) {
         return upload(ImportKind.STUDENT, file);
     }
 
     @PostMapping("/trainers/bulk-upload")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<BulkUploadResponse> uploadTrainers(@RequestParam("file") MultipartFile file) {
         return upload(ImportKind.TRAINER, file);
     }
 
     @GetMapping("/students/bulk-upload/template")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<byte[]> downloadStudentTemplate() {
         return template(ImportKind.STUDENT, "student_template.csv");
     }
 
     @GetMapping("/trainers/bulk-upload/template")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<byte[]> downloadTrainerTemplate() {
         return template(ImportKind.TRAINER, "trainer_template.csv");
     }
 
     /** Upload history, newest first. Paged because {@code bulk_uploads} only grows. */
     @GetMapping("/students/bulk-upload/history")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<PagedResponse<BulkUploadHistoryDTO>> getUploadHistory(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -86,7 +86,7 @@ public class BulkUploadController {
     }
 
     @GetMapping("/trainers/bulk-upload/history")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<PagedResponse<BulkUploadHistoryDTO>> getTrainerUploadHistory(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -96,7 +96,7 @@ public class BulkUploadController {
     }
 
     @GetMapping("/bulk-uploads/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<BulkUploadDetailDTO> getUpload(@PathVariable Long id) {
         return ResponseEntity.ok(bulkUploadService.getUpload(id, SecurityUtils.requireCollegeId()));
     }
@@ -107,7 +107,7 @@ public class BulkUploadController {
      * @param status comma-separated; defaults to the rows that need attention
      */
     @GetMapping("/bulk-uploads/{id}/rows")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<PagedResponse<BulkUploadRowDTO>> getUploadRows(
             @PathVariable Long id,
             @RequestParam(defaultValue = "FAILED,EMAIL_FAILED") Set<String> status,
@@ -124,14 +124,14 @@ public class BulkUploadController {
     }
 
     @PostMapping("/students/{id}/resend-invitation")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<Void> resendStudentInvitation(@PathVariable Long id) {
         invitationService.resend(id, "STUDENT");
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/trainers/{id}/resend-invitation")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<Void> resendTrainerInvitation(@PathVariable Long id) {
         invitationService.resend(id, "TRAINER");
         return ResponseEntity.ok().build();

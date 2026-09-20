@@ -24,7 +24,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.CollegeOrSystemAdmin;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -63,7 +63,7 @@ public class CompanyController {
      * Both are applied in SQL rather than to the page already fetched.
      */
     @GetMapping
-    @PreAuthorize("hasRole('SYSTEM_ADMIN') or hasRole('COLLEGE_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<PagedResponse<CompanyDTO>> getAllCompanies(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -115,7 +115,7 @@ public class CompanyController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN') or hasRole('COLLEGE_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<CompanyDTO> getCompanyById(@PathVariable Long id) {
         log.info("Fetching company with id: {}", id);
         // Company holds a lazy college. Returning the entity serialises that
@@ -132,7 +132,7 @@ public class CompanyController {
     // tell them apart afterwards. Requires an Idempotency-Key header.
     @Idempotent
     @PostMapping
-    @PreAuthorize("hasRole('SYSTEM_ADMIN') or hasRole('COLLEGE_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<?> createCompany(@RequestBody CreateCompanyRequest request) {
         log.info("Creating company: {}", request.name);
 
@@ -223,7 +223,7 @@ public class CompanyController {
      * would silently move every batch link with it, and no screen asks for that.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<CompanyDTO> updateCompany(
             @PathVariable Long id,
             @RequestBody CreateCompanyRequest request) {
@@ -251,7 +251,7 @@ public class CompanyController {
 
     /** Link this company to a batch, from the company's side. */
     @PostMapping("/{id}/batches/{batchId}")
-    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<?> linkToBatch(@PathVariable Long id, @PathVariable Long batchId) {
         int count = batchAssignmentService.assignCompany(batchId, id);
         return ResponseEntity.ok(Map.of("success", true, "companyId", id,
@@ -259,7 +259,7 @@ public class CompanyController {
     }
 
     @DeleteMapping("/{id}/batches/{batchId}")
-    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<?> unlinkFromBatch(@PathVariable Long id, @PathVariable Long batchId) {
         int count = batchAssignmentService.unassignCompany(batchId, id);
         return ResponseEntity.ok(Map.of("success", true, "companyId", id,
@@ -277,7 +277,7 @@ public class CompanyController {
      * <p>Refused with 409 COMPANY_LINKED_TO_BATCHES while the company is linked to a live batch.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<Void> deleteCompany(@PathVariable Long id, Authentication auth) {
         softDeleteService.deleteCompany(id, SecurityUtils.requirePrincipal(auth).getId());
         return ResponseEntity.noContent().build();

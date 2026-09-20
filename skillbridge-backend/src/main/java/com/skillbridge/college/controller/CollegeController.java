@@ -19,7 +19,7 @@ import com.skillbridge.trainer.service.TrainerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.SystemAdminOnly;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -52,7 +52,7 @@ public class CollegeController {
      * with any single tenant, and it is the SYSTEM_ADMIN's landing screen.
      */
     @GetMapping
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<PagedResponse<CollegeDTO>> getAllColleges(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -62,7 +62,7 @@ public class CollegeController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<CollegeDTO> getCollegeById(@PathVariable Long id) {
         log.info("Fetching college with id: {}", id);
         Optional<College> college = collegeRepository.findById(id);
@@ -71,7 +71,7 @@ public class CollegeController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<CollegeDTO> createCollege(@RequestBody College college) {
         log.info("Creating college: {}", college.getName());
         College savedCollege = collegeDirectory.save(college);
@@ -79,7 +79,7 @@ public class CollegeController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<CollegeDTO> updateCollege(@PathVariable Long id, @RequestBody College college) {
         log.info("Updating college with id: {}", id);
         if (!collegeRepository.existsById(id)) {
@@ -91,7 +91,7 @@ public class CollegeController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<CollegeDTO> updateCollegeStatus(
             @PathVariable Long id,
             @RequestBody StatusUpdateRequest request
@@ -108,7 +108,7 @@ public class CollegeController {
     }
 
     @GetMapping("/{collegeId}/admins")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<PagedResponse<CollegeAdminResponse>> getCollegeAdmins(
             @PathVariable Long collegeId,
             @RequestParam(defaultValue = "0") int page,
@@ -121,7 +121,7 @@ public class CollegeController {
     }
 
     @PostMapping("/{collegeId}/admins")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<CollegeAdminResponse> createCollegeAdmin(
             @PathVariable Long collegeId,
             @RequestBody CreateCollegeAdminRequest request
@@ -165,7 +165,7 @@ public class CollegeController {
      * has no students" and "there is no such college" are different answers.
      */
     @GetMapping("/{collegeId}/students")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<PagedResponse<StudentDTO>> getCollegeStudents(
             @PathVariable Long collegeId,
             @RequestParam(defaultValue = "0") int page,
@@ -177,7 +177,7 @@ public class CollegeController {
     }
 
     @GetMapping("/{collegeId}/batches")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<PagedResponse<BatchDTO>> getCollegeBatches(
             @PathVariable Long collegeId,
             @RequestParam(defaultValue = "0") int page,
@@ -196,7 +196,7 @@ public class CollegeController {
     }
 
     @GetMapping("/{collegeId}/trainers")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<PagedResponse<TrainerDTO>> getCollegeTrainers(
             @PathVariable Long collegeId,
             @RequestParam(defaultValue = "0") int page,

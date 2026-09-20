@@ -2,7 +2,8 @@ package com.skillbridge.skillgap;
 
 import com.skillbridge.auth.security.SecurityUtils;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.CollegeAdminOnly;
+import com.skillbridge.common.security.StudentOnly;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,7 +23,7 @@ public class SkillGapController {
     }
 
     @GetMapping("/api/v1/students/me/skill-gap")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<SkillGapReportDTO> myReport() {
         return service.forStudentUser(SecurityUtils.currentUser().getId())
                 .map(ResponseEntity::ok)
@@ -31,14 +32,14 @@ public class SkillGapController {
 
     /** 202: queued. The report changes when the AI service has run, usually within seconds. */
     @PostMapping("/api/v1/students/me/skill-gap/refresh")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<Void> refreshMyReport() {
         service.requestAnalysis(SecurityUtils.currentUser().getId());
         return ResponseEntity.accepted().build();
     }
 
     @GetMapping("/api/v1/admin/students/{studentId}/skill-gap")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<SkillGapReportDTO> studentReport(@PathVariable Long studentId) {
         return service.forStudent(studentId, SecurityUtils.requireCollegeId())
                 .map(ResponseEntity::ok)

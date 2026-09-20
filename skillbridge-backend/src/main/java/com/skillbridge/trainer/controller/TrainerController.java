@@ -6,7 +6,8 @@ import com.skillbridge.trainer.service.TrainerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.TrainerOnly;
+import com.skillbridge.common.security.TrainerOrCollegeAdmin;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -22,7 +23,7 @@ public class TrainerController {
     private final TrainerService trainerService;
 
     @GetMapping("/me")
-    @PreAuthorize("hasRole('TRAINER')")
+    @TrainerOnly
     public ResponseEntity<TrainerDTO> getMyProfile() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -40,7 +41,7 @@ public class TrainerController {
      * are scoped to batches they are enrolled in.
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('COLLEGE_ADMIN', 'TRAINER')")
+    @TrainerOrCollegeAdmin
     @DeprecatedEndpoint(
             since = "2026-09-06",
             sunset = "2026-12-31",
@@ -52,7 +53,7 @@ public class TrainerController {
     }
 
     @PutMapping("/me")
-    @PreAuthorize("hasRole('TRAINER')")
+    @TrainerOnly
     public ResponseEntity<TrainerDTO> updateMyProfile(@RequestBody UpdateTrainerProfileRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);

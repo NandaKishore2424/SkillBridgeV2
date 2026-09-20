@@ -9,7 +9,7 @@ import com.skillbridge.trainer.service.TrainerDashboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.TrainerOnly;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -26,7 +26,7 @@ public class TrainerDashboardController {
     private final TrainerDashboardService dashboardService;
 
     @GetMapping("/dashboard/stats")
-    @PreAuthorize("hasRole('TRAINER')")
+    @TrainerOnly
     public ResponseEntity<TrainerDashboardStatsDTO> getDashboardStats() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -43,7 +43,7 @@ public class TrainerDashboardController {
      * college.
      */
     @GetMapping("/batches")
-    @PreAuthorize("hasRole('TRAINER')")
+    @TrainerOnly
     public ResponseEntity<PagedResponse<TrainerBatchDTO>> getTrainerBatches(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -62,7 +62,7 @@ public class TrainerDashboardController {
      * reason the endpoint was on the list.
      */
     @GetMapping("/batches/{batchId}/students")
-    @PreAuthorize("hasRole('TRAINER')")
+    @TrainerOnly
     public ResponseEntity<PagedResponse<TrainerStudentDTO>> getBatchStudents(
             @PathVariable Long batchId,
             @RequestParam(defaultValue = "0") int page,

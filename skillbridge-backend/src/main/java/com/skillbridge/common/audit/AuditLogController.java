@@ -12,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.CollegeOrSystemAdmin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -51,7 +51,7 @@ public class AuditLogController {
      * trail goes, while a seek does not.
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN')")
+    @CollegeOrSystemAdmin
     public ResponseEntity<CursorPage<AuditLogDTO>> list(
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "50") int size,

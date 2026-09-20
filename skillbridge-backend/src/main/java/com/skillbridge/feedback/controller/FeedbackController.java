@@ -10,7 +10,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.StaffOnly;
+import com.skillbridge.common.security.StudentOrTrainer;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,7 +34,7 @@ public class FeedbackController {
     private final FeedbackService feedbackService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('STUDENT', 'TRAINER')")
+    @StudentOrTrainer
     public ResponseEntity<FeedbackResponseDTO> createFeedback(
             @Valid @RequestBody FeedbackRequestDTO request, Authentication authentication) {
         FeedbackResponseDTO created =
@@ -43,7 +44,7 @@ public class FeedbackController {
 
     /** Everything the caller is party to, in either direction. */
     @GetMapping("/my-feedback")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TRAINER')")
+    @StudentOrTrainer
     public ResponseEntity<PagedResponse<FeedbackResponseDTO>> getMyFeedback(
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
@@ -53,7 +54,7 @@ public class FeedbackController {
     }
 
     @GetMapping("/batch/{batchId}")
-    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN', 'TRAINER')")
+    @StaffOnly
     public ResponseEntity<PagedResponse<FeedbackResponseDTO>> getFeedbackByBatch(
             @PathVariable Long batchId, Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
@@ -71,7 +72,7 @@ public class FeedbackController {
      * wanting their own feedback already has {@code /my-feedback}.
      */
     @GetMapping("/student/{studentId}")
-    @PreAuthorize("hasAnyRole('SYSTEM_ADMIN', 'COLLEGE_ADMIN', 'TRAINER')")
+    @StaffOnly
     public ResponseEntity<PagedResponse<FeedbackResponseDTO>> getFeedbackByStudent(
             @PathVariable Long studentId, Authentication authentication,
             @RequestParam(defaultValue = "0") int page,

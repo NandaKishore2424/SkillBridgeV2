@@ -16,7 +16,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.StaffOnly;
+import com.skillbridge.common.security.StudentOnly;
+import com.skillbridge.common.security.TrainerOnly;
+import com.skillbridge.common.security.TrainerOrCollegeAdmin;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -43,7 +46,7 @@ public class ProgressController {
 
     /** The signed-in student's progress through one batch. */
     @GetMapping("/student/batches/{batchId}/progress/detail")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<BatchProgressDTO> getMyProgress(@PathVariable Long batchId) {
         AuthenticatedUser user = SecurityUtils.currentUser();
         return ResponseEntity.ok(progressService.getMyProgress(user.getId(), batchId));
@@ -59,7 +62,7 @@ public class ProgressController {
      * <p>Paged: one row per enrolled student, so this grows with the batch.
      */
     @GetMapping("/trainer/batches/{batchId}/progress")
-    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @StaffOnly
     public ResponseEntity<PagedResponse<StudentProgressSummaryDTO>> getBatchOverview(
             @PathVariable Long batchId,
             @RequestParam(defaultValue = "0") int page,
@@ -70,7 +73,7 @@ public class ProgressController {
 
     /** Students below the at-risk threshold. */
     @GetMapping("/trainer/batches/{batchId}/progress/at-risk")
-    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @StaffOnly
     public ResponseEntity<PagedResponse<StudentProgressSummaryDTO>> getAtRisk(
             @PathVariable Long batchId,
             @RequestParam(defaultValue = "0") int page,
@@ -81,7 +84,7 @@ public class ProgressController {
 
     /** One student's full tree, for a trainer reviewing them. */
     @GetMapping("/trainer/batches/{batchId}/students/{studentId}/progress")
-    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @StaffOnly
     public ResponseEntity<BatchProgressDTO> getStudentProgress(@PathVariable Long batchId,
                                                                 @PathVariable Long studentId) {
         return ResponseEntity.ok(progressService.getStudentProgress(studentId, batchId));
@@ -94,7 +97,7 @@ public class ProgressController {
      * student. A trainer grading a class of 400 gets 20 rows at a time.
      */
     @GetMapping("/trainer/topics/{topicId}/progress")
-    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN', 'SYSTEM_ADMIN')")
+    @StaffOnly
     public ResponseEntity<PagedResponse<GradingGridRowDTO>> getGradingGrid(
             @PathVariable Long topicId,
             @RequestParam(defaultValue = "0") int page,
@@ -113,7 +116,7 @@ public class ProgressController {
      * <p>The grading trainer is taken from the token, never from the body.
      */
     @PutMapping("/trainer/topics/{topicId}/progress")
-    @PreAuthorize("hasRole('TRAINER')")
+    @TrainerOnly
     public ResponseEntity<TopicProgressDTO> gradeTopic(@PathVariable Long topicId,
                                                         @Valid @RequestBody GradeTopicRequest request) {
         AuthenticatedUser user = SecurityUtils.currentUser();
@@ -122,7 +125,7 @@ public class ProgressController {
 
     /** Grade a whole class on one topic in one transaction. */
     @PutMapping("/trainer/topics/{topicId}/progress/bulk")
-    @PreAuthorize("hasRole('TRAINER')")
+    @TrainerOnly
     public ResponseEntity<BulkGradeResultDTO> bulkGrade(@PathVariable Long topicId,
                                                          @Valid @RequestBody BulkGradeRequest request) {
         AuthenticatedUser user = SecurityUtils.currentUser();
@@ -136,7 +139,7 @@ public class ProgressController {
      * on the batch.
      */
     @PostMapping("/trainer/batches/{batchId}/progress/backfill")
-    @PreAuthorize("hasAnyRole('TRAINER', 'COLLEGE_ADMIN')")
+    @TrainerOrCollegeAdmin
     public ResponseEntity<BulkGradeResultDTO> backfill(@PathVariable Long batchId) {
         int created = progressService.backfillBatch(batchId);
         return ResponseEntity.ok(BulkGradeResultDTO.builder()

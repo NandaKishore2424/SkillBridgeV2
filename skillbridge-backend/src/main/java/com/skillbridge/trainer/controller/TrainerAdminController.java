@@ -11,7 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import com.skillbridge.common.dto.SortParameter;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.CollegeAdminOnly;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -44,7 +44,7 @@ public class TrainerAdminController {
     private final BatchAssignmentService batchAssignmentService;
 
     @GetMapping
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<PagedResponse<TrainerDTO>> getAllTrainers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -61,7 +61,7 @@ public class TrainerAdminController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<TrainerDTO> createTrainer(@RequestBody CreateTrainerRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -71,14 +71,14 @@ public class TrainerAdminController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<TrainerDTO> getTrainerById(@PathVariable Long id) {
         TrainerDTO trainer = trainerService.getTrainerById(id);
         return ResponseEntity.ok(trainer);
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<Void> updateTrainerStatus(
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> request) {
@@ -94,7 +94,7 @@ public class TrainerAdminController {
      * for their own record by user id.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<TrainerDTO> updateTrainer(
             @PathVariable Long id,
             @Valid @RequestBody UpdateTrainerAdminRequest request) {
@@ -110,7 +110,7 @@ public class TrainerAdminController {
      * join-table handling live in one place.
      */
     @PostMapping("/{id}/batches/{batchId}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<?> assignToBatch(@PathVariable Long id, @PathVariable Long batchId) {
         int count = batchAssignmentService.assignTrainer(batchId, id);
         return ResponseEntity.ok(Map.of("success", true, "trainerId", id,
@@ -118,7 +118,7 @@ public class TrainerAdminController {
     }
 
     @DeleteMapping("/{id}/batches/{batchId}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<?> unassignFromBatch(@PathVariable Long id, @PathVariable Long batchId) {
         int count = batchAssignmentService.unassignTrainer(batchId, id);
         return ResponseEntity.ok(Map.of("success", true, "trainerId", id,
@@ -136,7 +136,7 @@ public class TrainerAdminController {
      * <p>Refused with 409 TRAINER_HAS_BATCHES while the trainer is assigned to a live batch. Also deactivates the login.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('COLLEGE_ADMIN')")
+    @CollegeAdminOnly
     public ResponseEntity<Void> deleteTrainer(@PathVariable Long id, Authentication auth) {
         softDeleteService.deleteTrainer(id, SecurityUtils.requirePrincipal(auth).getId());
         return ResponseEntity.noContent().build();

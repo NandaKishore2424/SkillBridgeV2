@@ -9,7 +9,7 @@ import com.skillbridge.student.service.StudentDashboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.StudentOnly;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -43,7 +43,7 @@ public class StudentDashboardController {
      * Get dashboard statistics for the logged-in student
      */
     @GetMapping("/dashboard/stats")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<StudentDashboardStatsDTO> getDashboardStats() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -57,7 +57,7 @@ public class StudentDashboardController {
      * Get recommended batches for the logged-in student
      */
     @GetMapping("/batches/recommended")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<List<RecommendedBatchDTO>> getRecommendedBatches() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -74,7 +74,7 @@ public class StudentDashboardController {
      * it grows with the college rather than with the student.
      */
     @GetMapping("/batches/available")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<PagedResponse<BatchDTO>> getAvailableBatches(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -93,7 +93,7 @@ public class StudentDashboardController {
      * student's whole time at the college.
      */
     @GetMapping("/batches")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<PagedResponse<StudentBatchDTO>> getMyBatches(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -109,7 +109,7 @@ public class StudentDashboardController {
      * Get details of a specific batch
      */
     @GetMapping("/batches/{batchId}")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<StudentBatchDTO> getBatchDetails(@PathVariable Long batchId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -127,7 +127,7 @@ public class StudentDashboardController {
      * double-clicked button and a network retry both do the right thing.
      */
     @PostMapping("/batches/apply")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<BatchApplicationDTO> applyToBatch(@RequestBody Map<String, Long> request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);
@@ -151,7 +151,7 @@ public class StudentDashboardController {
      * applied to, and nothing prunes the rejected or withdrawn ones.
      */
     @GetMapping("/applications")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<PagedResponse<BatchApplicationDTO>> getMyApplications(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -164,7 +164,7 @@ public class StudentDashboardController {
      * Withdraw an application that has not been reviewed yet.
      */
     @PostMapping("/applications/{applicationId}/withdraw")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<BatchApplicationDTO> withdrawApplication(@PathVariable Long applicationId) {
         AuthenticatedUser user = SecurityUtils.currentUser();
         return ResponseEntity.ok(enrollmentService.withdrawApplication(user.getId(), applicationId));
@@ -174,7 +174,7 @@ public class StudentDashboardController {
      * Get student progress for a specific batch
      */
     @GetMapping("/batches/{batchId}/progress")
-    @PreAuthorize("hasRole('STUDENT')")
+    @StudentOnly
     public ResponseEntity<StudentProgressDTO> getBatchProgress(@PathVariable Long batchId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         AuthenticatedUser user = SecurityUtils.requirePrincipal(auth);

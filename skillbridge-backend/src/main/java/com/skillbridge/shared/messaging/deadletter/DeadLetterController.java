@@ -10,7 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.SystemAdminOnly;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -51,7 +51,7 @@ public class DeadLetterController {
 
     /** PENDING by default: what still needs a decision. Newest first. */
     @GetMapping
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<PagedResponse<DeadLetterDTO>> list(
             @RequestParam(defaultValue = "PENDING") DeadLetterStatus status,
             @RequestParam(required = false) String eventType,
@@ -62,7 +62,7 @@ public class DeadLetterController {
 
     /** One dead letter, with its body and headers. */
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<DeadLetterDTO> get(@PathVariable long id) {
         return ResponseEntity.ok(deadLetters.get(id));
     }
@@ -74,7 +74,7 @@ public class DeadLetterController {
      * it was already resolved, 422 if its body cannot be replayed.
      */
     @PostMapping("/{id}/replay")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<ReplayBatchResultDTO.Replayed> replay(@PathVariable long id) {
         long adminId = SecurityUtils.currentUser().getId();
         UUID eventId = audited(AuditAction.DEAD_LETTER_REPLAYED, id, Map.of(),
@@ -86,7 +86,7 @@ public class DeadLetterController {
 
     /** Marks a dead letter as not worth replaying. The note is required. */
     @PostMapping("/{id}/discard")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<DeadLetterDTO> discard(@PathVariable long id, @Valid @RequestBody DiscardRequest request) {
         long adminId = SecurityUtils.currentUser().getId();
         DeadLetterDTO discarded = audited(AuditAction.DEAD_LETTER_DISCARDED, id, Map.of("note", request.note()),
@@ -104,7 +104,7 @@ public class DeadLetterController {
      * to replay. Only a real run is audited — a dry run changes nothing.
      */
     @PostMapping("/replay-batch")
-    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    @SystemAdminOnly
     public ResponseEntity<ReplayBatchResultDTO> replayBatch(@Valid @RequestBody ReplayBatchRequest request) {
         long adminId = SecurityUtils.currentUser().getId();
         if (request.isDryRunRequested()) {

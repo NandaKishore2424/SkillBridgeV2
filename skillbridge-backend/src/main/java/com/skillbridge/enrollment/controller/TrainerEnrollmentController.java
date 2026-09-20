@@ -14,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.skillbridge.common.security.TrainerOnly;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,7 +42,7 @@ public class TrainerEnrollmentController {
      * POST /api/v1/trainer/enrollment-requests
      */
     @PostMapping("/enrollment-requests")
-    @PreAuthorize("hasRole('TRAINER')")
+    @TrainerOnly
     public ResponseEntity<EnrollmentRequestDTO> createRequest(
             @Valid @RequestBody CreateEnrollmentRequestDTO request,
             Authentication authentication) {
@@ -57,7 +57,7 @@ public class TrainerEnrollmentController {
      * GET /api/v1/trainer/enrollment-requests
      */
     @GetMapping("/enrollment-requests")
-    @PreAuthorize("hasRole('TRAINER')")
+    @TrainerOnly
     public ResponseEntity<PagedResponse<EnrollmentRequestDTO>> getMyRequests(
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
