@@ -18,12 +18,18 @@ type ToasterToast = ToastProps & {
   action?: ToastActionElement
 }
 
-const actionTypes = {
-  ADD_TOAST: "ADD_TOAST",
-  UPDATE_TOAST: "UPDATE_TOAST",
-  DISMISS_TOAST: "DISMISS_TOAST",
-  REMOVE_TOAST: "REMOVE_TOAST",
-} as const
+/*
+  A type, not a value. shadcn's version of this file declares `actionTypes` as
+  a `const` object and then uses only `typeof actionTypes` -- the reducer
+  matches the string literals directly and never reads a property. The object
+  was shipped in the bundle for nothing.
+*/
+type ActionTypes = {
+  ADD_TOAST: "ADD_TOAST"
+  UPDATE_TOAST: "UPDATE_TOAST"
+  DISMISS_TOAST: "DISMISS_TOAST"
+  REMOVE_TOAST: "REMOVE_TOAST"
+}
 
 let count = 0
 
@@ -32,7 +38,7 @@ function genId() {
   return count.toString()
 }
 
-type ActionType = typeof actionTypes
+type ActionType = ActionTypes
 
 type Action =
   | {

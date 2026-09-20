@@ -1,5 +1,6 @@
 import apiClient from './client';
 import type { PagedResponse, PageParams } from './paging';
+import type { TrainerBatch } from './trainer'
 
 // ============================================================================
 // Batch API
@@ -7,7 +8,22 @@ import type { PagedResponse, PageParams } from './paging';
 
 export const batchApi = {
     // Get all batches
-    getAllBatches: () => apiClient.get('/trainer/batches'),
+    /**
+     * The signed-in trainer's batches.
+     *
+     * Typed, because it was not: `GET /trainer/batches` answers with a
+     * `PagedResponse`, and `CopySyllabusDialog` called `.filter` straight on
+     * `response.data` -- on the page object, not on its `items`. Opening that
+     * dialog threw "response.data.filter is not a function"; nothing typed the
+     * response, so nothing said so.
+     *
+     * `size: 100` is the server maximum and there is no pager here yet, so a
+     * trainer with more than 100 batches would not see them all. Recorded
+     * rather than hidden: `itemsOf` marks every such call site.
+     */
+    getAllBatches: () => apiClient.get<PagedResponse<TrainerBatch>>('/trainer/batches', {
+        params: { size: 100 },
+    }),
 
     // Get batch by ID (use admin endpoint for now, TODO: create trainer-specific endpoint)
     getBatchById: (batchId: number) => apiClient.get(`/admin/batches/${batchId}`),

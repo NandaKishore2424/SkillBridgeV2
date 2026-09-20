@@ -12,7 +12,9 @@
  * - Automatic token refresh on 401 errors
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+
+import { AuthContext } from './authContextObject'
 import { useNavigate } from 'react-router-dom'
 import type { AuthContextValue, AuthState, LoginCredentials } from '@/shared/types/auth'
 import type { User, UserRole } from '@/shared/types'
@@ -20,9 +22,10 @@ import * as authAPI from '@/api/auth'
 import apiClient from '@/api/client'
 import { clearAccessToken, getAccessToken, onTokenFromAnotherTab, setAccessToken } from '@/shared/auth/accessTokenStore'
 import { dashboardPathFor } from '@/shared/auth/dashboardPath'
+import { apiErrorMessage } from '@/lib/apiError'
 
 // Create context with undefined default (will be set by Provider)
-const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+
 
 // Neither token is in localStorage any more. The access token lives in memory
 // (shared/auth/accessTokenStore); the refresh token only in the HttpOnly cookie
@@ -46,10 +49,31 @@ function isJWT(token: string): boolean {
 }
 
 /**
+ * The claims this application reads out of an access token.
+ *
+ * Only `exp` is used, and only to decide whether to refresh before making a
+ * request -- the backend re-validates everything. Typed rather than `any` so
+ * that a second reader cannot quietly start trusting a claim: the authorities
+ * come from the token on the server side, and treating a client-side decode as
+ * authoritative is how a role check ends up in the browser.
+ */
+interface TokenClaims {
+  /** Expiry, seconds since the epoch. */
+  exp?: number
+  /** The user id, as the subject. */
+  sub?: string
+  userId?: string
+  email?: string
+  role?: string
+  collegeId?: number
+  isActive?: boolean
+}
+
+/**
  * Decode JWT token to extract payload
  * Returns null if token is not a JWT
  */
-function decodeJWT(token: string): any {
+function decodeJWT(token: string): TokenClaims | null {
   if (!token || !isJWT(token)) {
     return null // Not a JWT, return null
   }
@@ -164,7 +188,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           try {
             const response = await authAPI.refreshToken()
             await handleAuthSuccess(response)
-          } catch (error) {
+          } catch {
+            // Expected for anyone who is simply not signed in.
             clearAuthState()
           }
         }
@@ -296,10 +321,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } else {
         console.error('[AuthContext] No user after login - this should not happen')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[AuthContext] Login error:', error)
-      const errorMessage =
-        error.response?.data?.message || error.message || 'Login failed. Please try again.'
+      const errorMessage = apiErrorMessage(error, 'Could not sign you in. Try again.')
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -447,17 +471,3 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
-
-/**
- * Hook to use authentication context
- * 
- * @throws Error if used outside AuthProvider
- */
-export function useAuth(): AuthContextValue {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-}
-

@@ -81,7 +81,7 @@ export function CreateTrainer() {
       showSuccess('Trainer created successfully!')
       navigate('/admin/trainers')
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       showError(apiErrorMessage(error, 'Failed to create trainer. Please try again.'))
     },
   })

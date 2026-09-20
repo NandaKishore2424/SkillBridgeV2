@@ -31,6 +31,7 @@ import { createCollege, type CreateCollegeRequest } from '@/api/admin'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import { Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { apiErrorMessage } from '@/lib/apiError'
 
 // Form schema
 const createCollegeSchema = z.object({
@@ -72,9 +73,9 @@ export function CreateCollege() {
       showSuccess('College created successfully!')
       navigate('/admin/colleges')
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       showError(
-        error?.response?.data?.message || 'Failed to create college. Please try again.'
+        apiErrorMessage(error, 'Failed to create college. Please try again.')
       )
     },
   })

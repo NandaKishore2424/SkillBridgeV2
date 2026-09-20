@@ -58,6 +58,8 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
+import { apiErrorMessage } from '@/lib/apiError'
+import { usePagedFilter } from '@/shared/hooks/useSyncedState'
 
 export function TrainersList() {
   const queryClient = useQueryClient()
@@ -65,13 +67,10 @@ export function TrainersList() {
   const [searchQuery, setSearchQuery] = useState('')
   const debouncedSearch = useDebouncedValue(searchQuery)
 
-  // A narrowing search has to reset the page. Staying on page 3 while the
-  // result set shrinks to two rows shows an empty table that reads as
-  // "no matches".
-  useEffect(() => {
-    setPage(0)
-  }, [debouncedSearch])
-  const [page, setPage] = useState(0)
+  // Resets to the first page whenever the search narrows: staying on page
+  // 3 while the results shrink to two rows shows an empty table that reads
+  // as "no matches". See `usePagedFilter`.
+  const [page, setPage] = usePagedFilter(debouncedSearch)
   const pageSize = 20
   const { showSuccess, showError } = useToastNotifications()
 
@@ -106,8 +105,8 @@ export function TrainersList() {
         `Trainer ${variables.isActive ? 'activated' : 'deactivated'} successfully`
       )
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to update trainer status')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to update trainer status'))
     },
   })
 

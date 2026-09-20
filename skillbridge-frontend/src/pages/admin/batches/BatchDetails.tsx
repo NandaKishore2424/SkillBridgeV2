@@ -46,6 +46,7 @@ import {
   getBatchEnrollments,
   approveEnrollment,
   rejectEnrollment,
+  type BatchDetails as BatchDetailsResponse,
 } from '@/api/batch-details'
 import { getAssignedTrainers as getBatchTrainers, getAssignedCompanies as getBatchCompanies } from '@/api/batch-details'
 import { getTrainers, getCompanies } from '@/api/college-admin'
@@ -58,8 +59,10 @@ import {
   XCircle,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useMemo } from 'react'
+import { useSyncedState } from '@/shared/hooks/useSyncedState'
 import { itemsOf } from '@/api/paging'
+import { apiErrorMessage } from '@/lib/apiError'
 
 const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'outline'> = {
   UPCOMING: 'outline',
@@ -70,7 +73,7 @@ const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'outline'> = {
 }
 
 // Tab components
-function OverviewTab({ batch }: { batch: any }) {
+function OverviewTab({ batch }: { batch: BatchDetailsResponse }) {
   return (
     <div className="space-y-4">
       <Card>
@@ -122,10 +125,9 @@ function OverviewTab({ batch }: { batch: any }) {
   )
 }
 
-function TrainersTab({ batchId }: any) {
+function TrainersTab({ batchId }: { batchId: number }) {
   const queryClient = useQueryClient()
   const { showSuccess, showError } = useToastNotifications()
-  const [selectedTrainers, setSelectedTrainers] = useState<number[]>([])
 
   // Two bugs lived in these three lines. `queryFn: getTrainers` hands React
   // Query's context object to getTrainers' `page` parameter, and the response is
@@ -145,12 +147,18 @@ function TrainersTab({ batchId }: any) {
     select: itemsOf,
   })
 
-  // Update selectedTrainers when assignedTrainers data arrives
-  useEffect(() => {
-    if (assignedTrainers) {
-      setSelectedTrainers(assignedTrainers.map(t => t.id))
-    }
-  }, [assignedTrainers])
+  const assignedTrainerIds = useMemo(
+    () => assignedTrainers?.map((t) => t.id) ?? [],
+    [assignedTrainers],
+  )
+
+  // Seeded from what is already assigned, and re-seeded when that changes --
+  // during the render that notices, not in an effect afterwards, so the
+  // checkboxes never show the previous assignment for a frame.
+  const [selectedTrainers, setSelectedTrainers] = useSyncedState(
+    assignedTrainerIds,
+    assignedTrainers,
+  )
 
   const assignMutation = useMutation({
     mutationFn: (trainerIds: number[]) => assignTrainersToBatch(batchId, trainerIds),
@@ -160,8 +168,8 @@ function TrainersTab({ batchId }: any) {
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId, 'trainers'] })
       showSuccess('Trainers assigned successfully!')
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to assign trainers')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to assign trainers'))
     },
   })
 
@@ -270,10 +278,9 @@ function TrainersTab({ batchId }: any) {
   )
 }
 
-function CompaniesTab({ batchId }: any) {
+function CompaniesTab({ batchId }: { batchId: number }) {
   const queryClient = useQueryClient()
   const { showSuccess, showError } = useToastNotifications()
-  const [selectedCompanies, setSelectedCompanies] = useState<number[]>([])
 
   const { data: companiesPage, isLoading } = useQuery({
     queryKey: ['admin', 'companies'],
@@ -288,12 +295,16 @@ function CompaniesTab({ batchId }: any) {
     select: itemsOf,
   })
 
-  // Update selectedCompanies when assignedCompanies data arrives
-  useEffect(() => {
-    if (assignedCompanies) {
-      setSelectedCompanies(assignedCompanies.map(c => c.id))
-    }
-  }, [assignedCompanies])
+  const assignedCompanyIds = useMemo(
+    () => assignedCompanies?.map((c) => c.id) ?? [],
+    [assignedCompanies],
+  )
+
+  // Same shape as the trainers tab above, for the same reason.
+  const [selectedCompanies, setSelectedCompanies] = useSyncedState(
+    assignedCompanyIds,
+    assignedCompanies,
+  )
 
   const mapMutation = useMutation({
     mutationFn: (companyIds: number[]) => mapCompaniesToBatch(batchId, companyIds),
@@ -303,8 +314,8 @@ function CompaniesTab({ batchId }: any) {
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId, 'companies'] })
       showSuccess('Companies mapped successfully!')
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to map companies')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to map companies'))
     },
   })
 
@@ -429,8 +440,8 @@ function EnrollmentsTab({ batchId }: { batchId: number }) {
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId] })
       showSuccess('Enrollment approved successfully!')
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to approve enrollment')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to approve enrollment'))
     },
   })
 
@@ -440,8 +451,8 @@ function EnrollmentsTab({ batchId }: { batchId: number }) {
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches', batchId, 'enrollments'] })
       showSuccess('Enrollment rejected')
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to reject enrollment')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to reject enrollment'))
     },
   })
 
@@ -724,20 +735,19 @@ export function BatchDetails() {
                 <OverviewTab batch={batch} />
               </TabsContent>
 
+              {/*
+                `trainers` / `assignedTrainerIds` and their company equivalents
+                used to be passed here and were never read: both tabs fetch
+                their own lists. They survived because the components were typed
+                `({ batchId }: any)`, which accepts any props at all and reports
+                nothing.
+              */}
               <TabsContent value="trainers">
-                <TrainersTab
-                  batchId={batchId}
-                  trainers={batch.trainers}
-                  assignedTrainerIds={batch.trainers?.map((t) => t.id) || []}
-                />
+                <TrainersTab batchId={batchId} />
               </TabsContent>
 
               <TabsContent value="companies">
-                <CompaniesTab
-                  batchId={batchId}
-                  companies={batch.companies}
-                  linkedCompanyIds={batch.companies?.map((c) => c.id) || []}
-                />
+                <CompaniesTab batchId={batchId} />
               </TabsContent>
 
               <TabsContent value="enrollments">

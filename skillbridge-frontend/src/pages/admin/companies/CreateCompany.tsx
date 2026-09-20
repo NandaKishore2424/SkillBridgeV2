@@ -10,7 +10,7 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -41,6 +41,7 @@ import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import { Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { itemsOf } from '@/api/paging'
+import { apiErrorMessage } from '@/lib/apiError'
 
 // Form schema
 const createCompanySchema = z.object({
@@ -78,7 +79,7 @@ export function CreateCompany() {
     handleSubmit,
     formState: { errors },
     setValue,
-    watch,
+    control,
   } = useForm<CreateCompanyFormData>({
     resolver: zodResolver(createCompanySchema),
     defaultValues: {
@@ -102,8 +103,8 @@ export function CreateCompany() {
       showSuccess('Company created successfully!')
       navigate('/admin/companies')
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to create company. Please try again.')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to create company. Please try again.'))
     },
   })
 
@@ -119,8 +120,17 @@ export function CreateCompany() {
     mutation.mutate(payload)
   }
 
-  const hiringType = watch('hiringType')
-  const selectedCollegeId = watch('collegeId')
+  /*
+    `useWatch`, not `form.watch`.
+
+    `watch` is a function the form hands back, and React Compiler refuses to
+    memoise any component that calls one -- it cannot know what the function
+    closes over, so a memoised value derived from it can go stale. `useWatch`
+    is a hook that subscribes to one field and re-renders on it, which is what
+    this actually wants.
+  */
+  const hiringType = useWatch({ control, name: 'hiringType' })
+  const selectedCollegeId = useWatch({ control, name: 'collegeId' })
 
   return (
     <RoleGuard allowedRoles={['COLLEGE_ADMIN', 'SYSTEM_ADMIN']}>
@@ -221,7 +231,7 @@ export function CreateCompany() {
                       Hiring Type <span className="text-destructive">*</span>
                     </Label>
                     <Select
-                      onValueChange={(value) => setValue('hiringType', value as any)}
+                      onValueChange={(value) => setValue('hiringType', value as CreateCompanyFormData['hiringType'])}
                       disabled={mutation.isPending}
                     >
                       <SelectTrigger id="hiringType">

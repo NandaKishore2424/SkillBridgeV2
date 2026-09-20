@@ -48,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui'
 import { itemsOf } from '@/api/paging'
+import { apiErrorMessage } from '@/lib/apiError'
 
 export function CollegesList() {
   const queryClient = useQueryClient()
@@ -86,8 +87,8 @@ export function CollegesList() {
         `College ${variables.status === 'ACTIVE' ? 'activated' : 'deactivated'} successfully`
       )
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to update college status')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to update college status'))
     },
   })
 

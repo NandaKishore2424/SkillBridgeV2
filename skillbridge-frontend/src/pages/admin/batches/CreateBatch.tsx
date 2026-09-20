@@ -33,6 +33,7 @@ import { useIdempotencyKey } from '@/lib/idempotency'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import { Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { apiErrorMessage } from '@/lib/apiError'
 
 // Form schema
 const createBatchSchema = z.object({
@@ -90,8 +91,8 @@ export function CreateBatch() {
       showSuccess('Batch created successfully!')
       navigate('/admin/batches')
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to create batch. Please try again.')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to create batch. Please try again.'))
     },
   })
 

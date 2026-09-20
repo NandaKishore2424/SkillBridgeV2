@@ -16,11 +16,6 @@ import { cn } from '@/lib/utils'
  * thing was missing or the server was broken.
  */
 
-/** True when the API said 404. A missing thing is not a failure to load. */
-export function isNotFound(error: unknown): boolean {
-  return (error as { response?: { status?: number } })?.response?.status === 404
-}
-
 export function DetailSkeleton({ className }: { className?: string }) {
   return (
     <div className={cn('space-y-6', className)} role="status" aria-label="Loading">

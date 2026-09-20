@@ -39,6 +39,7 @@ import { itemsOf } from '@/api/paging'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
 import { MySkillGapCard } from '@/shared/components/skill-gap/SkillGapCard'
 import { ErrorState, PageHeader, StatCard } from '@/shared/components/page'
+import { apiErrorMessage } from '@/lib/apiError'
 import {
   BookOpen,
   TrendingUp,
@@ -111,8 +112,8 @@ export function StudentDashboard() {
       queryClient.invalidateQueries({ queryKey: ['student', 'batches', 'recommended'] })
       showSuccess('Application submitted successfully!')
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to apply to batch. Please try again.')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to apply to batch. Please try again.'))
     },
   })
 

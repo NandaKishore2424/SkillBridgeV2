@@ -13,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/shared/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table'
+import { apiErrorMessage } from '@/lib/apiError'
 import {
   bulkGrade, getGradingGrid, type GradingGridRow, type ProgressStatus,
 } from '@/api/trainer'
@@ -72,7 +73,11 @@ export default function TopicGradingPage() {
   const toggle = (studentId: number) =>
     setSelected((prev) => {
       const next = new Set(prev)
-      next.has(studentId) ? next.delete(studentId) : next.add(studentId)
+      if (next.has(studentId)) {
+        next.delete(studentId)
+      } else {
+        next.add(studentId)
+      }
       return next
     })
 
@@ -95,9 +100,9 @@ export default function TopicGradingPage() {
       setSelected(new Set())
       queryClient.invalidateQueries({ queryKey: ['grading-grid', id] })
     },
-    onError: (e: any) => {
+    onError: (e: unknown) => {
       setResult(null)
-      setError(e?.response?.data?.message || 'Could not save. Nothing was changed.')
+      setError(apiErrorMessage(e, 'Could not save. Nothing was changed.'))
     },
   })
 

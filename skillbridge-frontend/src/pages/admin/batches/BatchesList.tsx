@@ -64,6 +64,8 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
+import { apiErrorMessage } from '@/lib/apiError'
+import { usePagedFilter } from '@/shared/hooks/useSyncedState'
 
 const STATUS_COLORS: Record<BatchStatus, 'default' | 'secondary' | 'outline'> = {
   UPCOMING: 'outline',
@@ -78,7 +80,6 @@ export function BatchesList() {
   const location = useLocation()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<BatchStatus | 'ALL'>('ALL')
-  const [page, setPage] = useState(0)
   const pageSize = 20
   const { showSuccess, showError } = useToastNotifications()
 
@@ -94,11 +95,10 @@ export function BatchesList() {
   // request rather than eight, and the results cannot land out of order.
   const debouncedSearch = useDebouncedValue(searchQuery)
 
-  // A filter change has to reset the page. Staying on page 3 while narrowing to
-  // two results shows an empty list that looks like "no matches".
-  useEffect(() => {
-    setPage(0)
-  }, [debouncedSearch, statusFilter])
+  // Both filters, joined into one primitive: `usePagedFilter` compares with
+  // `!==`, and an object would be a new identity on every render. The tab
+  // character cannot appear in either value, so nothing can collide.
+  const [page, setPage] = usePagedFilter(`${debouncedSearch}\t${statusFilter}`)
 
   const {
     data: batchesPage,
@@ -125,8 +125,8 @@ export function BatchesList() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'batches'] })
       showSuccess(`Batch status updated to ${variables.status}`)
     },
-    onError: (error: any) => {
-      showError(error?.response?.data?.message || 'Failed to update batch status')
+    onError: (error: unknown) => {
+      showError(apiErrorMessage(error, 'Failed to update batch status'))
     },
   })
 
@@ -177,7 +177,7 @@ export function BatchesList() {
                       className="pl-10"
                     />
                   </div>
-                  <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                  <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as BatchStatus | 'ALL')}>
                     <SelectTrigger className="w-full sm:w-[180px]">
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>

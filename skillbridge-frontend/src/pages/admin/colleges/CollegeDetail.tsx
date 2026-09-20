@@ -352,9 +352,9 @@ export function CollegeDetail() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {students.map((student: any) => (
+                            {students.map((student) => (
                               <TableRow key={student.id}>
-                                <TableCell className="font-medium">{student.name || student.fullName || '-'}</TableCell>
+                                <TableCell className="font-medium">{student.fullName || '-'}</TableCell>
                                 <TableCell>{student.email || '-'}</TableCell>
                                 <TableCell>{student.rollNumber || '-'}</TableCell>
                                 <TableCell>
@@ -413,7 +413,7 @@ export function CollegeDetail() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {batches.map((batch: any) => (
+                            {batches.map((batch) => (
                               <TableRow key={batch.id}>
                                 <TableCell className="font-medium">{batch.name || '-'}</TableCell>
                                 <TableCell>
@@ -474,9 +474,9 @@ export function CollegeDetail() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {trainers.map((trainer: any) => (
+                            {trainers.map((trainer) => (
                               <TableRow key={trainer.id}>
-                                <TableCell className="font-medium">{trainer.name || trainer.fullName || '-'}</TableCell>
+                                <TableCell className="font-medium">{trainer.fullName || '-'}</TableCell>
                                 <TableCell>{trainer.email || '-'}</TableCell>
                                 <TableCell>{trainer.department || '-'}</TableCell>
                                 <TableCell>
@@ -539,25 +539,29 @@ export function CollegeDetail() {
                     <CardContent>
                       <div className="rounded-md border">
                         <Table>
+                          {/*
+                            Two columns were removed here, and typing the
+                            response is what found them.
+                            `CollegeController.toAdminResponse` builds
+                            `{ id, email, fullName, collegeId }` -- there is no
+                            phone and no active flag. The Phone column had
+                            always rendered "-" for every row, and the Status
+                            column had always rendered the grey "Inactive"
+                            badge, for administrators who were perfectly
+                            active. Both were unreachable under
+                            `PagedResponse<any>`.
+                          */}
                           <TableHeader>
                             <TableRow>
                               <TableHead>Name</TableHead>
                               <TableHead>Email</TableHead>
-                              <TableHead>Phone</TableHead>
-                              <TableHead>Status</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {admins.map((admin: any) => (
+                            {admins.map((admin) => (
                               <TableRow key={admin.id}>
-                                <TableCell className="font-medium">{admin.name || admin.fullName || '-'}</TableCell>
+                                <TableCell className="font-medium">{admin.fullName || '-'}</TableCell>
                                 <TableCell>{admin.email || '-'}</TableCell>
-                                <TableCell>{admin.phone || '-'}</TableCell>
-                                <TableCell>
-                                  <Badge variant={admin.isActive ? 'default' : 'secondary'}>
-                                    {admin.isActive ? 'Active' : 'Inactive'}
-                                  </Badge>
-                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>

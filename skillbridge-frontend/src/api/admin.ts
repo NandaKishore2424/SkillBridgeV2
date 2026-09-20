@@ -6,6 +6,7 @@
 
 import apiClient from './client'
 import type { College } from '@/shared/types'
+import type { BatchWithDetails, StudentWithDetails, Trainer } from './college-admin'
 import type { PagedResponse, PageParams } from './paging'
 
 // Re-exported: pages import College from this module alongside the API
@@ -97,14 +98,24 @@ export const createCollegeAdmin = async (
   return response.data
 }
 
+/*
+ * The four sub-resource reads behind the college detail screen.
+ *
+ * They were typed `PagedResponse<any>`, and the screen consumed them with
+ * `student.name || student.fullName || '-'` -- a guess, written because the
+ * type said nothing. `CollegeController` returns `StudentDTO`, `BatchDTO`,
+ * `TrainerDTO` and `CollegeAdminResponse`, which are the four types named
+ * below; `.name` has never existed on any of them.
+ */
+
 /**
  * Get students for a specific college
  */
 export const getCollegeStudents = async (
   collegeId: number,
   params: PageParams = {},
-): Promise<PagedResponse<any>> => {
-  const response = await apiClient.get<PagedResponse<any>>(
+): Promise<PagedResponse<StudentWithDetails>> => {
+  const response = await apiClient.get<PagedResponse<StudentWithDetails>>(
     `/admin/colleges/${collegeId}/students`, { params })
   return response.data
 }
@@ -115,8 +126,8 @@ export const getCollegeStudents = async (
 export const getCollegeBatches = async (
   collegeId: number,
   params: PageParams = {},
-): Promise<PagedResponse<any>> => {
-  const response = await apiClient.get<PagedResponse<any>>(
+): Promise<PagedResponse<BatchWithDetails>> => {
+  const response = await apiClient.get<PagedResponse<BatchWithDetails>>(
     `/admin/colleges/${collegeId}/batches`, { params })
   return response.data
 }
@@ -127,8 +138,8 @@ export const getCollegeBatches = async (
 export const getCollegeTrainers = async (
   collegeId: number,
   params: PageParams = {},
-): Promise<PagedResponse<any>> => {
-  const response = await apiClient.get<PagedResponse<any>>(
+): Promise<PagedResponse<Trainer>> => {
+  const response = await apiClient.get<PagedResponse<Trainer>>(
     `/admin/colleges/${collegeId}/trainers`, { params })
   return response.data
 }
@@ -139,8 +150,8 @@ export const getCollegeTrainers = async (
 export const getCollegeAdmins = async (
   collegeId: number,
   params: PageParams = {},
-): Promise<PagedResponse<any>> => {
-  const response = await apiClient.get<PagedResponse<any>>(
+): Promise<PagedResponse<CreateCollegeAdminResponse>> => {
+  const response = await apiClient.get<PagedResponse<CreateCollegeAdminResponse>>(
     `/admin/colleges/${collegeId}/admins`, { params })
   return response.data
 }

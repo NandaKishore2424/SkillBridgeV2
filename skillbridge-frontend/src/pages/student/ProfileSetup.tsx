@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import {
@@ -26,6 +26,7 @@ import {
 } from '@/shared/components/ui'
 import { DASHBOARD_PATH } from '@/shared/auth/dashboardPath'
 import { useToastNotifications } from '@/shared/hooks/useToastNotifications'
+import { apiErrorMessage } from '@/lib/apiError'
 import {
     completeProfile,
     type StudentProfileUpdateData,
@@ -108,7 +109,7 @@ export function ProfileSetup() {
         handleSubmit,
         formState: { errors },
         trigger,
-        watch,
+        control,
     // z.coerce.number() makes the schema's INPUT type `unknown` (whatever the DOM
     // hands over) while its OUTPUT type is `number`. useForm<Output> declared both
     // sides as the output, so the resolver -- which maps input to output -- did not
@@ -119,6 +120,15 @@ export function ProfileSetup() {
         mode: 'onChange',
     })
 
+    /*
+      `useWatch`, not `form.watch`. `watch` is a function the form hands back,
+      and React Compiler will not memoise a component that calls one -- it
+      cannot know what the function closes over, so anything derived from it
+      could go stale. This wants a subscription to one field, which is what
+      `useWatch` is.
+    */
+    const bio = useWatch({ control, name: 'bio' })
+
     const completeMutation = useMutation({
         mutationFn: completeProfile,
         onSuccess: () => {
@@ -127,10 +137,9 @@ export function ProfileSetup() {
                 navigate(DASHBOARD_PATH.STUDENT)
             }, 1500)
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             showError(
-                error?.response?.data?.message ||
-                'Failed to complete profile. Please try again.'
+                apiErrorMessage(error, 'Failed to complete profile. Please try again.')
             )
         },
     })
@@ -366,7 +375,7 @@ export function ProfileSetup() {
                                         {...register('bio')}
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        {watch('bio')?.length || 0} / 1000 characters
+                                        {bio?.length ?? 0} / 1000 characters
                                     </p>
                                 </div>
                             </div>

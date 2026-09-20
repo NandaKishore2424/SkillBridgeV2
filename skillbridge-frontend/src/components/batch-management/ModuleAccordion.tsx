@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/shared/components/ui/accordion';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { useAuth } from '@/shared/hooks/useAuth';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { Pencil, Trash2, Plus, Calendar, ClipboardCheck } from 'lucide-react';

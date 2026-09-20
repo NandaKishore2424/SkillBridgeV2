@@ -79,8 +79,8 @@ export function CreateCollegeAdminModal({
       reset()
       onSuccess()
     },
-    onError: (error: any) => {
-      showError('Failed to create admin.', apiErrorMessage(error, error.message))
+    onError: (error: unknown) => {
+      showError('Failed to create admin.', apiErrorMessage(error, 'Try again in a moment.'))
     },
   })
 

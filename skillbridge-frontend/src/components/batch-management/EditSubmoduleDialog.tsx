@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
@@ -8,6 +7,8 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { Pencil, Loader2 } from 'lucide-react';
 import { syllabusApi, type SyllabusSubmodule } from '@/api/batchManagement';
 import { useToast } from '@/shared/hooks/use-toast';
+import { apiErrorMessage } from '@/lib/apiError'
+import { useSyncedState } from '@/shared/hooks/useSyncedState';
 
 interface EditSubmoduleDialogProps {
     submodule: SyllabusSubmodule;
@@ -19,22 +20,24 @@ interface EditSubmoduleDialogProps {
 export default function EditSubmoduleDialog({ submodule, batchId, isOpen, onClose }: EditSubmoduleDialogProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
-    const [weekNumber, setWeekNumber] = useState('');
-
-    // Load submodule data when dialog opens
-    useEffect(() => {
-        if (isOpen && submodule) {
-            setName(submodule.name);
-            setDescription(submodule.description || '');
-            setStartDate(submodule.startDate ? submodule.startDate.split('T')[0] : '');
-            setEndDate(submodule.endDate ? submodule.endDate.split('T')[0] : '');
-            setWeekNumber(submodule.weekNumber?.toString() || '');
-        }
-    }, [isOpen, submodule]);
+    // Same shape as EditModuleDialog: seeded from the sub-module, reseeded when
+    // a different one is opened or this one is opened again.
+    const seed = `${isOpen}:${submodule?.id ?? ''}`;
+    const [name, setName] = useSyncedState(submodule?.name ?? '', seed);
+    const [description, setDescription] = useSyncedState(submodule?.description ?? '', seed);
+    // The API sends a timestamp; the date input wants the day.
+    const [startDate, setStartDate] = useSyncedState(
+        submodule?.startDate?.split('T')[0] ?? '',
+        seed,
+    );
+    const [endDate, setEndDate] = useSyncedState(
+        submodule?.endDate?.split('T')[0] ?? '',
+        seed,
+    );
+    const [weekNumber, setWeekNumber] = useSyncedState(
+        submodule?.weekNumber?.toString() ?? '',
+        seed,
+    );
 
     const updateMutation = useMutation({
         mutationFn: (data: {
@@ -52,10 +55,10 @@ export default function EditSubmoduleDialog({ submodule, batchId, isOpen, onClos
             });
             handleClose();
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: 'Error',
-                description: error.response?.data?.message || 'Failed to update sub-module. Please try again.',
+                description: apiErrorMessage(error, 'Failed to update sub-module. Please try again.'),
                 variant: 'destructive',
             });
         },

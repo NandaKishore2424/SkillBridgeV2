@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
@@ -8,6 +8,8 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { Plus, Loader2 } from 'lucide-react';
 import { syllabusApi, type SyllabusModule } from '@/api/batchManagement';
 import { useToast } from '@/shared/hooks/use-toast';
+import { apiErrorMessage } from '@/lib/apiError'
+import { useSyncedState } from '@/shared/hooks/useSyncedState';
 
 interface CreateModuleDialogProps {
     batchId: number;
@@ -21,17 +23,19 @@ export default function CreateModuleDialog({ batchId, modules, open, onOpenChang
     const queryClient = useQueryClient();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [displayOrder, setDisplayOrder] = useState('1');
 
-    // Auto-calculate next display order when dialog opens
-    useEffect(() => {
-        if (open) {
-            const maxOrder = modules.length > 0
-                ? Math.max(...modules.map(m => m.displayOrder))
-                : 0;
-            setDisplayOrder((maxOrder + 1).toString());
-        }
-    }, [open, modules]);
+    const nextOrder = (
+        (modules.length > 0 ? Math.max(...modules.map(m => m.displayOrder)) : 0) + 1
+    ).toString();
+    /*
+      Reseeded when the dialog opens, and only then.
+
+      The effect this replaces listed `modules` as a dependency too, so a
+      refetch while the dialog was open overwrote whatever the person had typed
+      into Display order. Keyed on `open` alone, which is what its own comment
+      ("when dialog opens") always said it did.
+    */
+    const [displayOrder, setDisplayOrder] = useSyncedState(nextOrder, open);
 
     const createMutation = useMutation({
         mutationFn: (data: { name: string; description?: string; displayOrder: number }) =>
@@ -44,10 +48,10 @@ export default function CreateModuleDialog({ batchId, modules, open, onOpenChang
             });
             handleClose();
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: 'Error',
-                description: error.response?.data?.message || 'Failed to create module. Please try again.',
+                description: apiErrorMessage(error, 'Failed to create module. Please try again.'),
                 variant: 'destructive',
             });
         },

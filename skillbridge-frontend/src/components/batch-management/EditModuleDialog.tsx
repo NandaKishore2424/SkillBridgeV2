@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
@@ -8,6 +7,8 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { Pencil, Loader2 } from 'lucide-react';
 import { syllabusApi, type SyllabusModule } from '@/api/batchManagement';
 import { useToast } from '@/shared/hooks/use-toast';
+import { apiErrorMessage } from '@/lib/apiError'
+import { useSyncedState } from '@/shared/hooks/useSyncedState';
 
 interface EditModuleDialogProps {
     module: SyllabusModule | null;
@@ -19,22 +20,24 @@ interface EditModuleDialogProps {
 export default function EditModuleDialog({ module, batchId, isOpen, onClose }: EditModuleDialogProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-    const [displayOrder, setDisplayOrder] = useState('1');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    /*
+      The form is seeded from the module, and reseeded when a different module
+      is opened -- or the same one opened again. Keyed on both, because the
+      dialog is kept mounted: keyed on the id alone, closing it and reopening it
+      on the same module would show the half-finished edit from last time.
 
-    // Populate form when module changes
-    useEffect(() => {
-        if (module) {
-            setName(module.name);
-            setDescription(module.description || '');
-            setDisplayOrder(module.displayOrder.toString());
-            setStartDate(module.startDate || '');
-            setEndDate(module.endDate || '');
-        }
-    }, [module]);
+      During render rather than in an effect, so the fields never show the
+      previous module's values for a frame.
+    */
+    const seed = `${isOpen}:${module?.id ?? ''}`;
+    const [name, setName] = useSyncedState(module?.name ?? '', seed);
+    const [description, setDescription] = useSyncedState(module?.description ?? '', seed);
+    const [displayOrder, setDisplayOrder] = useSyncedState(
+        module?.displayOrder?.toString() ?? '1',
+        seed,
+    );
+    const [startDate, setStartDate] = useSyncedState(module?.startDate ?? '', seed);
+    const [endDate, setEndDate] = useSyncedState(module?.endDate ?? '', seed);
 
     const updateMutation = useMutation({
         mutationFn: (data: { name: string; description?: string; displayOrder: number; startDate?: string; endDate?: string }) =>
@@ -47,10 +50,10 @@ export default function EditModuleDialog({ module, batchId, isOpen, onClose }: E
             });
             onClose();
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: 'Error',
-                description: error.response?.data?.message || 'Failed to update module. Please try again.',
+                description: apiErrorMessage(error, 'Failed to update module. Please try again.'),
                 variant: 'destructive',
             });
         },

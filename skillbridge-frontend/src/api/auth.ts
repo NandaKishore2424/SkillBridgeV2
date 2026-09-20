@@ -1,4 +1,5 @@
 import apiClient from './client';
+import type { User } from '@/shared/types'
 
 /**
  * Authentication API endpoints
@@ -69,8 +70,8 @@ export const logout = async (): Promise<void> => {
 /**
  * Get current user information
  */
-export const getCurrentUser = async (): Promise<any> => {
-  const response = await apiClient.get('/auth/me');
+export const getCurrentUser = async (): Promise<User> => {
+  const response = await apiClient.get<User>('/auth/me');
   return response.data;
 };
 

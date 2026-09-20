@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
@@ -8,6 +8,8 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { Plus, Loader2 } from 'lucide-react';
 import { syllabusApi } from '@/api/batchManagement';
 import { useToast } from '@/shared/hooks/use-toast';
+import { apiErrorMessage } from '@/lib/apiError'
+import { useSyncedState } from '@/shared/hooks/useSyncedState';
 
 interface CreateSubmoduleDialogProps {
     moduleId: number;
@@ -22,17 +24,16 @@ export default function CreateSubmoduleDialog({ moduleId, batchId, submodulesCou
     const queryClient = useQueryClient();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [displayOrder, setDisplayOrder] = useState('1');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [weekNumber, setWeekNumber] = useState('');
 
-    // Auto-calculate next display order when dialog opens
-    useEffect(() => {
-        if (isOpen) {
-            setDisplayOrder((submodulesCount + 1).toString());
-        }
-    }, [isOpen, submodulesCount]);
+    // Reseeded when the dialog opens; see CreateModuleDialog for why the count
+    // is not also a key.
+    const [displayOrder, setDisplayOrder] = useSyncedState(
+        (submodulesCount + 1).toString(),
+        isOpen,
+    );
 
     const createMutation = useMutation({
         mutationFn: (data: {
@@ -51,10 +52,10 @@ export default function CreateSubmoduleDialog({ moduleId, batchId, submodulesCou
             });
             handleClose();
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: 'Error',
-                description: error.response?.data?.message || 'Failed to create sub-module. Please try again.',
+                description: apiErrorMessage(error, 'Failed to create sub-module. Please try again.'),
                 variant: 'destructive',
             });
         },

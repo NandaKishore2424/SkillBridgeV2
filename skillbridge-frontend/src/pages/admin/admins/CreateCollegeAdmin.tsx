@@ -11,7 +11,7 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
@@ -83,7 +83,7 @@ export function CreateCollegeAdmin() {
     handleSubmit,
     formState: { errors },
     setValue,
-    watch,
+    control,
   } = useForm<CreateAdminFormData>({
     resolver: zodResolver(createAdminSchema),
     defaultValues: {
@@ -103,7 +103,7 @@ export function CreateCollegeAdmin() {
       showSuccess('College admin created successfully!')
       navigate('/admin/colleges')
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       showError(apiErrorMessage(error, 'Failed to create college admin. Please try again.'))
     },
   })
@@ -118,7 +118,16 @@ export function CreateCollegeAdmin() {
     mutation.mutate({ collegeId: data.collegeId, data: payload })
   }
 
-  const selectedCollegeId = watch('collegeId')
+  /*
+    `useWatch`, not `form.watch`.
+
+    `watch` is a function the form hands back, and React Compiler refuses to
+    memoise any component that calls one -- it cannot know what the function
+    closes over, so a memoised value derived from it can go stale. `useWatch`
+    is a hook that subscribes to one field and re-renders on it, which is what
+    this actually wants.
+  */
+  const selectedCollegeId = useWatch({ control, name: 'collegeId' })
 
   return (
     <RoleGuard allowedRoles={['SYSTEM_ADMIN']}>

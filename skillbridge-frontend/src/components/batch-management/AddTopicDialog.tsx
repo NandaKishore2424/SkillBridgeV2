@@ -8,6 +8,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { Plus, Loader2 } from 'lucide-react';
 import { syllabusApi } from '@/api/batchManagement';
 import { useToast } from '@/shared/hooks/use-toast';
+import { apiErrorMessage } from '@/lib/apiError'
 
 interface AddTopicDialogProps {
     submoduleId: number;
@@ -36,10 +37,10 @@ export default function AddTopicDialog({ submoduleId, batchId, isOpen, onClose }
             });
             handleClose();
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: 'Error',
-                description: error.response?.data?.message || 'Failed to add topic. Please try again.',
+                description: apiErrorMessage(error, 'Failed to add topic. Please try again.'),
                 variant: 'destructive',
             });
         },

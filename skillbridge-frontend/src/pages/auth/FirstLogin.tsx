@@ -84,7 +84,7 @@ export function FirstLogin() {
         replace: true,
         state: { message: 'Password updated. Please sign in with your new password.' },
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(apiErrorMessage(err,
         'Could not update your password. Check your temporary password and try again.'))
     } finally {

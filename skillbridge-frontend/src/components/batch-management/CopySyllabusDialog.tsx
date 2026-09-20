@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Copy, Loader2 } from 'lucide-react';
 import { syllabusApi, batchApi } from '@/api/batchManagement';
 import { useToast } from '@/shared/hooks/use-toast';
+import { apiErrorMessage } from '@/lib/apiError'
+import { itemsOf } from '@/api/paging';
 
 interface CopySyllabusDialogProps {
     targetBatchId: number;
@@ -24,7 +26,9 @@ export default function CopySyllabusDialog({ targetBatchId, open, onOpenChange }
         queryKey: ['batches'],
         queryFn: async () => {
             const response = await batchApi.getAllBatches();
-            return response.data.filter((batch: any) => batch.id !== targetBatchId);
+            // `.items`, not the page object. Calling `.filter` on the response
+            // body threw every time this dialog was opened.
+            return itemsOf(response.data).filter((batch) => batch.id !== targetBatchId);
         },
         enabled: open,
     });
@@ -39,10 +43,10 @@ export default function CopySyllabusDialog({ targetBatchId, open, onOpenChange }
             });
             handleClose();
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
             toast({
                 title: 'Error',
-                description: error.response?.data?.message || 'Failed to copy syllabus. Please try again.',
+                description: apiErrorMessage(error, 'Failed to copy syllabus. Please try again.'),
                 variant: 'destructive',
             });
         },
@@ -97,7 +101,7 @@ export default function CopySyllabusDialog({ targetBatchId, open, onOpenChange }
                                                 No other batches available
                                             </div>
                                         ) : (
-                                            batches.map((batch: any) => (
+                                            batches.map((batch) => (
                                                 <SelectItem key={batch.id} value={batch.id.toString()}>
                                                     {batch.name}
                                                 </SelectItem>
