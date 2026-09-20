@@ -11,6 +11,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -161,7 +162,25 @@ class SuiteTieringTest {
      * fast tier.
      */
     private static boolean needsDatabase(JavaClass c) {
-        return c.isAnnotatedWith(SpringBootTest.class) || c.isAnnotatedWith(DataJpaTest.class);
+        return c.isAnnotatedWith(SpringBootTest.class)
+                || c.isAnnotatedWith(DataJpaTest.class)
+                || startsItsOwnContainer(c);
+    }
+
+    /**
+     * A test that holds a {@link PostgreSQLContainer} needs a database as surely
+     * as one that loads a Spring context around a datasource — it just brings
+     * its own. {@code DemoSeedTest} does, because the file it runs opens with
+     * {@code DELETE FROM colleges} and cannot be pointed at the container the
+     * rest of the tier shares.
+     *
+     * <p>Recognising that here, rather than listing the class in
+     * {@link #TAGGED_WITHOUT_CONTEXT}, keeps the exemption set empty and makes
+     * the rule say what it means.
+     */
+    private static boolean startsItsOwnContainer(JavaClass c) {
+        return c.getFields().stream()
+                .anyMatch(f -> f.getRawType().isAssignableTo(PostgreSQLContainer.class));
     }
 
     /** Test classes only: anything whose simple name ends in Test. */
