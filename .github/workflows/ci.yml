@@ -219,6 +219,18 @@ jobs:
       - name: Install
         working-directory: skillbridge-frontend
         run: npm ci
+
+      # Before the build, because it is quicker and because most of what it
+      # catches would otherwise compile. `--max-warnings=0`: the config's rules
+      # are there to fail, and a warning nobody has to clear is a rule nobody
+      # follows. It reached zero in Phase 4 by fixing 31 real findings -- among
+      # them a paged response treated as an array, which threw the moment a
+      # dialog opened -- so this step starts from a clean baseline rather than
+      # a promise to clean it later.
+      - name: Lint
+        working-directory: skillbridge-frontend
+        run: npm run lint
+
       - name: Build
         working-directory: skillbridge-frontend
         # `npm run build` is `tsc -b && vite build`. Use it rather than `tsc
