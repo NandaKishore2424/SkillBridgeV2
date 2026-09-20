@@ -98,7 +98,13 @@ class CrossTenantAccessTest {
             Map.entry("POST /api/v1/syllabus/submodules/{submoduleId}/topics", t -> Map.of("name", "Injected topic", "displayOrder", 99)),
             Map.entry("PUT /api/v1/syllabus/topics/{topicId}", t -> Map.of("name", "Renamed topic")),
             Map.entry("PATCH /api/v1/admin/trainers/{id}/status", t -> Map.of("isActive", false)),
-            Map.entry("PUT /api/v1/admin/trainers/{id}", t -> Map.of("fullName", "Renamed by another college")));
+            Map.entry("PUT /api/v1/admin/trainers/{id}", t -> Map.of("fullName", "Renamed by another college")),
+            // Added when `reject` stopped discarding the admin's reason and
+            // started taking a body. This test noticed within the same run:
+            // an endpoint that grows a body drops out of the replay until its
+            // body is written down here.
+            Map.entry("POST /api/v1/admin/enrollment-requests/{requestId}/reject",
+                    t -> Map.of("reason", "Rejected by another college")));
 
     @Autowired private MockMvc mvc;
     @Autowired private JdbcTemplate jdbc;

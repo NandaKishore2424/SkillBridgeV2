@@ -310,12 +310,30 @@ public class StudentService {
         aiEventPublisher.publishSkillUpdated(student.getId(), student.getCollege().getId(), skillId);
     }
 
+    /**
+     * Remove a skill, and re-run the gap analysis.
+     *
+     * <p>The publish is the point. {@link #addSkill} and
+     * {@link #updateSkillProficiency} both told the AI service and this did
+     * not, so removing a skill left the student's report standing — still
+     * matching them against jobs on the strength of something no longer on
+     * their profile, for ever, because nothing else triggers a re-analysis.
+     * Dropping a skill you decided you did not really have is exactly when the
+     * report is most wrong and most worth refreshing.
+     *
+     * <p>Only when a row actually went: the screen's delete button is easy to
+     * press twice, and a no-op should not queue AI work.
+     */
     @Transactional
     public void removeSkill(Long userId, Long skillId) {
         Student student = studentRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student profile not found"));
 
-        studentSkillRepository.deleteByStudentIdAndSkillId(student.getId(), skillId);
+        int removed = studentSkillRepository.deleteByStudentIdAndSkillId(student.getId(), skillId);
+
+        if (removed > 0) {
+            aiEventPublisher.publishSkillUpdated(student.getId(), student.getCollege().getId(), skillId);
+        }
     }
 
     @Transactional

@@ -14,7 +14,13 @@ import java.util.List;
 public interface StudentSkillRepository extends JpaRepository<StudentSkill, StudentSkillId> {
     List<StudentSkill> findByStudentId(Long studentId);
 
-    void deleteByStudentIdAndSkillId(Long studentId, Long skillId);
+    /**
+     * @return how many rows went, so the caller can tell a real removal from a
+     *         no-op. {@code StudentService.removeSkill} publishes a re-analysis
+     *         only when something actually changed; publishing on every call
+     *         would queue AI work for a button pressed twice.
+     */
+    int deleteByStudentIdAndSkillId(Long studentId, Long skillId);
 
     /**
      * Every row for a whole page of students, in one query.

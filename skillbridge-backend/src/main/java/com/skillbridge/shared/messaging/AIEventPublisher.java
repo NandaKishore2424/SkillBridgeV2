@@ -36,7 +36,7 @@ public class AIEventPublisher {
 
     private final OutboxWriter outbox;
 
-    /** A student added or changed a skill; the AI service re-runs the gap analysis. */
+    /** A student added, changed or removed a skill; the AI service re-runs the gap analysis. */
     public void publishSkillUpdated(Long studentId, Long collegeId, Long skillId) {
         outbox.write(EventType.SKILL_UPDATED, AGGREGATE, studentId, collegeId,
                 new EventType.SkillUpdated(studentId, skillId));
