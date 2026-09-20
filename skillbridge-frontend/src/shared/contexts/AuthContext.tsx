@@ -6,7 +6,7 @@
  * 
  * Features:
  * - User state management
- * - Token storage (access token in memory + localStorage, refresh token via HttpOnly cookie)
+ * - Token storage (access token in memory only, refresh token via HttpOnly cookie)
  * - Login/logout functions
  * - Token refresh logic
  * - Automatic token refresh on 401 errors
@@ -18,15 +18,16 @@ import type { AuthContextValue, AuthState, LoginCredentials } from '@/shared/typ
 import type { User, UserRole } from '@/shared/types'
 import * as authAPI from '@/api/auth'
 import apiClient from '@/api/client'
+import { clearAccessToken, getAccessToken, onTokenFromAnotherTab, setAccessToken } from '@/shared/auth/accessTokenStore'
 
 // Create context with undefined default (will be set by Provider)
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-// Token storage keys
-const ACCESS_TOKEN_KEY = 'skillbridge_access_token'
-// The refresh token lives ONLY in the HttpOnly cookie the API sets, where
-// script cannot read it. Older builds kept a copy in localStorage; this key is
-// kept solely so clearAuthState can delete such a leftover.
+// Neither token is in localStorage any more. The access token lives in memory
+// (shared/auth/accessTokenStore); the refresh token only in the HttpOnly cookie
+// the API sets, which script cannot read. These two keys remain so that
+// clearAuthState deletes what older builds left behind.
+const LEGACY_ACCESS_TOKEN_KEY = 'skillbridge_access_token'
 const LEGACY_REFRESH_TOKEN_KEY = 'skillbridge_refresh_token'
 const USER_KEY = 'skillbridge_user'
 
@@ -121,7 +122,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const storedAccessToken = localStorage.getItem(ACCESS_TOKEN_KEY)
+        // A reload empties memory, so there is never a token here. The refresh
+        // cookie is what restores the session; see the else branch.
+        const storedAccessToken = getAccessToken()
         const storedUser = localStorage.getItem(USER_KEY)
 
         if (storedAccessToken && !isTokenExpired(storedAccessToken)) {
@@ -174,10 +177,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   /**
+   * What another tab announces: a token it has just been issued, or null when it
+   * signed out. Applied without announcing again, or the tabs would echo.
+   */
+  useEffect(() => onTokenFromAnotherTab((token) => {
+    setAccessToken(token, false)
+    setState((previous) => token
+      ? { ...previous, accessToken: token, isAuthenticated: true, isLoading: false }
+      : { ...previous, user: null, accessToken: null, isAuthenticated: false, isLoading: false })
+  }), [])
+
+  /**
    * Clear authentication state
    */
   const clearAuthState = () => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY)
+    clearAccessToken()
+    localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY)
     localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     setState({
@@ -214,8 +229,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       user = getUserFromToken(response.accessToken)
     }
 
-    // Store tokens
-    localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken)
+    // In memory, and announced to the other tabs.
+    setAccessToken(response.accessToken)
     if (user) {
       localStorage.setItem(USER_KEY, JSON.stringify(user))
     }
@@ -349,17 +364,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     const attempt = (async () => {
-      const tokenBefore = localStorage.getItem(ACCESS_TOKEN_KEY)
+      const tokenBefore = getAccessToken()
       try {
         // No token argument: the browser sends the HttpOnly refresh cookie.
         const response = await authAPI.refreshToken()
         await handleAuthSuccess(response)
       } catch (error) {
-        // Tabs share one cookie jar and one localStorage. If another tab
-        // refreshed first, our cookie was already rotated and the server refused
-        // it (within its grace period, without ending the session), but that
-        // tab has stored a new access token. Use it rather than logging out.
-        const tokenNow = localStorage.getItem(ACCESS_TOKEN_KEY)
+        // Tabs share one cookie jar. If another tab refreshed first, our cookie
+        // was already rotated and the server refused it (within its grace period,
+        // without ending the session) -- but that tab announced its new token on
+        // the BroadcastChannel, and we applied it. Use it rather than logging out.
+        const tokenNow = getAccessToken()
         if (tokenNow && tokenNow !== tokenBefore) {
           return
         }
@@ -403,7 +418,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           try {
             await refreshAccessToken()
             // Retry original request with new token
-            const newToken = localStorage.getItem(ACCESS_TOKEN_KEY)
+            const newToken = getAccessToken()
             if (newToken) {
               originalRequest.headers.Authorization = `Bearer ${newToken}`
               return apiClient(originalRequest)

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import apiClient from '@/api/client'
 import { AuthProvider } from '@/shared/contexts/AuthContext'
 import { useAuth } from '@/shared/hooks/useAuth'
+import { getAccessToken, setAccessToken } from '@/shared/auth/accessTokenStore'
 
 import { API, authPayload, userPayload } from '@/test/handlers'
 import { server } from '@/test/server'
@@ -20,6 +21,9 @@ import { server } from '@/test/server'
  * - "you may not" is **403**, and is final;
  * - the refresh token exists **only in an HttpOnly cookie**: never in a
  *   response body, never in localStorage, never in a request body;
+ * - since 2026-09-20 the **access** token is not in localStorage either: it
+ *   lives in memory (shared/auth/accessTokenStore), so these tests seed and read
+ *   it there, and assert that storage stays empty of it;
  * - each refresh **rotates** that cookie, and presenting the old one fails.
  *
  * The previous version of this file mocked a 401 "the way it would in
@@ -109,7 +113,7 @@ beforeEach(() => {
   // What a real login leaves behind: the access token and the user. Nothing
   // else. A non-JWT access token counts as unexpired on mount, so mounting makes
   // no network call and refreshCalls counts only what each test causes.
-  localStorage.setItem(ACCESS_TOKEN_KEY, 'access-1')
+  setAccessToken('access-1')
   localStorage.setItem(USER_KEY, JSON.stringify(userPayload()))
   armServer()
 })
@@ -125,7 +129,10 @@ describe('session renewal through the refresh cookie', () => {
     expect(refreshCalls).toBe(1)
     // The cookie carries the token; the body must not.
     expect(refreshBodies).toEqual([{}])
-    expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBe('access-2')
+    expect(getAccessToken()).toBe('access-2')
+    // The point of the 2026-09-20 change: a renewed token is in memory and
+    // nowhere a script can read it after the fact.
+    expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBeNull()
     expect(localStorage.getItem(LEGACY_REFRESH_TOKEN_KEY)).toBeNull()
   })
 
@@ -159,7 +166,7 @@ describe('session renewal through the refresh cookie', () => {
 
     // clearAuthState() empties these keys; their survival is the assertion
     // that the user is still signed in.
-    expect(localStorage.getItem(ACCESS_TOKEN_KEY)).not.toBeNull()
+    expect(getAccessToken()).not.toBeNull()
     expect(localStorage.getItem(USER_KEY)).not.toBeNull()
   })
 
@@ -174,7 +181,7 @@ describe('session renewal through the refresh cookie', () => {
       response: { status: 403 },
     })
     expect(refreshCalls).toBe(0)
-    expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBe('access-1')
+    expect(getAccessToken()).toBe('access-1')
   })
 
   it('retries a 401 exactly once, so an endpoint that always 401s cannot loop', async () => {
@@ -190,13 +197,15 @@ describe('session renewal through the refresh cookie', () => {
     expect(refreshCalls).toBe(1)
   })
 
-  it('adopts the token another tab just stored instead of logging out, when that tab won the refresh', async () => {
+  it('adopts the token another tab just announced instead of logging out, when that tab won the refresh', async () => {
     server.use(
       http.post(`${API}/auth/refresh`, async () => {
         refreshCalls += 1
         // Another tab rotated the shared cookie first, so ours is refused.
-        // That tab then wrote its fresh access token to the shared storage.
-        localStorage.setItem(ACCESS_TOKEN_KEY, 'access-2')
+        // That tab announced its fresh access token, and this tab applied it --
+        // which is what the BroadcastChannel listener does, called directly here
+        // because each test runs in one window.
+        setAccessToken('access-2', false)
         return HttpResponse.json({ status: 401, error: 'UNAUTHORIZED' }, { status: 401 })
       }),
     )
@@ -216,7 +225,7 @@ describe('session renewal through the refresh cookie', () => {
     await expect(apiClient.get('/admin/colleges')).rejects.toBeDefined()
 
     expect(refreshCalls).toBe(1)
-    expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBeNull()
+    expect(getAccessToken()).toBeNull()
     expect(localStorage.getItem(USER_KEY)).toBeNull()
   })
 })

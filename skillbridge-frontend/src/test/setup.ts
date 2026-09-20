@@ -2,6 +2,8 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 
+import { clearAccessToken } from '@/shared/auth/accessTokenStore'
+
 import { server } from './server'
 
 /**
@@ -23,6 +25,8 @@ afterEach(() => {
   // leave a 500 armed for the next.
   server.resetHandlers()
   localStorage.clear()
+  // Module state, so it outlives a test unless cleared here.
+  clearAccessToken(false)
   sessionStorage.clear()
 })
 

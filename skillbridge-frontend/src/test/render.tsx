@@ -3,11 +3,11 @@ import { render, type RenderResult } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 
+import { setAccessToken } from '@/shared/auth/accessTokenStore'
 import { AuthProvider } from '@/shared/contexts/AuthContext'
 
 import { userPayload } from './handlers'
 
-const ACCESS_TOKEN_KEY = 'skillbridge_access_token'
 const USER_KEY = 'skillbridge_user'
 
 /**
@@ -20,7 +20,8 @@ const USER_KEY = 'skillbridge_user'
  * test itself caused.
  */
 export function signIn(overrides: Record<string, unknown> = {}) {
-  localStorage.setItem(ACCESS_TOKEN_KEY, 'access-1')
+  // In memory, where the application keeps it (shared/auth/accessTokenStore).
+  setAccessToken('access-1')
   localStorage.setItem(USER_KEY, JSON.stringify(userPayload(overrides)))
 }
 

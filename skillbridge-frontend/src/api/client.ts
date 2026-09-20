@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+import { getAccessToken } from '@/shared/auth/accessTokenStore';
+
 /**
  * Axios instance configured for SkillBridge API
  * 
@@ -19,9 +21,9 @@ const apiClient = axios.create({
 // Request interceptor: Add JWT token to every request
 apiClient.interceptors.request.use(
   (config) => {
-    // Get token from localStorage (consistent with AuthContext)
-    const token = localStorage.getItem('skillbridge_access_token');
-    
+    // From memory, never localStorage: see shared/auth/accessTokenStore.
+    const token = getAccessToken();
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
