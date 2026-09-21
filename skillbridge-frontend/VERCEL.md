@@ -54,13 +54,15 @@ answers is the same either way.
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' https://<your-app>.vercel.app/
 curl -s -o /dev/null -w '%{http_code}\n' https://<your-app>.vercel.app/admin/students/1
-curl -s https://<your-app>.vercel.app/api/v1/actuator/health
+curl -s -o /dev/null -w '%{http_code}\n' https://<your-app>.vercel.app/api/v1/colleges/active
 ```
 
-The first two must both be **200** — the second is the SPA fallback, and a 404
-there means a deep link breaks on reload. The third proves the rewrite reaches
-the backend; if the EC2 host is stopped it will fail, which is the expected
-answer when the host is off.
+All three must be **200**. The second is the SPA fallback — a 404 there means
+a deep link breaks on reload. The third proves the rewrite reaches the backend
+and the backend reaches the database: that endpoint is public and reads it.
+(Actuator is not a check here: it lives at `/actuator`, outside `/api/*`, so
+the rewrite never forwards it, and Caddy answers 404 for it anyway.) If the
+EC2 host is stopped the third fails, which is the expected answer.
 
 Then sign in, wait for the access token to expire, and use the app again. If
 you are still signed in, the cookie survived the proxy and the whole design
