@@ -22,20 +22,16 @@ Frontend application for SkillBridge - Training Management Platform
 
 ### Installation
 
-1. Install dependencies:
+Install dependencies:
 ```bash
 npm install
 ```
 
-2. Create environment file:
-```bash
-cp .env.example .env.development
-```
-
-3. Update `.env.development` with your backend URL:
-```env
-VITE_API_BASE_URL=http://localhost:8080/api/v1
-```
+No environment file is needed. The client calls `/api/v1` on its own origin:
+in development Vite proxies `/api` to the backend on `:8080`
+(`vite.config.ts`), and on Vercel a rewrite does the same (`VERCEL.md`). Keep
+it relative -- an absolute `VITE_API_BASE_URL` makes the refresh cookie
+cross-site and ends every session at the first token expiry.
 
 ### Development
 
@@ -76,18 +72,16 @@ src/
  └── lib/            # Library configurations
 ```
 
-## Environment Variables
+## Checks that fail the build
 
-Create `.env.development` or `.env.production`:
+| Test | Fails when |
+|---|---|
+| `src/shared/design/tokens.test.ts` | a colour pair drops below WCAG AA, or a token exists in one theme only |
+| `src/shared/rules/routes.test.ts` | a `<Link>` points at a path with no route |
+| `src/pages/landing/facts.test.ts` | a figure on the landing page disagrees with the backend or AI service config |
+| `src/api/client.test.ts` | the API base URL stops being relative |
 
-```env
-VITE_API_BASE_URL=http://localhost:8080/api/v1
+```bash
+npm test
+npm run lint      # --max-warnings=0
 ```
-
-## Next Steps
-
-1. Set up authentication context
-2. Build login/register pages
-3. Create protected routes
-4. Build dashboard (role-based)
-5. Connect to backend API
