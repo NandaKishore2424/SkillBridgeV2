@@ -15,15 +15,20 @@
 #   SKILLBRIDGE_REGION=ap-south-1
 #   SKILLBRIDGE_HOST=13-234-56-78.nip.io
 #   SKILLBRIDGE_SSH_KEY=~/.ssh/skillbridge.pem
-#   SKILLBRIDGE_SSH_USER=ec2-user
+#   SKILLBRIDGE_SSH_USER=ubuntu        # Ubuntu 24.04, as integronix
 #
 # WHY STOPPING MATTERS MORE THAN ANYTHING ELSE HERE
 #
-# A stopped instance is not billed for compute. Its EBS volume and its Elastic
-# IP are billed regardless, and those are the standing cost -- a few dollars a
-# month against a credit that expires 2027-01-27. Compute is what would burn
+# A stopped instance is not billed for compute. Its EBS volume is billed
+# regardless, and that is the standing cost -- a few dollars a month against a
+# credit that expires 2027-01-27. (There is no Elastic IP to add to it, on
+# purpose: docs/DEPLOYMENT.md, "What it costs".) Compute is what would burn
 # it, and only if the instance is left running. Leaving it on for a month
 # costs more than a year of interviews. See docs/DEPLOYMENT.md for the numbers.
+#
+# start, stop and status need the AWS CLI, which the development machine does
+# not have today: until it does, start and stop from the EC2 console, as
+# integronix does. ssh and logs need only the key.
 #
 # The AWS CLI is called through $AWS_CLI so the tests can substitute a stub and
 # check what this script would run. See instance.test.sh.
@@ -37,7 +42,7 @@ DRY_RUN=false
 [[ -f "$HERE/instance.env" ]] && . "$HERE/instance.env"
 
 REGION="${SKILLBRIDGE_REGION:-ap-south-1}"
-SSH_USER="${SKILLBRIDGE_SSH_USER:-ec2-user}"
+SSH_USER="${SKILLBRIDGE_SSH_USER:-ubuntu}"
 
 usage() { sed -n '2,27p' "${BASH_SOURCE[0]}" | sed 's/^#\{1,\} \{0,1\}//'; }
 
@@ -143,7 +148,7 @@ ssh|logs)
     require SKILLBRIDGE_HOST
     require SKILLBRIDGE_SSH_KEY
     remote=""
-    [[ "$COMMAND" == logs ]] && remote="cd /opt/skillbridge/deploy && docker compose -f docker-compose.prod.yml logs -f --tail=100"
+    [[ "$COMMAND" == logs ]] && remote="docker compose -f /opt/skillbridge/compose.yml logs -f --tail=100"
     if [[ "$DRY_RUN" == true ]]; then
         echo "would run: ssh -i $SKILLBRIDGE_SSH_KEY $SSH_USER@$SKILLBRIDGE_HOST${remote:+ $remote}"
         exit 0

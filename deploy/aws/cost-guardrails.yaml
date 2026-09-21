@@ -5,14 +5,22 @@ Description: >-
   emails before the money is gone, and a nightly rule that switches the instance
   off whether or not anyone remembered to.
 
-# Apply from the development machine, once:
+# Apply once, in the AWS console -- there is no AWS CLI on the development
+# machine: CloudFormation -> (region ap-south-1) -> Create stack -> With new
+# resources -> Upload a template file -> this file. Stack name
+# skillbridge-cost-guardrails; tick "I acknowledge that AWS CloudFormation might
+# create IAM resources". Or from AWS CloudShell, which has the CLI:
 #
 #   aws cloudformation deploy \
-#     --template-file deploy/aws/cost-guardrails.yaml \
+#     --template-file cost-guardrails.yaml \
 #     --stack-name skillbridge-cost-guardrails \
 #     --region ap-south-1 \
 #     --capabilities CAPABILITY_IAM \
-#     --parameter-overrides InstanceId=i-0... NotifyEmail=you@example.com
+#     --parameter-overrides InstanceId=i-0...
+#
+# CreateBudget defaults to false because the account already has one
+# (integronix-monthly) and an AWS budget watches the whole account, not a
+# project. Set it to true, with NotifyEmail, on an account that has none.
 #
 # WHY THE AUTO-STOP MATTERS MORE THAN THE BUDGET
 #
@@ -40,10 +48,19 @@ Parameters:
     AllowedPattern: '^i-[0-9a-f]{8,17}$'
     ConstraintDescription: must be an EC2 instance id
 
+  CreateBudget:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Create the skillbridge-monthly budget. A budget covers the whole account,
+      so leave this false where one already exists and raise that one instead.
+
   NotifyEmail:
     Type: String
-    Description: Where budget warnings go. AWS sends a subscription confirmation first.
-    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    Default: ''
+    Description: Where budget warnings go (only with CreateBudget=true). AWS sends a subscription confirmation first.
+    AllowedPattern: '^$|^[^@\s]+@[^@\s]+\.[^@\s]+$'
 
   MonthlyBudgetUsd:
     Type: Number
@@ -63,17 +80,30 @@ Parameters:
       left on in the morning is off the same day. Change it if your interviews
       run later; do not remove it.
 
+Conditions:
+
+  WantBudget:
+    Fn::Equals: [{Ref: CreateBudget}, 'true']
+
 Resources:
 
   # ----------------------------------------------------------------- budget
 
   MonthlyBudget:
     Type: AWS::Budgets::Budget
+    Condition: WantBudget
     Properties:
       Budget:
         BudgetName: skillbridge-monthly
         BudgetType: COST
         TimeUnit: MONTHLY
+        # Credits and refunds excluded. Credits are billed as negative cost, so
+        # a budget that counts them sees $3 of usage minus $3 of credit, nets to
+        # zero, and never alerts -- until the credit is gone. What this budget
+        # must watch is the real spend the credit is quietly absorbing.
+        CostTypes:
+          IncludeCredit: false
+          IncludeRefund: false
         BudgetLimit:
           Amount:
             Ref: MonthlyBudgetUsd
@@ -161,6 +191,7 @@ Resources:
 Outputs:
 
   BudgetName:
+    Condition: WantBudget
     Description: Check it under Billing -> Budgets
     Value: skillbridge-monthly
 
@@ -170,6 +201,7 @@ Outputs:
       Ref: AutoStopSchedule
 
   ConfirmTheEmail:
+    Condition: WantBudget
     Description: >-
       AWS sends a subscription confirmation to NotifyEmail. Until it is
       accepted, the budget exists and notifies nobody.

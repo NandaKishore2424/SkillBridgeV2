@@ -86,6 +86,26 @@ check(all(n["Subscribers"][0]["SubscriptionType"] == "EMAIL" for n in notificati
 check(budget.get("Budget", {}).get("TimeUnit") == "MONTHLY",
       "the budget is not monthly")
 
+# Credits are negative cost. A budget that counts them nets to zero on a
+# credit-funded account and stays silent until the credit is gone -- the exact
+# failure it exists to catch. Both flags must be present and false: absent
+# means AWS's default, which includes them.
+cost_types = budget.get("Budget", {}).get("CostTypes", {})
+check(cost_types.get("IncludeCredit") is False,
+      "the budget counts credits, so on a credit-funded account it sees $0 and never alerts")
+check(cost_types.get("IncludeRefund") is False,
+      "the budget counts refunds, which net real spend down the same way credits do")
+
+# Optional, because one budget covers the whole account -- but optional must
+# not mean the auto-stop goes with it.
+check(resources.get("MonthlyBudget", {}).get("Condition") == "WantBudget",
+      "the budget is not conditional on CreateBudget")
+check(params.get("CreateBudget", {}).get("Default") == "false",
+      "CreateBudget should default to false: this account already has a budget")
+check("Condition" not in resources.get("AutoStopSchedule", {})
+      and "Condition" not in resources.get("AutoStopRole", {}),
+      "the auto-stop is conditional -- it must exist whatever is chosen for the budget")
+
 default_limit = params.get("MonthlyBudgetUsd", {}).get("Default")
 check(isinstance(default_limit, (int, float)) and default_limit <= 25,
       f"the default budget is {default_limit}; on a $100 credit a ceiling that "

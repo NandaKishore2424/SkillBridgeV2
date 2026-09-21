@@ -78,11 +78,11 @@ check "stop says what stopping is for" "compute billing ends" "$out"
 
 out="$(bash "$SCRIPT" ssh --dry-run 2>&1)"
 check "ssh uses the key and the configured user" \
-      "ssh -i $WORK/key.pem ec2-user@1-2-3-4.nip.io" "$out"
+      "ssh -i $WORK/key.pem ubuntu@1-2-3-4.nip.io" "$out"
 
 out="$(bash "$SCRIPT" logs --dry-run 2>&1)"
 check "logs follows the compose logs on the host" \
-      "docker compose -f docker-compose.prod.yml logs -f" "$out"
+      "docker compose -f /opt/skillbridge/compose.yml logs -f" "$out"
 
 # A region default that silently differed from where the instance lives would
 # produce "instance not found" against an account that plainly has it.

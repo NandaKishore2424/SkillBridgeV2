@@ -35,6 +35,12 @@ application owns them and an owner bypasses RLS unless FORCE is set, so for the
 application the flag does nothing. `RowLevelSecurityRulesTest` pins that set,
 that FORCE is off, and that no policy exists.
 
+That test runs against Testcontainers, not the deployed database. Supabase can
+create a project with an `ensure_rls` event trigger that enables RLS on every
+new table, which would make production differ from all of the above; the
+deploy runbook drops it before Flyway first runs (`docs/DEPLOYMENT.md`,
+Supabase step 3).
+
 **What that flag actually does** is bite any other role: a write fails loudly,
 and *a SELECT returns zero rows, silently*. That is not theoretical here. When
 the AI service got its own role, its vector search returned nothing and the

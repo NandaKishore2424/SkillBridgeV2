@@ -107,19 +107,35 @@ that expires **2027-01-27**.
 > about **$0.70 a month**.
 
 Two guardrails in `deploy/aws/cost-guardrails.yaml`: a **nightly auto-stop**
-(the one that does the work) and a **budget** that warns at 50%, at 100%, and
-when the *forecast* passes 100%. Apply once:
+(the one that does the work) and, optionally, a **budget** that warns at 50%,
+at 100%, and when the *forecast* passes 100%.
 
-```bash
-aws cloudformation deploy \
-  --template-file deploy/aws/cost-guardrails.yaml \
-  --stack-name skillbridge-cost-guardrails \
-  --region ap-south-1 --capabilities CAPABILITY_IAM \
-  --parameter-overrides InstanceId=i-0... NotifyEmail=you@example.com
-```
+**The budget is off by default** (`CreateBudget=false`): an AWS budget watches
+the whole account, not one project, and this account already has
+`integronix-monthly`. Raise that one to cover both hosts (Billing → Budgets →
+`integronix-monthly` → Edit, e.g. $5 → $10). Keep **Charge type → Excludes →
+Credit, Refund** on it: credits are billed as negative cost, so a budget that
+counts them nets to $0 and never alerts until the credit is gone. The template
+excludes both too, and `cost-guardrails.test.sh` fails if it ever stops.
 
-AWS emails a subscription confirmation. **Until you accept it the budget exists
-and notifies nobody.**
+There is no AWS CLI on the development machine, so apply the template **in the
+console**, once, after the instance exists:
+
+1. CloudFormation → region **ap-south-1** → **Create stack → With new resources**.
+2. **Upload a template file** → `deploy/aws/cost-guardrails.yaml`.
+3. Stack name `skillbridge-cost-guardrails`; `InstanceId` = the new instance's
+   id; leave `CreateBudget` false.
+4. Tick *"I acknowledge that AWS CloudFormation might create IAM resources"* →
+   Submit. Wait for `CREATE_COMPLETE`.
+5. Check: **EventBridge → Schedules** shows `skillbridge-nightly-stop`, enabled.
+
+(AWS CloudShell, in the browser, has the CLI: `aws cloudformation deploy
+--template-file cost-guardrails.yaml --stack-name skillbridge-cost-guardrails
+--region ap-south-1 --capabilities CAPABILITY_IAM --parameter-overrides
+InstanceId=i-0...` does the same.)
+
+This is the first time the template meets CloudFormation; the test checks its
+structure, not that AWS accepts it.
 
 ### The Supabase catch
 
@@ -143,7 +159,21 @@ browser.
 2. SQL Editor: `create extension if not exists vector;` and
    `create extension if not exists pg_trgm;`. V1 also creates them, but
    creating them first means a migration failure is about the migration.
-3. **Connect → Session pooler.** Port **5432** on
+3. **Turn off automatic RLS, before the backend ever starts.** A project
+   created with "automatically enable RLS" has an event trigger that switches
+   RLS on for every new table in `public`. Flyway would then build ~33 RLS
+   tables where the tested schema has 3 (`docs/SECURITY.md`), and any role
+   other than the owner would read those tables as empty, silently. Check,
+   then drop, in the SQL editor:
+
+   ```sql
+   select evtname from pg_event_trigger where evtname = 'ensure_rls';
+   drop event trigger if exists ensure_rls;
+   drop function if exists public.rls_auto_enable();
+   ```
+
+   The `pshhwbcudlhqkohboumh` project has it (found 2026-09-21).
+4. **Connect → Session pooler.** Port **5432** on
    `aws-N-ap-south-1.pooler.supabase.com`, user `postgres.<project-ref>`. Not
    the direct host — it is **IPv6-only**, and an EC2 instance in a default VPC
    has no IPv6 route — and not the transaction pooler on 6543.
@@ -158,14 +188,24 @@ No domain purchase, no Elastic IP.
 ### 3. The instance
 
 - **Region** `ap-south-1`, **type** `t3.medium`, **storage** 30 GiB gp3
-- **AMI** Amazon Linux 2023 or Ubuntu 24.04 (these notes assume `ec2-user`)
+- **AMI** **Ubuntu Server 24.04 LTS**, x86 — the same as integronix, so the
+  two hosts are run the same way. The login user is `ubuntu`.
+- **Key pair:** new, RSA, `.pem`, saved to `~/.ssh/skillbridge.pem`, `chmod 400`.
+- **Advanced details → Credit specification: Standard.** The t3 default,
+  Unlimited, *bills* for sustained CPU above the baseline; Standard slows down
+  instead. **Termination protection: Enable.**
 - **No Elastic IP.**
+
+**After launch, check the instance, not the form** (Details tab):
+`Credit specification: standard`, `Termination protection: enabled`.
+Integronix set both on the form and got neither; fix either with **Actions →
+Instance settings**.
 
 Security group:
 
 | Port | From | Why |
 |---|---|---|
-| 22 | your IP only | SSH |
+| 22 | your IP only | SSH. Your home IPv4 changes often (the ISP gives IPv6 and shares IPv4 through NAT64 — integronix note 08), so edit this rule to **My IP** at the start of each session |
 | 80 | anywhere | the ACME challenge; Caddy redirects to 443 |
 | 443 | anywhere | Vercel's proxy reaches the API here |
 
@@ -175,11 +215,29 @@ window is the interview. The nightly rule closes it if you forget.
 
 ### 4. The host
 
-```bash
-sudo dnf install -y docker git && sudo systemctl enable --now docker
-sudo usermod -aG docker ec2-user      # log out and back in
+Patches, swap and Docker — the same commands integronix used (its notes 02, 03):
 
-sudo mkdir -p /opt/skillbridge && sudo chown ec2-user:ec2-user /opt/skillbridge
+```bash
+sudo apt update && sudo NEEDRESTART_MODE=a apt -y upgrade
+
+# 2 GiB of swap: a net under the 4 GiB, not extra memory to plan on
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf && sudo sysctl -p /etc/sysctl.d/99-swappiness.conf
+
+# Docker with the compose plugin (Ubuntu's own packages), logs capped at 30 MB a container
+sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -y install docker.io docker-compose-v2 git
+echo '{"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"},"live-restore":true}' \
+  | sudo tee /etc/docker/daemon.json
+sudo systemctl enable docker && sudo systemctl restart docker
+sudo usermod -aG docker ubuntu        # log out and back in, then: docker compose version
+```
+
+Then SkillBridge itself:
+
+```bash
+sudo mkdir -p /opt/skillbridge && sudo chown ubuntu:ubuntu /opt/skillbridge
 git clone https://github.com/NandaKishore2424/SkillBridgeV2.git ~/skillbridge-src
 cd ~/skillbridge-src
 
@@ -288,17 +346,26 @@ SKILLBRIDGE_SSH_KEY=~/.ssh/skillbridge.pem
 EOF
 ```
 
-`deploy/instance.env` is gitignored.
+`deploy/instance.env` is gitignored. `instance.sh ssh` and `logs` work with
+just that; `start`, `stop` and `status` also need the AWS CLI, which this
+machine does not have — use the console for those.
 
 ---
 
 ## Everyday use
 
+**Start and stop in the EC2 console** (region Mumbai → Instances → tick the
+instance → **Instance state → Start / Stop**), as integronix does. Wait for
+*Running* and *2/2 checks passed*; the DNS timer and `skillbridge.service`
+bring the hostname and the app up on their own.
+
 ```bash
+deploy/instance.sh ssh       # needs only the key
+deploy/instance.sh logs
+# with the AWS CLI installed, also:
 deploy/instance.sh start     # start, wait for the app, print the URL
 deploy/instance.sh stop      # THE IMPORTANT ONE
 deploy/instance.sh status
-deploy/instance.sh logs
 ```
 
 Before an interview: start it, open the Supabase dashboard to be sure the
@@ -309,7 +376,7 @@ deploy/instance.sh ssh
 cd ~/skillbridge-src && sudo ./scripts/db/seed-demo.sh --yes --app-env /opt/skillbridge/app.env
 ```
 
-After: `deploy/instance.sh stop`. The nightly rule catches this if you forget.
+After: **stop it in the console**. The nightly rule catches this if you forget.
 Do not rely on it — it is a net, not a plan.
 
 To ship a change: push to `main`, wait for CI to publish, then
@@ -360,7 +427,7 @@ manual preparation — which is the state you are in when you need it.
 
 | Symptom | Where to look |
 |---|---|
-| The site loads but every API call fails | The instance is off, or Supabase is paused. `deploy/instance.sh status` |
+| The site loads but every API call fails | The instance is off (EC2 console), or Supabase is paused (its dashboard) |
 | `skillbridge-deploy` says the backend never got healthy | Almost always Supabase paused or a wrong connection string in `app.env` |
 | Backend log says `Network is unreachable` or `UnknownHost` for `db.<ref>.supabase.co` | `app.env` names the direct host, which is IPv6-only. Use the session pooler — `app.env.example`, `DATABASE_URL` |
 | `FATAL: Tenant or user not found` | The pooler wants the user `postgres.<project-ref>`, not `postgres`, or the host is the other `aws-N` cluster. Copy both from Connect → Session pooler |
