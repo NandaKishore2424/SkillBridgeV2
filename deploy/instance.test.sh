@@ -102,6 +102,18 @@ refuses "no subcommand prints the usage and fails" \
         "instance.sh start" \
         bash "$SCRIPT" --dry-run
 
+# The readiness probe must be a path the backend serves to an anonymous caller.
+# Anything else answers 401, curl -f calls that "down", and `start` waits out
+# its five minutes against a healthy host -- which is what polling "/" did.
+probe=$(sed -n 's/^PROBE_PATH=//p' "$SCRIPT")
+security="$(dirname "$SCRIPT")/../skillbridge-backend/src/main/java/com/skillbridge/common/config/SecurityConfig.java"
+if [[ -n "$probe" ]] && grep -F "\"$probe\"" "$security" | grep -q 'permitAll()'; then
+    PASS=$((PASS + 1))
+else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: start probes '${probe:-<unset>}', which SecurityConfig does not permitAll"
+fi
+
 # ---------------------------------------------------------------------------
 
 echo

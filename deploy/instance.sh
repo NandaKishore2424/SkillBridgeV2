@@ -43,6 +43,7 @@ DRY_RUN=false
 
 REGION="${SKILLBRIDGE_REGION:-ap-south-1}"
 SSH_USER="${SKILLBRIDGE_SSH_USER:-ubuntu}"
+PROBE_PATH=/api/v1/colleges/active
 
 usage() { sed -n '2,27p' "${BASH_SOURCE[0]}" | sed 's/^#\{1,\} \{0,1\}//'; }
 
@@ -102,11 +103,18 @@ start)
         echo "instance running; waiting for the application"
 
         if [[ -n "${SKILLBRIDGE_HOST:-}" ]]; then
-            # compose restarts the containers on boot (restart: unless-stopped),
-            # and the backend waits on PostgreSQL's healthcheck, so a cold start
+            # skillbridge.service pulls and starts the stack at boot, and the
+            # backend has to reach Supabase before it answers, so a cold start
             # is a minute or two rather than seconds. Poll rather than guess.
+            #
+            # PROBE_PATH, not "/": the backend answers 401 to anonymous
+            # requests for anything not public, and curl -f treats that as
+            # down -- the first version polled "/" and would have timed out
+            # against a healthy host. This one is public AND reads the
+            # database, so a 200 means the whole path works.
+            # instance.test.sh checks it is still permitAll in SecurityConfig.
             for _ in $(seq 60); do
-                if curl -fsS --max-time 5 "https://$SKILLBRIDGE_HOST/" >/dev/null 2>&1; then
+                if curl -fsS --max-time 5 "https://$SKILLBRIDGE_HOST$PROBE_PATH" >/dev/null 2>&1; then
                     echo
                     echo "  https://$SKILLBRIDGE_HOST"
                     echo
