@@ -228,6 +228,12 @@ jobs:
       - name: vercel.json still proxies the API and falls back to the SPA
         run: ./deploy/vercel.test.sh
 
+      # The seed, the backup and the runbook's corpus and restore steps all
+      # reach Supabase through this one script; it must keep the password off
+      # every process's argv, and refuse rather than guess without a URL.
+      - name: scripts/db/pg.sh connects, and never shows the password to ps
+        run: ./scripts/db/pg.test.sh
+
       - name: Build the backend image
         uses: docker/build-push-action@v6
         with:

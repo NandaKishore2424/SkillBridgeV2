@@ -46,11 +46,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 HERE="deploy"
 
-# The database is Supabase, so there is no postgres container to exec into.
-# pg_dump comes from a throwaway container of the same image the schema was
-# built and tested against, which also means the host needs no PostgreSQL
-# client package installed.
-PG_IMAGE="${PG_IMAGE:-pgvector/pgvector:pg17}"
+# pg_dump runs through scripts/db/pg.sh: a throwaway container of the image the
+# schema is built and tested against, because the database is Supabase and the
+# host has no PostgreSQL client installed.
 
 MODE=backup
 for arg in "$@"; do
@@ -110,15 +108,10 @@ echo "1/4 Dumping"
 # set: without it a failed dump gzips to a valid empty archive and reports
 # success, and you find out at restore time.
 #
-# The URL goes in the environment, not on the command line, so `ps` on the host
-# does not show the database password to every user on it.
-# --network host so a URL naming localhost, or a container on this host, means
-# the same thing inside the throwaway container as it does outside it. Against
-# Supabase this changes nothing; it is what makes the script runnable against a
-# local database for testing, which is the only way to find out it works
-# without needing it.
-docker run --rm -i --network host -e PGURL="$BACKUP_DATABASE_URL" "$PG_IMAGE" \
-    sh -c 'pg_dump "$PGURL" --schema=public --clean --if-exists --no-owner --no-acl' \
+# The password goes in the environment, not on any command line, so `ps` on the
+# host does not show it to every user for the length of the dump; pg.sh says how.
+SKILLBRIDGE_DATABASE_URL="$BACKUP_DATABASE_URL" scripts/db/pg.sh \
+    pg_dump --schema=public --clean --if-exists --no-owner --no-acl \
     | gzip -9 > "$FILE"
 
 SIZE=$(du -h "$FILE" | cut -f1)

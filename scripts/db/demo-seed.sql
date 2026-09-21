@@ -1,8 +1,9 @@
 -- The demo dataset: two colleges, sixteen students, and enough of everything
 -- else that no screen in the application is empty.
 --
--- Run it through scripts/db/seed-demo.sh, which supplies :demo_password and
--- waits for the skill-gap reports. Running it directly needs:
+-- Run it through scripts/db/seed-demo.sh, which supplies :demo_password (by
+-- \getenv, so it is never on a command line) and waits for the skill-gap
+-- reports. Running it directly needs the psql variable set, e.g.:
 --
 --     psql -v demo_password='...' -f scripts/db/demo-seed.sql
 --

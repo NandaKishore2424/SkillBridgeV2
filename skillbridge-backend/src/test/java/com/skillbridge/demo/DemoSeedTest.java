@@ -54,7 +54,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <h2>Why psql, and not JDBC</h2>
  *
  * <p>The file is executed by the real {@code psql} inside the container, with a
- * real {@code -v demo_password}, because that is how it is run for a demo.
+ * real {@code :demo_password} psql variable, because that is how it is run for a
+ * demo. (seed-demo.sh sets it with {@code \getenv} so the password is never an
+ * argument; {@code -v} here sets the same variable, and the test's password is
+ * not a secret.)
  * Reading it into JDBC would mean stripping the backslash commands and
  * substituting the variable by hand — testing a transformation of the file
  * rather than the file.

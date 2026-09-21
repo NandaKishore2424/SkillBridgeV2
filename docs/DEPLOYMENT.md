@@ -143,9 +143,11 @@ browser.
 2. SQL Editor: `create extension if not exists vector;` and
    `create extension if not exists pg_trgm;`. V1 also creates them, but
    creating them first means a migration failure is about the migration.
-3. Project Settings → Database → **Connection string → JDBC**. Take the
-   **direct** one on port **5432**, not the pooler on 6543 —
-   `deploy/app.env.example` explains why at the `DATABASE_URL` entry.
+3. **Connect → Session pooler.** Port **5432** on
+   `aws-N-ap-south-1.pooler.supabase.com`, user `postgres.<project-ref>`. Not
+   the direct host — it is **IPv6-only**, and an EC2 instance in a default VPC
+   has no IPv6 route — and not the transaction pooler on 6543.
+   `deploy/app.env.example` explains both at the `DATABASE_URL` entry.
 
 ### 2. A hostname
 
@@ -227,29 +229,40 @@ point of the product. The 1,500 embeddings are not in the migrations and cannot
 be regenerated: the ETL's source CSV is gone, and `~/skillbridge-backup/` on
 the development machine is the only other copy.
 
-From the development machine, with the local stack up:
+After step 5 — Flyway has to have built the table — and from the development
+machine, with the local stack up:
 
 ```bash
 docker compose exec -T postgres pg_dump -U skillbridge -d skillbridge \
   --table=industry_job_descriptions --data-only | gzip > /tmp/corpus.sql.gz
 
-gzip -dc /tmp/corpus.sql.gz | psql "<your Supabase libpq URL>"
+gzip -dc /tmp/corpus.sql.gz | scripts/db/pg.sh psql -q -v ON_ERROR_STOP=1
 ```
 
-Then confirm — it must print `1500 | 1500`:
+`scripts/db/pg.sh` asks for the session-pooler URL without echoing it, so the
+password stays out of shell history and off the screen, and runs `psql` in a
+throwaway `pgvector/pgvector:pg17` container — there is no PostgreSQL client on
+the laptop or the host. Then confirm — it must print `1500|1500`:
 
 ```bash
-psql "<your Supabase libpq URL>" -c \
+scripts/db/pg.sh psql -tAc \
   "select count(*), count(embedding) from industry_job_descriptions"
 ```
 
+Rehearsed 2026-09-21 into a throwaway pg17 with the schema: `1500|1500`, 384
+dimensions, and `search_similar_jobs` returns a stored embedding's own row at
+similarity 1.0.
+
 ### 7. Seed the demo data
 
+On the host, from the source checkout:
+
 ```bash
-SKILLBRIDGE_COMPOSE_FILE=/opt/skillbridge/compose.yml ./scripts/db/seed-demo.sh --yes
+sudo ./scripts/db/seed-demo.sh --yes --app-env /opt/skillbridge/app.env
 ```
 
-It prints `16/16 reports` once the real pipeline has produced them.
+It reads `AI_DATABASE_URL` from `app.env` (root-only, hence `sudo`) and prints
+`16/16 reports` once the real pipeline has produced them.
 
 ### 8. Vercel
 
@@ -293,8 +306,7 @@ project is awake, and reseed if the data has been clicked about:
 
 ```bash
 deploy/instance.sh ssh
-cd ~/skillbridge-src && SKILLBRIDGE_COMPOSE_FILE=/opt/skillbridge/compose.yml \
-  ./scripts/db/seed-demo.sh --yes
+cd ~/skillbridge-src && sudo ./scripts/db/seed-demo.sh --yes --app-env /opt/skillbridge/app.env
 ```
 
 After: `deploy/instance.sh stop`. The nightly rule catches this if you forget.
@@ -333,8 +345,11 @@ throwaway container → 1,500 rows, 1,500 embeddings, 384 dimensions.
 To restore:
 
 ```bash
-gzip -dc deploy/backups/skillbridge-<stamp>.sql.gz | psql "<libpq URL>"
+gzip -dc deploy/backups/skillbridge-<stamp>.sql.gz | scripts/db/pg.sh psql -q -v ON_ERROR_STOP=1
 ```
+
+On the host, add `sudo` and `--app-env /opt/skillbridge/app.env` after
+`pg.sh` to restore into the database the app uses.
 
 The dump is `--clean --if-exists`, so it drops what it replaces and needs no
 manual preparation — which is the state you are in when you need it.
@@ -347,6 +362,8 @@ manual preparation — which is the state you are in when you need it.
 |---|---|
 | The site loads but every API call fails | The instance is off, or Supabase is paused. `deploy/instance.sh status` |
 | `skillbridge-deploy` says the backend never got healthy | Almost always Supabase paused or a wrong connection string in `app.env` |
+| Backend log says `Network is unreachable` or `UnknownHost` for `db.<ref>.supabase.co` | `app.env` names the direct host, which is IPv6-only. Use the session pooler — `app.env.example`, `DATABASE_URL` |
+| `FATAL: Tenant or user not found` | The pooler wants the user `postgres.<project-ref>`, not `postgres`, or the host is the other `aws-N` cluster. Copy both from Connect → Session pooler |
 | Certificate error | `docker compose -f /opt/skillbridge/compose.yml logs caddy`. Port 80 must be reachable and the DNS record current: `systemctl start skillbridge-dns` |
 | API calls return HTML | The `vercel.json` rewrite order. `./deploy/vercel.test.sh` |
 | Logged out after ~15 minutes | The refresh cookie is not first-party — the rewrite is missing or bypassed. `VERCEL.md` |

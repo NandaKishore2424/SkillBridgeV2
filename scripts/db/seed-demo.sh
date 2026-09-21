@@ -6,6 +6,19 @@
 #   scripts/db/seed-demo.sh --yes        # do not ask
 #   scripts/db/seed-demo.sh --no-wait    # seed only; do not wait for reports
 #
+#   # The deployed database, from the EC2 host (app.env is root-only):
+#   sudo scripts/db/seed-demo.sh --yes --app-env /opt/skillbridge/app.env
+#
+# WHICH DATABASE
+#
+# By default, the postgres service of the development compose file. With
+# --app-env FILE it reads AI_DATABASE_URL from that file -- the one key, the
+# file is not sourced -- and with SKILLBRIDGE_DATABASE_URL set it uses that
+# libpq URL. With a URL, psql runs through scripts/db/pg.sh in a throwaway
+# container of the image the schema is tested against, because the host has
+# neither a postgres service to exec into (the database is Supabase) nor, on a
+# fresh AMI, a psql of its own.
+#
 # This is a reset. It replaces every row of application data with the dataset in
 # demo-seed.sql -- two colleges, sixteen students, their skills, batches,
 # syllabus, progress, feedback and placements -- and leaves the 1,500 job
@@ -35,38 +48,80 @@ cd "$(dirname "$0")/../.."
 
 ASSUME_YES=false
 WAIT_FOR_REPORTS=true
-for arg in "$@"; do
-    case "$arg" in
+APP_ENV=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --yes|-y)   ASSUME_YES=true ;;
         --no-wait)  WAIT_FOR_REPORTS=false ;;
+        --app-env)  if [[ $# -lt 2 || "$2" == -* ]]; then
+                        echo "--app-env needs a file, e.g. --app-env /opt/skillbridge/app.env" >&2
+                        exit 2
+                    fi
+                    APP_ENV="$2"; shift ;;
         -h|--help)  sed -n '2,/^$/p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; exit 0 ;;
-        *)          echo "unknown option: $arg" >&2; exit 2 ;;
+        *)          echo "unknown option: $1" >&2; exit 2 ;;
     esac
+    shift
 done
 
-# Which stack to seed. Empty means the development compose file in the
-# repository root; on the deployed host it is deploy/docker-compose.prod.yml.
-# Without this the script would silently target whichever compose file happens
-# to be in the working directory, which on the EC2 host is the wrong one -- and
-# "wrong" there means it finds no postgres service and fails, rather than
-# seeding something it should not.
-COMPOSE_ARGS=()
-[[ -n "${SKILLBRIDGE_COMPOSE_FILE:-}" ]] && COMPOSE_ARGS=(-f "$SKILLBRIDGE_COMPOSE_FILE")
+# Which database to seed. A URL (or --app-env) means a remote database, reached
+# through scripts/db/pg.sh -- which says why a container, and how it keeps the
+# password off every process's argv.
+DATABASE_URL_FOR_SEED="${SKILLBRIDGE_DATABASE_URL:-}"
+if [[ -n "$APP_ENV" ]]; then
+    if [[ ! -r "$APP_ENV" ]]; then
+        echo "Cannot read $APP_ENV. On the host it is root-only: run this with sudo." >&2
+        exit 2
+    fi
+    DATABASE_URL_FOR_SEED=$(sed -n 's/^AI_DATABASE_URL=//p' "$APP_ENV" | tail -1)
+    if [[ -z "$DATABASE_URL_FOR_SEED" ]]; then
+        echo "$APP_ENV has no AI_DATABASE_URL, so there is no database to seed." >&2
+        exit 2
+    fi
+fi
 
-psql_local() { docker compose "${COMPOSE_ARGS[@]}" exec -T postgres psql -U skillbridge -d skillbridge -v ON_ERROR_STOP=1 "$@"; }
-ask()        { psql_local -tAc "$1"; }
+# The demo password reaches psql through the environment and \getenv, never as
+# `-v demo_password=...` on a command line that `ps` would show.
+export SKILLBRIDGE_DEMO_PASSWORD="${SKILLBRIDGE_DEMO_PASSWORD:-}"
+if [[ -n "$DATABASE_URL_FOR_SEED" ]]; then
+    export SKILLBRIDGE_DATABASE_URL="$DATABASE_URL_FOR_SEED"
+    export PG_PASSTHROUGH_ENV=SKILLBRIDGE_DEMO_PASSWORD
+    psql_local() { scripts/db/pg.sh psql -v ON_ERROR_STOP=1 "$@"; }
+else
+    psql_local() { docker compose exec -T -e SKILLBRIDGE_DEMO_PASSWORD postgres \
+                       psql -U skillbridge -d skillbridge -v ON_ERROR_STOP=1 "$@"; }
+fi
+# </dev/null: `docker run -i` forwards stdin, and a query must not eat input
+# meant for the confirmation prompt further down.
+ask()        { psql_local -tAc "$1" </dev/null; }
 
 # ---------------------------------------------------------------------------
 # 1. The database has to be up, and migrated
 # ---------------------------------------------------------------------------
 
 echo "1/6 Checking the database"
-docker compose "${COMPOSE_ARGS[@]}" up -d --wait postgres >/dev/null
+if [[ -n "$DATABASE_URL_FOR_SEED" ]]; then
+    # Said here, in words, rather than left to psql's connection error halfway
+    # through: a wrong URL is the likeliest failure and should not look like a
+    # broken seed. The URL itself is not printed; it holds the password.
+    if ! ask "SELECT 1" >/dev/null; then
+        echo "    Could not connect to the database named by AI_DATABASE_URL /" >&2
+        echo "    SKILLBRIDGE_DATABASE_URL (the psql error is above). Nothing changed." >&2
+        exit 1
+    fi
+    echo "    $(ask "SELECT current_database() || ' on ' || coalesce(inet_server_addr()::text, 'local socket')")"
+else
+    docker compose up -d --wait postgres >/dev/null
+fi
 missing=$(ask "SELECT count(*) FROM (VALUES ('colleges'),('students'),('student_skills'),('outbox_events'))
                AS t(name) WHERE to_regclass('public.' || name) IS NULL")
 if [[ "$missing" != "0" ]]; then
     echo "    The schema is not there. Start the backend once so Flyway can build it:" >&2
-    echo "      cd skillbridge-backend && ./mvnw spring-boot:run" >&2
+    if [[ -n "$DATABASE_URL_FOR_SEED" ]]; then
+        echo "      sudo skillbridge-deploy" >&2
+    else
+        echo "      cd skillbridge-backend && ./mvnw spring-boot:run" >&2
+    fi
     exit 1
 fi
 
@@ -74,7 +129,11 @@ corpus=$(ask "SELECT count(*) FROM industry_job_descriptions WHERE embedding IS 
 echo "    $corpus job descriptions with embeddings (left untouched)"
 if [[ "$corpus" == "0" ]]; then
     echo "    Warning: the corpus is empty, so every report will match nothing." >&2
-    echo "    Restore it with scripts/db/restore-local.sh." >&2
+    if [[ -n "$DATABASE_URL_FOR_SEED" ]]; then
+        echo "    Load it first: docs/DEPLOYMENT.md, \"The corpus\"." >&2
+    else
+        echo "    Restore it with scripts/db/restore-local.sh." >&2
+    fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -140,7 +199,10 @@ give_back_pgcrypto() {
 trap give_back_pgcrypto EXIT
 
 echo "4/6 Seeding"
-psql_local -q -v demo_password="$DEMO_PASSWORD" -f - < scripts/db/demo-seed.sql
+# \getenv rather than -v demo_password=..., so the password is never an argument.
+export SKILLBRIDGE_DEMO_PASSWORD="$DEMO_PASSWORD"
+{ echo '\getenv demo_password SKILLBRIDGE_DEMO_PASSWORD'; cat scripts/db/demo-seed.sql; } \
+    | psql_local -q -f -
 
 give_back_pgcrypto
 trap - EXIT
@@ -181,10 +243,14 @@ else
 
     if [[ "$reports" != "$students" ]]; then
         echo "    Timed out with $reports of $students reports." >&2
-        echo "    Check that all three are running:" >&2
-        echo "      backend     curl -fs localhost:8080/actuator/health" >&2
-        echo "      AI service  curl -fs localhost:8000/health" >&2
-        echo "      RabbitMQ    docker compose ps rabbitmq" >&2
+        echo "    Check that the backend, the AI service and RabbitMQ are all running:" >&2
+        if [[ -n "$DATABASE_URL_FOR_SEED" ]]; then
+            echo "      docker compose -f /opt/skillbridge/compose.yml ps" >&2
+        else
+            echo "      backend     curl -fs localhost:8080/actuator/health" >&2
+            echo "      AI service  curl -fs localhost:8000/health" >&2
+            echo "      RabbitMQ    docker compose ps rabbitmq" >&2
+        fi
         echo "    Re-run with --no-wait to seed without waiting." >&2
         exit 1
     fi
@@ -196,9 +262,11 @@ fi
 # ---------------------------------------------------------------------------
 
 echo "6/6 Ready"
+SIGN_IN_AT=http://localhost:5173
+[[ -n "$DATABASE_URL_FOR_SEED" ]] && SIGN_IN_AT="the Vercel URL"
 cat <<LOGINS
 
-  Sign in at http://localhost:5173
+  Sign in at ${SIGN_IN_AT}
 
     System admin    admin@skillbridge.test
     College admin   priya@hillview.test        (Hillview)
