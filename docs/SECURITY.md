@@ -87,17 +87,17 @@ database access.
   longer does. Splitting the backend's own rights (read-only reporting role, say)
   is the same idea applied again, not yet done.
 - **Invitations carry a temporary password by email.** A one-time set-password
-  link is the stronger design; recorded in START-HERE.
+  link is the stronger design, and the planned change.
 - **No WAF, no intrusion detection, no secret manager.** The deploy is a single
-  host started for interviews (Phase 7); secrets come from a gitignored `.env`.
+  host started on demand (`docs/DEPLOYMENT.md`); secrets come from a root-only `app.env`.
 - **`/actuator/health` answers an unauthenticated caller**, with a bare status;
   details are `when-authorized`. It is reached over the container's own
   loopback by the Docker healthcheck, and **not from the internet**: Caddy
   returns 404 for the whole of `/actuator/*` (`deploy/Caddyfile`), so `metrics`
   and `prometheus` — which are a map of the system's internals — never leave
   the host. Read them over SSH.
-- **Port 443 is open to the world while the demo host is running.** The control
-  is that the host is switched off except during an interview, so the exposure
-  window is the interview itself, and a nightly EventBridge rule stops it if
+- **Port 443 is open to the world while the host is running.** The control
+  is that the host is switched off except while in use, so the exposure
+  window is that session, and a nightly EventBridge rule stops it if
   nobody does. That is a real acceptance, not a mitigation; `docs/DEPLOYMENT.md`
   says what to do if it is not good enough for a given situation.

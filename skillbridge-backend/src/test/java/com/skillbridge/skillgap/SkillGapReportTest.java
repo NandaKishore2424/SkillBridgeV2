@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>The row is inserted exactly as report_store.py writes it: the contract's
  * own example document in the jsonb column. So this is the crossing between
- * the two services, not two ends tested separately (START-HERE, trap 5).
+ * the two services, not two ends tested separately.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

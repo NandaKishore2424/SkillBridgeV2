@@ -34,8 +34,7 @@ that cannot fail. The numbers below are its output; re-derive them the same way
 rather than trusting this table if a decision turns on one.
 
 > **Single-run numbers on a shared free-tier database are not a benchmark.**
-> Gotcha 8 in `further-plans/START-HERE.md`: identical configurations have
-> differed by 2–3× between runs here. What survives is the *ordering* and the
+> Identical configurations have differed by 2–3× between runs here. What survives is the *ordering* and the
 > *ratio to statement count*, and that is all this file leans on.
 
 ---
@@ -291,8 +290,8 @@ Phase 06 § 1.1 specifies Caffeine at L1 and Redis at L2. **This decision is L1
 only**, and the reason is not effort.
 
 **L2's distinguishing feature is shared invalidation across instances, and there
-is more than one instance nowhere.** The application is not deployed (open
-question #3 in `HANDOVER.md`), and it runs as a single JVM. At one instance, L1
+is more than one instance nowhere.** The application runs as a single JVM
+(`docs/DEPLOYMENT.md`: one host, one replica of each service). At one instance, L1
 *is* the shared cache: evicting in-process evicts for everybody. Redis would add
 a network hop, a dependency, a failure mode and a circuit breaker (Task 6) to buy
 coordination between replicas that do not exist.

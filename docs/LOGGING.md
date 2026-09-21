@@ -119,5 +119,5 @@ which is why stack traces are a structured field rather than loose text.
 
 Phase 10 Tasks 2 to 6: metrics beyond the actuator's defaults, distributed
 tracing, dashboards, SLOs and alerting, runbooks. Several of those need
-somewhere to ship logs and metrics to, which is a deployment question — see
-`further-plans/START-HERE.md` under "Decisions only you can make".
+somewhere to ship logs and metrics to, which is a deployment question, not
+yet answered (`docs/DEPLOYMENT.md`).

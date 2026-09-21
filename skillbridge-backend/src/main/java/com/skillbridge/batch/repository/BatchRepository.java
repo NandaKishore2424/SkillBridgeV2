@@ -112,8 +112,8 @@ public interface BatchRepository extends JpaRepository<Batch, Long>, JpaSpecific
     // They replace a second table, `trainer_batches`, mapped by a TrainerBatch
     // entity that the whole trainer side used to read. Nothing in the
     // application ever wrote it, so every trainer's dashboard was empty and
-    // ProgressService could never authorise anyone to grade. See the 2026-09-08
-    // entry in HANDOVER.md.
+    // ProgressService could never authorise anyone to grade. Found and removed
+    // 2026-09-08.
     //
     // Rooting the query at Batch rather than at the join row is not just
     // tidier: Batch carries @SQLRestriction("deleted_at IS NULL"), so a

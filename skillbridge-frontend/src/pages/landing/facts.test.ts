@@ -58,8 +58,8 @@ describe.runIf(inMonorepo)('the numbers on the landing page', () => {
 describe('the numbers with no machine-readable source', () => {
   it('states the corpus size the 2026-09-19 restore was verified at', () => {
     // Not derivable from the repository: the corpus lives in the database, and
-    // the only copy of it is the owner's backup. START-HERE records the
-    // verification. Asserting the constant here at least makes a silent edit to
+    // the only copy of it is an offline backup, checked at the 2026-09-19
+    // restore. Asserting the constant here at least makes a silent edit to
     // the page fail this test and force the reasoning back into view.
     expect(FACTS.corpusSize).toBe(1500)
   })

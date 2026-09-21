@@ -20,7 +20,7 @@ Three pieces, each where it costs least and breaks least. Phase 7.
 This is not a production architecture and does not pretend to be. It is a demo
 host for one viewer at a time, and every decision below is made for that. Where
 a real deployment would differ, it says so — being able to explain the gap is
-worth more in an interview than pretending there isn't one.
+worth more than pretending there isn't one.
 
 ---
 
@@ -43,8 +43,8 @@ up, patch or size on the instance. It also removes PostgreSQL's memory from the
 host budget, which is most of why the rest fits.
 
 **Everything else is on EC2** because RabbitMQ, the outbox relay and a 2.3 GB
-AI service are not serverless-shaped. The instance is off unless an interview
-is happening.
+AI service are not serverless-shaped. The instance is off unless it is in
+use.
 
 **The host never builds.** CI builds both images, smoke-tests them and pushes
 to GHCR; the host pulls. The AI image carries PyTorch and the MiniLM weights —
@@ -101,7 +101,7 @@ need; only the address moves.
 So the floor is the EBS volume, a few dollars a month, against a $100 credit
 that expires **2027-01-27**.
 
-> **The mistake is forgetting to stop it.** An interview ends in a
+> **The mistake is forgetting to stop it.** A session ends in a
 > conversation, the tab closes, the box runs for three weeks. At ~$0.04/hour
 > that is about $30 — a third of the credit, for nothing. Four hours a week is
 > about **$0.70 a month**.
@@ -139,9 +139,9 @@ structure, not that AWS accepts it.
 
 ### The Supabase catch
 
-**The free tier pauses a project after about a week of inactivity.** Interviews
+**The free tier pauses a project after about a week of inactivity.** Sessions
 are weeks apart, so the realistic failure is arriving at one with a paused
-database and a few minutes of unpausing in front of an interviewer.
+database and a few minutes of unpausing in front of someone.
 
 Open the Supabase dashboard as part of starting the instance, not after. The
 backend's healthcheck will fail while the database is paused, so
@@ -210,8 +210,8 @@ Security group:
 | 443 | anywhere | Vercel's proxy reaches the API here |
 
 443 open to the world is a real exposure, and worth being straight about: the
-control is that **the instance is off except during an interview**, so the
-window is the interview. The nightly rule closes it if you forget.
+control is that **the instance is off except while in use**, so the
+window is that session. The nightly rule closes it if you forget.
 
 ### 4. The host
 
@@ -368,7 +368,7 @@ deploy/instance.sh stop      # THE IMPORTANT ONE
 deploy/instance.sh status
 ```
 
-Before an interview: start it, open the Supabase dashboard to be sure the
+Before a session: start it, open the Supabase dashboard to be sure the
 project is awake, and reseed if the data has been clicked about:
 
 ```bash

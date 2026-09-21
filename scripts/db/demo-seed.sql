@@ -272,8 +272,8 @@ LEFT JOIN colleges c ON c.code = p.college_code;
 -- anything that is not PENDING_SETUP, with a 409.
 --
 -- Without this row that button answers 409 for every student in the database,
--- and the email step of docs/DEMO.md cannot be demonstrated at all. Found by
--- running the demo script against seeded data on 2026-09-20.
+-- and the invitation-email flow cannot be shown at all. Found by walking
+-- the app against seeded data on 2026-09-20.
 UPDATE users SET account_status = 'PENDING_SETUP',
                  must_change_password = true,
                  first_login_at = NULL,

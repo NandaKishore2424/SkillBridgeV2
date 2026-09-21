@@ -49,7 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>That last step is the point. Each half could pass on its own -- a mail
  * arrives, a password is set -- while the password mailed is not the one stored.
- * Testing the crossing is what catches that (START-HERE, trap 5).
+ * Testing the crossing, not the two ends, is what catches that.
  */
 @SpringBootTest(properties = {"app.mail.provider=SMTP", "app.auth.invitation-ttl=7d"})
 @AutoConfigureMockMvc

@@ -71,3 +71,24 @@ further-plans/LOCAL-LOGINS.md
 deploy/instance.env
 deploy/app.env
 deploy/backups/
+
+# Private working notes and AI-assistant configuration. Kept on disk, never published.
+further-plans/
+AGENTS.md
+CLAUDE.md
+.claude/
+.mcp.json
+skills-lock.json
+.vscode/
+.github/modernize/
+SKILLBRIDGE_CODEBASE_DEEP_DIVE.md
+change-april-10.md
+skillbridge-backend/HELP.md
+skillbridge-backend/SETUP_PROGRESS.md
+docs/README.md
+docs/DECISIONS.md
+docs/DEMO.md
+docs/MANUAL-CHECKLIST.md
+docs/version_1/
+docs/version_2/
+docs/erros and fixes/

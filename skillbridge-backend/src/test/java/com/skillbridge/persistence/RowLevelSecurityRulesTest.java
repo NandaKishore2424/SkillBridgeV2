@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * application (TenantGuard, the Hibernate filter, and CrossTenantAccessTest
  * over the whole route table); doing it again in the database would mean a
  * per-request {@code SET LOCAL} and policies on thirty tables. That is a real
- * option, written up in START-HERE, not an oversight.
+ * option, written up in docs/SECURITY.md, not an oversight.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)

@@ -3,7 +3,7 @@ Which known skills a job asks for, read from its description.
 
 Every one of the 1,500 stored jobs has required_skills = '' (the ETL never
 filled it), so the skill-gap report listed matched jobs and no missing skills.
-Decided 2026-09-19 (HANDOVER open question #11): extract at analysis time from
+Decided 2026-09-19: extract at analysis time from
 raw_description, rather than backfilling required_skills once. The stored
 corpus -- the only copy of the embeddings -- is left untouched, and a better
 extractor applies to every job the next time it is matched.

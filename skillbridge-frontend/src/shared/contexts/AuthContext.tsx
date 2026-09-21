@@ -337,7 +337,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Registration removed 2026-09-06: the product is invite-only. Accounts are
   // provisioned by a college admin through bulk upload and activated through
   // /auth/first-login, and POST /auth/register was never implemented on the
-  // backend -- the page had been posting into the void. See HANDOVER Q1.
+  // backend -- the page had been posting into the void.
 
   /**
    * Logout function

@@ -12,8 +12,8 @@ export const FACTS = {
    * Industry job descriptions with embeddings in the corpus.
    *
    * Source: the 2026-09-19 database restore, verified table-by-table against
-   * the Supabase capture (further-plans/START-HERE.md, "Facts this plan
-   * depends on"). It is a fixed corpus -- nothing loads more.
+   * the Supabase capture (1500 rows, 1500 embeddings). It is a fixed corpus
+   * -- nothing loads more.
    */
   corpusSize: 1500,
 
